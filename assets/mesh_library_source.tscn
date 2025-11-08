@@ -1,0 +1,24 @@
+[gd_scene load_steps=5 format=3 uid="uid://cy43ok6gm2487"]
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ichvf"]
+albedo_color = Color(0.8235294, 0.7058824, 0.54901963, 1)
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_t7hg2"]
+material = SubResource("StandardMaterial3D_ichvf")
+size = Vector2(1, 1)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_t7hg2"]
+albedo_color = Color(0.9098039, 0.8509804, 0.59607846, 1)
+
+[sub_resource type="BoxMesh" id="BoxMesh_g2w8g"]
+material = SubResource("StandardMaterial3D_t7hg2")
+size = Vector3(1, 4, 1)
+
+[node name="MeshLibrary" type="Node3D"]
+
+[node name="Floor" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_t7hg2")
+
+[node name="Wall" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+mesh = SubResource("BoxMesh_g2w8g")

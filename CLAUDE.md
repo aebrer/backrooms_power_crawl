@@ -56,6 +56,13 @@
 - Values clean, maintainable code over quick hacks
 - Thinks in systems, not features
 
+**Direct File Editing Preferred**
+- **IMPORTANT**: Always edit Godot resource files (.tscn, .tres, etc.) directly when possible
+- Don't make user manually import/export through Godot UI if you can edit the text file
+- Example: Edit grid_mesh_library.tres directly instead of "re-export MeshLibrary in editor"
+- Godot files are text-based - take advantage of that!
+- Only use the editor UI when absolutely necessary (creating new scenes from scratch)
+
 **Controller-First Design**
 - User is building for controller from day one
 - Keyboard is fallback, not primary

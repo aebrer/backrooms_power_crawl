@@ -17,7 +17,7 @@ extends Node
 # ============================================================================
 
 ## Analog stick deadzone for aim direction (radial)
-@export var aim_deadzone: float = 0.2
+@export var aim_deadzone: float = 0.15  # Reduced for better sensitivity
 
 ## Enable debug printing for input events
 @export var debug_input: bool = true

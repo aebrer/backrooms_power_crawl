@@ -1,0 +1,102 @@
+[gd_scene load_steps=8 format=3 uid="uid://cy7w8qn1yf3d"]
+
+[ext_resource type="Script" path="res://scripts/game_3d.gd" id="1_game3d"]
+[ext_resource type="Script" path="res://scripts/grid_3d.gd" id="2_grid3d"]
+[ext_resource type="MeshLibrary" uid="uid://c8vwx8qn1yf3d" path="res://assets/grid_mesh_library.tres" id="3_meshlibrary"]
+[ext_resource type="Script" path="res://scripts/player/player_3d.gd" id="4_player3d"]
+[ext_resource type="Script" path="res://scripts/player/input_state_machine.gd" id="5_statemachine"]
+[ext_resource type="Script" path="res://scripts/player/states/idle_state.gd" id="6_idle"]
+[ext_resource type="Script" path="res://scripts/player/states/aiming_move_state.gd" id="7_aiming"]
+[ext_resource type="Script" path="res://scripts/player/states/executing_turn_state.gd" id="8_executing"]
+[ext_resource type="Script" path="res://scripts/player/mouse_grid_input.gd" id="9_mouse"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
+
+[sub_resource type="Sky" id="Sky_1"]
+sky_material = SubResource("ProceduralSkyMaterial_1")
+
+[sub_resource type="Environment" id="Environment_1"]
+background_mode = 2
+sky = SubResource("Sky_1")
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
+radius = 0.4
+height = 1.8
+
+[node name="Game" type="Node3D"]
+script = ExtResource("1_game3d")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_1")
+
+[node name="SunLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 0, 0)
+light_energy = 0.8
+shadow_enabled = true
+
+[node name="Grid3D" type="Node3D" parent="."]
+script = ExtResource("2_grid3d")
+
+[node name="GridMap" type="GridMap" parent="Grid3D"]
+mesh_library = ExtResource("3_meshlibrary")
+cell_size = Vector3(2, 1, 2)
+
+[node name="Player3D" type="CharacterBody3D" parent="."]
+script = ExtResource("4_player3d")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player3D"]
+shape = SubResource("CapsuleShape3D_1")
+
+[node name="Model" type="Label3D" parent="Player3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+pixel_size = 0.01
+billboard = 2
+text = "🚶"
+font_size = 128
+
+[node name="InputStateMachine" type="Node" parent="Player3D"]
+script = ExtResource("5_statemachine")
+
+[node name="IdleState" type="Node" parent="Player3D/InputStateMachine"]
+script = ExtResource("6_idle")
+
+[node name="AimingMoveState" type="Node" parent="Player3D/InputStateMachine"]
+script = ExtResource("7_aiming")
+
+[node name="ExecutingTurnState" type="Node" parent="Player3D/InputStateMachine"]
+script = ExtResource("8_executing")
+
+[node name="MouseGridInput" type="Node" parent="Player3D"]
+script = ExtResource("9_mouse")
+
+[node name="Camera" type="Camera3D" parent="Player3D"]
+transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 5, 8, 8)
+fov = 70.0
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="TurnCounter" type="Label" parent="UI"]
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 510.0
+offset_bottom = 40.0
+theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
+theme_override_font_sizes/font_size = 16
+text = "Turn: 0 | Pos: (0, 0) | State: None"
+
+[node name="Instructions" type="Label" parent="UI"]
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -100.0
+offset_right = 610.0
+offset_bottom = -10.0
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
+theme_override_font_sizes/font_size = 14
+text = "LEFT STICK / WASD: Aim movement
+RIGHT TRIGGER / SPACE: Confirm move
+START / ESC: Return to menu
+
+PHASE 1: Testing 3D Grid System"
