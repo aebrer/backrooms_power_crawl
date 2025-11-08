@@ -1,5 +1,5 @@
-class_name PlayerInputState
 extends Node
+class_name PlayerInputState
 ## Base class for all player input states
 ##
 ## States represent different input handling modes:
@@ -28,12 +28,12 @@ var state_name: String = "BaseState"
 
 ## Called when entering this state
 func enter() -> void:
-	if InputManager.debug_input:
+	if InputManager and InputManager.debug_input:
 		print("[State] Entered: ", state_name)
 
 ## Called when exiting this state
 func exit() -> void:
-	if InputManager.debug_input:
+	if InputManager and InputManager.debug_input:
 		print("[State] Exited: ", state_name)
 
 # ============================================================================

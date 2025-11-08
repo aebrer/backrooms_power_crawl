@@ -68,7 +68,7 @@ func change_state(new_state_name: String) -> void:
 	current_state = states[new_state_name]
 	current_state.enter()
 
-	if InputManager.debug_input:
+	if InputManager and InputManager.debug_input:
 		print("[InputStateMachine] State changed: ", new_state_name)
 
 func get_current_state_name() -> String:

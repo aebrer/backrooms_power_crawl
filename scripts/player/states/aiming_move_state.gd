@@ -14,7 +14,8 @@ func _init() -> void:
 
 func enter() -> void:
 	super.enter()
-	last_direction = InputManager.get_aim_direction_grid()
+	if InputManager:
+		last_direction = InputManager.get_aim_direction_grid()
 	if player:
 		player.movement_target = last_direction
 
@@ -30,6 +31,9 @@ func handle_input(event: InputEvent) -> void:
 
 func process_frame(delta: float) -> void:
 	# Update aim direction from InputManager
+	if not InputManager:
+		return
+
 	var aim = InputManager.get_aim_direction_grid()
 
 	# Check if stick was released (returned to zero)

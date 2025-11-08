@@ -20,6 +20,9 @@ func handle_input(event: InputEvent) -> void:
 
 func process_frame(delta: float) -> void:
 	# Check if player started aiming
+	if not InputManager:
+		return
+
 	var aim = InputManager.get_aim_direction_grid()
 
 	if aim != Vector2i.ZERO:
