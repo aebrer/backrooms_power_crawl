@@ -34,6 +34,11 @@ func process_frame(delta: float) -> void:
 	if not InputManager:
 		return
 
+	# Check for move confirmation (from trigger or other synthesized actions)
+	if InputManager.is_action_just_pressed("move_confirm"):
+		_confirm_movement()
+		return
+
 	var aim = InputManager.get_aim_direction_grid()
 
 	# Check if stick was released (returned to zero)

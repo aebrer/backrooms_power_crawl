@@ -22,6 +22,13 @@ extends Node
 ## Enable debug printing for input events
 @export var debug_input: bool = true
 
+## Trigger threshold - treat trigger as "pressed" when above this value (0.0-1.0)
+const TRIGGER_THRESHOLD: float = 0.5
+
+## Xbox controller trigger axis indices
+const TRIGGER_AXIS_LEFT: int = 4   # LT (Left Trigger)
+const TRIGGER_AXIS_RIGHT: int = 5  # RT (Right Trigger)
+
 # ============================================================================
 # INPUT STATE
 # ============================================================================
@@ -34,6 +41,18 @@ var aim_direction_grid: Vector2i = Vector2i.ZERO
 
 ## Track which actions were just pressed this frame
 var _actions_this_frame: Dictionary = {}  # String -> bool
+
+## Trigger state - analog values (0.0 to 1.0)
+var left_trigger_value: float = 0.0
+var right_trigger_value: float = 0.0
+
+## Trigger state - digital (above threshold)
+var left_trigger_pressed: bool = false
+var right_trigger_pressed: bool = false
+
+## Trigger state - just pressed this frame (for action synthesis)
+var _left_trigger_just_pressed: bool = false
+var _right_trigger_just_pressed: bool = false
 
 # ============================================================================
 # LIFECYCLE
@@ -56,6 +75,11 @@ func _ready() -> void:
 func _process(_delta: float) -> void:
 	# Clear frame-based action tracking
 	_actions_this_frame.clear()
+	_left_trigger_just_pressed = false
+	_right_trigger_just_pressed = false
+
+	# Update trigger state
+	_update_triggers()
 
 	# Update continuous aim direction every frame
 	_update_aim_direction()
@@ -135,6 +159,39 @@ func get_aim_direction() -> Vector2:
 ## Get grid-snapped aim direction (Vector2i for 8-way movement)
 func get_aim_direction_grid() -> Vector2i:
 	return aim_direction_grid
+
+# ============================================================================
+# TRIGGER HANDLING
+# ============================================================================
+
+func _update_triggers() -> void:
+	"""Read trigger axes and synthesize button events for actions"""
+	# Read raw axis values from controller 0
+	# Note: Triggers return 0.0 to 1.0 (not -1.0 to 1.0 like sticks)
+	left_trigger_value = Input.get_joy_axis(0, TRIGGER_AXIS_LEFT)
+	right_trigger_value = Input.get_joy_axis(0, TRIGGER_AXIS_RIGHT)
+
+	# Convert to digital state (above threshold = "pressed")
+	var left_now_pressed = left_trigger_value > TRIGGER_THRESHOLD
+	var right_now_pressed = right_trigger_value > TRIGGER_THRESHOLD
+
+	# Track "just pressed" (transition from not pressed -> pressed)
+	_left_trigger_just_pressed = left_now_pressed and not left_trigger_pressed
+	_right_trigger_just_pressed = right_now_pressed and not right_trigger_pressed
+
+	# Update pressed state for next frame
+	left_trigger_pressed = left_now_pressed
+	right_trigger_pressed = right_now_pressed
+
+	# Synthesize action events for triggers
+	# RT (right trigger) -> move_confirm action
+	if _right_trigger_just_pressed:
+		_actions_this_frame["move_confirm"] = true
+		if debug_input:
+			print("[InputManager] Right trigger pressed -> move_confirm (value: %.2f, was_pressed: %s, now_pressed: %s)" % [right_trigger_value, not _right_trigger_just_pressed, right_trigger_pressed])
+
+	# LT (left trigger) currently unmapped
+	# Future: Could map to examine_mode or other actions
 
 # ============================================================================
 # ACTION QUERIES
