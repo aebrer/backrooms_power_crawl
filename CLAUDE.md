@@ -732,15 +732,31 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 1. **Spawn Creator Agent**
    - Provide detailed description of texture needed
    - Pull reference details from Backrooms wiki or design docs
-   - Agent creates standalone JavaScript in `_claude_scripts/textures/texture_name/`
-   - **No npm/package.json** - use plain browser APIs (Canvas 2D, WebGL)
-   - See `/home/andrew/pico8_carts/series/screensavers/the_seed_marche/index.js` for reference
+   - Agent creates standalone Python script in `_claude_scripts/textures/texture_name/generate.py`
+   - **USE PYTHON + PIL/Pillow** for image generation
+   - **Runs in project venv**: `/home/andrew/projects/backrooms_power_crawl/venv/`
+   - **Pillow already available** in venv (standard image library)
    - Code structure:
-     - Create canvas element: `document.createElement('canvas')`
-     - Use Canvas 2D API or WebGL for procedural rendering
-     - Export to PNG: `canvas.toDataURL()` or `canvas.toBlob()`
-     - Run in browser or headless Chromium
-   - Clear filesystem layout: `_claude_scripts/textures/texture_name/generate.html` + `generate.js`
+     ```python
+     from PIL import Image
+     import numpy as np
+
+     # Generate texture as numpy array or pixel-by-pixel
+     img = Image.new('RGB', (128, 128))
+     pixels = img.load()
+
+     # Render texture
+     for y in range(128):
+         for x in range(128):
+             pixels[x, y] = (r, g, b)
+
+     # Save directly to PNG
+     img.save('output.png')
+     print(f'✓ Saved {img.size} texture to output.png')
+     ```
+   - **AUTOMATION**: Agent creates script, runs it with project venv, verifies output.png exists
+   - **Command**: `cd /home/andrew/projects/backrooms_power_crawl && source venv/bin/activate && cd _claude_scripts/textures/texture_name && python generate.py`
+   - **THIS IS SIMPLE**: Pure Python, no browser, no headless nonsense, just direct PNG generation
 
 2. **Spawn Comparison Critic Agent**
    - Provide original description + path to generated PNG
