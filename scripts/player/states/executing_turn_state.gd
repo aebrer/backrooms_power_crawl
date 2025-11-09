@@ -13,6 +13,9 @@ func _init() -> void:
 
 func enter() -> void:
 	super.enter()
+	# Hide movement indicator during turn execution
+	if player:
+		player.hide_move_indicator()
 	# Execute the turn immediately
 	_execute_turn()
 
@@ -27,13 +30,17 @@ func _execute_turn() -> void:
 		transition_to("IdleState")
 		return
 
-	# Execute player action
+	print("[ExecutingTurnState] ===== TURN %d EXECUTING =====" % (player.turn_count + 1))
+
+	# Execute player action (this advances turn_count)
 	player.pending_action.execute(player)
 	player.pending_action = null
 
 	# TODO: Process enemy turns
 	# TODO: Process environmental effects
 	# TODO: Check win/loss conditions
+
+	print("[ExecutingTurnState] ===== TURN %d COMPLETE =====" % player.turn_count)
 
 	# Turn complete - check if player is still aiming
 	# If stick is still tilted, go back to AimingMoveState (not IdleState)

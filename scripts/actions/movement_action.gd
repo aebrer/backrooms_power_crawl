@@ -38,6 +38,8 @@ func execute(player) -> void:
 		push_warning("MovementAction.execute() called but movement is invalid!")
 		return
 
+	var old_pos = player.grid_position
+
 	# Update player grid position
 	player.grid_position += direction
 
@@ -47,8 +49,10 @@ func execute(player) -> void:
 	# Advance turn counter
 	player.turn_count += 1
 
-	print("[MovementAction] Turn %d: Moved to (%d, %d)" % [
+	print("[MovementAction] Turn %d: direction=%s | (%d,%d) → (%d,%d) | world(X%+d, Z%+d)" % [
 		player.turn_count,
-		player.grid_position.x,
-		player.grid_position.y
+		direction,
+		old_pos.x, old_pos.y,
+		player.grid_position.x, player.grid_position.y,
+		direction.x, direction.y
 	])

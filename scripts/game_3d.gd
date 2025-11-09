@@ -3,6 +3,7 @@ extends Node3D
 
 @onready var grid: Grid3D = $Grid3D
 @onready var player: Player3D = $Player3D
+@onready var move_indicator: Node3D = $MoveIndicator
 @onready var ui_turn_counter: Label = $UI/TurnCounter
 @onready var ui_instructions: Label = $UI/Instructions
 
@@ -12,8 +13,9 @@ func _ready() -> void:
 	# Initialize grid
 	grid.initialize(Grid3D.GRID_SIZE)
 
-	# Link player to grid
+	# Link player to grid and indicator
 	player.grid = grid
+	player.move_indicator = move_indicator
 
 	print("[Game3D] Ready! Controls: Left stick/WASD to aim, RT/Space to move")
 

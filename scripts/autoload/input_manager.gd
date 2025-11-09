@@ -121,7 +121,13 @@ func _update_aim_direction() -> void:
 		aim_direction = raw_input.normalized()
 
 		# Convert to 8-way grid direction using angle-based snapping
-		aim_direction_grid = _analog_to_grid_8_direction(raw_input)
+		var new_grid_dir = _analog_to_grid_8_direction(raw_input)
+
+		# Only print when direction CHANGES (not every frame)
+		if new_grid_dir != aim_direction_grid and debug_input:
+			print("[InputManager] Direction changed: %s (angle=%.0f°)" % [new_grid_dir, rad_to_deg(raw_input.angle())])
+
+		aim_direction_grid = new_grid_dir
 	else:
 		aim_direction = Vector2.ZERO
 		aim_direction_grid = Vector2i.ZERO
@@ -133,24 +139,27 @@ func _analog_to_grid_8_direction(analog: Vector2) -> Vector2i:
 
 	# Use angle-based approach for cleaner diagonal snapping
 	var angle = analog.angle()
+	var angle_deg = rad_to_deg(angle)
 
 	# Convert angle to octant (8 directions)
 	# Each octant is PI/4 radians (45 degrees)
 	var octant = int(round(angle / (PI / 4.0))) % 8
 
 	# Map octants to 8 cardinal/diagonal directions
+	# NOTE: In grid space, +X=right, +Y=down (forward in 3D world is +Z)
 	var directions := [
 		Vector2i(1, 0),   # 0: Right (0°)
-		Vector2i(1, 1),   # 1: Down-Right (45°)
-		Vector2i(0, 1),   # 2: Down (90°)
-		Vector2i(-1, 1),  # 3: Down-Left (135°)
+		Vector2i(1, 1),   # 1: Down-Right (45°) = +X,+Z in world
+		Vector2i(0, 1),   # 2: Down (90°) = +Z in world
+		Vector2i(-1, 1),  # 3: Down-Left (135°) = -X,+Z in world
 		Vector2i(-1, 0),  # 4: Left (180°)
-		Vector2i(-1, -1), # 5: Up-Left (225°)
-		Vector2i(0, -1),  # 6: Up (270°)
-		Vector2i(1, -1)   # 7: Up-Right (315°)
+		Vector2i(-1, -1), # 5: Up-Left (225°) = -X,-Z in world
+		Vector2i(0, -1),  # 6: Up (270°) = -Z in world
+		Vector2i(1, -1)   # 7: Up-Right (315°) = +X,-Z in world
 	]
 
-	return directions[octant]
+	var result = directions[octant]
+	return result
 
 ## Get current aim direction (normalized Vector2, or ZERO if below deadzone)
 func get_aim_direction() -> Vector2:
@@ -201,6 +210,19 @@ func _update_triggers() -> void:
 ## This is similar to Input.is_action_just_pressed() but centralized
 func is_action_just_pressed(action: String) -> bool:
 	return _actions_this_frame.get(action, false)
+
+## Check if an action is currently held down
+## Handles both regular actions AND trigger-synthesized actions
+func is_action_pressed(action: String) -> bool:
+	# Special handling for move_confirm - check RT trigger state
+	if action == "move_confirm":
+		# RT is "pressed" if either:
+		# 1. Physical trigger is above threshold
+		# 2. Regular keyboard/button action is pressed
+		return right_trigger_pressed or Input.is_action_pressed(action)
+
+	# For other actions, use Godot's built-in system
+	return Input.is_action_pressed(action)
 
 # ============================================================================
 # CONFIGURATION

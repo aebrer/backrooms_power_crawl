@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-08
+**Last Updated**: 2025-11-08 (Added critical lessons on input parity)
 
 ---
 
@@ -68,6 +68,14 @@
 - Keyboard is fallback, not primary
 - Test with actual controller hardware
 - Input abstraction is critical
+
+**Input Parity is NON-NEGOTIABLE**
+- **CRITICAL**: Gamepad and Mouse+Keyboard must have identical functionality
+- Mouse+Keyboard means MOUSE MOVEMENT + keyboard, not just keyboard keys
+- Standard third-person controls: right stick OR mouse for camera rotation
+- Never implement a feature for one control scheme without the other
+- User will immediately notice and call out parity issues
+- See Section 5 for detailed lessons learned on this
 
 **Python Background Benefits**
 - GDScript is Python-like, so user picks it up quickly
@@ -322,6 +330,43 @@
 - Input mappings must have BOTH controller and keyboard
 - If designing UI, design for controller navigation first
 
+### CRITICAL: Input Parity Between Control Schemes
+
+**User cares DEEPLY about input parity - this is NON-NEGOTIABLE**
+- Gamepad and Mouse+Keyboard must have **IDENTICAL** functionality
+- Don't implement features for one input method without the other
+- **NEVER** assume keyboard means keyboard keys - it means MOUSE + KEYBOARD!
+
+**Standard Third-Person Camera Controls (THE LESSON)**
+This was learned the hard way. Here's the industry-standard pattern:
+
+**Gamepad:**
+- **Right stick (both axes)**: Camera rotation (yaw + pitch)
+- **Shoulder buttons**: Zoom in/out
+
+**Mouse + Keyboard:**
+- **Mouse movement**: Camera rotation (yaw + pitch) - NOT keyboard keys!
+- **Mouse wheel**: Zoom in/out
+
+**Common mistakes to avoid:**
+- ❌ Using keyboard keys (Q/E) for camera rotation instead of mouse
+- ❌ Using right stick Y-axis for zoom instead of pitch rotation
+- ❌ Only implementing one axis of rotation on gamepad
+- ❌ Not capturing the mouse for camera control
+- ❌ Implementing snapping/lerping that fights free camera rotation
+- ❌ Adding features to one control scheme but not the other
+
+**The Rule of Thumb:**
+If you're implementing camera controls, ask: "What does Fortnite/Gears of War/every modern third-person game do?"
+- They use mouse movement OR right stick for full camera rotation
+- They don't reinvent the wheel
+- They have perfect parity between control schemes
+
+**Testing:**
+- Test BOTH control schemes before considering a feature "done"
+- If it feels wrong compared to industry-standard games, it probably is wrong
+- User will call out parity issues immediately - don't skip this
+
 ### Don't Use Real-Time Where Turn-Based Belongs
 
 **This is a turn-based game**
@@ -450,6 +495,36 @@ Should I implement this, or do you want to discuss the tooltip system first?"
 **When**: Large grids that exceed performance budget
 **How**: Calculate visible rect, only update those tiles
 **Why**: 128x128 grid = 16k tiles, but only ~400 visible
+
+### Standard Third-Person Camera
+
+**What**: Mouse/right-stick controlled camera with pivot hierarchy
+**When**: Any third-person 3D game (Fortnite-style camera)
+**How**:
+```gdscript
+# Scene hierarchy:
+Player → CameraRig → HorizontalPivot → VerticalPivot → SpringArm → Camera
+
+# In _process (gamepad):
+h_pivot.rotation_degrees.y -= right_stick_x * rotation_speed * delta
+v_pivot.rotation_degrees.x -= right_stick_y * rotation_speed * delta
+
+# In _unhandled_input (mouse):
+h_pivot.rotation_degrees.y -= event.relative.x * mouse_sensitivity
+v_pivot.rotation_degrees.x -= event.relative.y * mouse_sensitivity
+```
+**Why**:
+- Direct rotation (no lerping!) for instant 1:1 response
+- Separate pivots for yaw/pitch allow independent rotation
+- SpringArm handles collision with walls automatically
+- Mouse captured (MOUSE_MODE_CAPTURED) for FPS-style camera control
+- Perfect parity between gamepad and mouse+keyboard
+
+**Don't:**
+- ❌ Lerp camera rotation to a target (creates lag/fighting)
+- ❌ Use keyboard keys for rotation (use mouse movement!)
+- ❌ Mix rotation with zoom on same input axis
+- ❌ Snap rotation when user wants free camera control
 
 ---
 
