@@ -111,6 +111,9 @@ func _generate_grid() -> void:
 				grid_map.set_cell_item(Vector3i(x, 0, y), TileType.FLOOR)
 				walkable_cells.append(pos)
 
+			# Place ceiling everywhere (at y=1 in grid space, which is y=4 in world space due to mesh_transform)
+			grid_map.set_cell_item(Vector3i(x, 1, y), TileType.CEILING)
+
 # ============================================================================
 # COORDINATE CONVERSION
 # ============================================================================
