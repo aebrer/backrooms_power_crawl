@@ -6,6 +6,26 @@
 
 ---
 
+## ⚠️ CRITICAL: YOU ARE ON WSL2 - DO NOT RUN TESTS
+
+**NEVER attempt to run Godot or test the game yourself!**
+- You are running on WSL2 (Windows Subsystem for Linux)
+- Godot GUI/game cannot run in this environment
+- **THE USER RUNS ALL TESTS** - they have the Windows Godot editor
+- Your job: implement, explain, prepare for testing
+- User's job: actually run and validate
+
+**What this means**:
+- ❌ DO NOT use `godot` command to test anything
+- ❌ DO NOT run the game or try to validate it works
+- ✅ DO implement the code changes
+- ✅ DO explain what should happen when tested
+- ✅ DO wait for user to confirm "it works" or report issues
+
+When ready for testing, say: "This is ready for you to test. When you run it, you should see [expected behavior]."
+
+---
+
 ## 1. Behavioral Patterns Observed
 
 ### What Worked Well

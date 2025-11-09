@@ -39,7 +39,7 @@ func _ready() -> void:
 		var first_state_name = states.keys()[0]
 		change_state(first_state_name)
 
-	print("[InputStateMachine] Ready with %d states" % states.size())
+	Log.system("InputStateMachine ready with %d states" % states.size())
 
 func _register_state(state: PlayerInputState) -> void:
 	"""Register a state and connect its signals"""
@@ -47,7 +47,7 @@ func _register_state(state: PlayerInputState) -> void:
 	state.player = get_parent()  # Assumes parent is Player
 	state.state_machine = self
 	state.state_transition_requested.connect(_on_state_transition_requested)
-	print("[InputStateMachine] Registered state: ", state.name)
+	Log.state("Registered state: %s" % state.name)
 
 # ============================================================================
 # STATE MANAGEMENT
@@ -68,7 +68,7 @@ func change_state(new_state_name: String) -> void:
 	current_state.enter()
 
 	if InputManager and InputManager.debug_input:
-		print("[InputStateMachine] State changed: ", new_state_name)
+		Log.state_info("State changed: %s" % new_state_name)
 
 func get_current_state_name() -> String:
 	"""Get name of current state for debugging"""

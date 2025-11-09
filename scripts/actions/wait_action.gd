@@ -19,7 +19,7 @@ func execute(player) -> void:
 	# Advance turn counter
 	player.turn_count += 1
 
-	print("[WaitAction] Turn %d: Waited in place at (%d, %d)" % [
+	Log.action("Turn %d: Waited in place at grid(%d, %d)" % [
 		player.turn_count,
 		player.grid_position.x,
 		player.grid_position.y

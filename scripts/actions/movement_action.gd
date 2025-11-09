@@ -49,7 +49,7 @@ func execute(player) -> void:
 	# Advance turn counter
 	player.turn_count += 1
 
-	print("[MovementAction] Turn %d: direction=%s | (%d,%d) → (%d,%d) | world(X%+d, Z%+d)" % [
+	Log.action("Turn %d: Moved %s | grid(%d,%d) → (%d,%d) | world(X%+d, Z%+d)" % [
 		player.turn_count,
 		direction,
 		old_pos.x, old_pos.y,

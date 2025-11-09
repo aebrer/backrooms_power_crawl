@@ -33,7 +33,7 @@ func _ready() -> void:
 		# SNAP to grid position (turn-based = no smooth movement)
 		update_visual_position()
 
-		print("[Player3D] Ready at position: ", grid_position)
+		Log.system("Player3D ready at grid position: %s" % grid_position)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Delegate to state machine

@@ -59,7 +59,7 @@ func _ready() -> void:
 	# Capture mouse for camera control (standard third-person)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
-	print("[TacticalCamera] Initialized - Zoom: %.1f, Rotation: %.1f°" % [
+	Log.camera("TacticalCamera initialized - Zoom: %.1f, Rotation: %.1f°" % [
 		current_zoom,
 		default_yaw
 	])

@@ -26,11 +26,11 @@ func handle_input(event: InputEvent) -> void:
 func _execute_turn() -> void:
 	"""Execute the pending action and process turn"""
 	if not player or not player.pending_action:
-		push_warning("[ExecutingTurnState] No pending action!")
+		Log.error(Log.Category.TURN, "No pending action!")
 		transition_to("IdleState")
 		return
 
-	print("[ExecutingTurnState] ===== TURN %d EXECUTING =====" % (player.turn_count + 1))
+	Log.turn("===== TURN %d EXECUTING =====" % (player.turn_count + 1))
 
 	# Execute player action (this advances turn_count)
 	player.pending_action.execute(player)
@@ -40,7 +40,7 @@ func _execute_turn() -> void:
 	# TODO: Process environmental effects
 	# TODO: Check win/loss conditions
 
-	print("[ExecutingTurnState] ===== TURN %d COMPLETE =====" % player.turn_count)
+	Log.turn("===== TURN %d COMPLETE =====" % player.turn_count)
 
 	# Turn complete - return to idle state
 	transition_to("IdleState")

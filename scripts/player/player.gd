@@ -31,7 +31,7 @@ var grid: Grid = null
 @onready var camera: Camera2D = $Camera2D
 
 func _ready() -> void:
-	print("[Player] Ready at position: ", grid_position)
+	Log.system("Player ready at grid position: %s" % grid_position)
 
 	# Setup sprite
 	sprite.text = "🚶"
@@ -51,7 +51,7 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# System actions (pause) handled here, not in states
 	if event.is_action_pressed("pause"):
-		print("[Player] Pause pressed - returning to menu")
+		Log.system("Pause pressed - returning to menu")
 		get_tree().change_scene_to_file("res://scenes/main_menu.tscn")
 		return
 
@@ -104,4 +104,4 @@ func hide_move_indicator() -> void:
 func set_grid(new_grid: Grid) -> void:
 	"""Set the grid reference"""
 	grid = new_grid
-	print("[Player] Grid reference set")
+	Log.system("Player grid reference set")
