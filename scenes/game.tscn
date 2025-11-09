@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3 uid="uid://bqm3n2v8xk7yx"]
+[gd_scene load_steps=4 format=3 uid="uid://bqm3n2v8xk7yx"]
 
 [ext_resource type="PackedScene" uid="uid://cy7w8qn1yf3d" path="res://scenes/game_3d.tscn" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/game.gd" id="2_game"]
+[ext_resource type="Theme" path="res://assets/themes/minimal_mono_theme.tres" id="3_theme"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -10,6 +11,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+theme = ExtResource("3_theme")
 script = ExtResource("2_game")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
@@ -47,10 +49,9 @@ theme_override_constants/margin_bottom = 2
 
 [node name="SubViewportContainer" type="SubViewportContainer" parent="MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer"]
 texture_filter = 1
-custom_minimum_size = Vector2(640, 480)
 layout_mode = 2
-size_flags_horizontal = 4
-size_flags_vertical = 4
+size_flags_horizontal = 3
+size_flags_vertical = 3
 mouse_filter = 0
 stretch = true
 stretch_shrink = 1
@@ -78,23 +79,15 @@ layout_mode = 2
 
 [node name="LogTitle" type="Label" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 14
-text = "GAME LOG / EXAMINE"
-
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer"]
-layout_mode = 2
+text = "log"
 
 [node name="LogText" type="RichTextLabel" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
-theme_override_colors/default_color = Color(0.7, 0.7, 0.7, 1)
-theme_override_font_sizes/normal_font_size = 12
 bbcode_enabled = true
-text = "[color=gray]Welcome to the Backrooms...[/color]
-[color=white]> You enter Level 0. The fluorescent lights buzz overhead.[/color]
-[color=#88ff88]> [REDACTED] watches from [REDACTED][/color]"
+text = "[PLACEHOLDER] game logs will appear here"
 scroll_following = true
+fit_content = false
 
 [node name="RightSide" type="PanelContainer" parent="MarginContainer/HBoxContainer"]
 custom_minimum_size = Vector2(350, 0)
@@ -117,25 +110,20 @@ size_flags_vertical = 3
 
 [node name="Title" type="Label" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 16
-text = "CHARACTER"
-
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet"]
-layout_mode = 2
+text = "character"
 
 [node name="Stats" type="Label" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
-theme_override_font_sizes/font_size = 12
-text = "Health: 100 / 100
-Sanity: 80 / 100
-Stamina: 50 / 50
+text = "[PLACEHOLDER]
+hp  100/100
+sn   80/100
+st   50/50
 
-Turn: 0
-Position: (0, 0)"
+turn 0
+pos  (0, 0)"
 
-[node name="HSeparator2" type="HSeparator" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer"]
+[node name="Spacer" type="Control" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer"]
+custom_minimum_size = Vector2(0, 20)
 layout_mode = 2
 
 [node name="CoreInventory" type="VBoxContainer" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer"]
@@ -144,18 +132,12 @@ size_flags_vertical = 3
 
 [node name="Title" type="Label" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CoreInventory"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.8, 0.8, 0.8, 1)
-theme_override_font_sizes/font_size = 16
-text = "CORE INVENTORY"
-
-[node name="HSeparator" type="HSeparator" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CoreInventory"]
-layout_mode = 2
+text = "build"
 
 [node name="Items" type="Label" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CoreInventory"]
 layout_mode = 2
-theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
-theme_override_font_sizes/font_size = 12
-text = "[Empty Slot]
-[Empty Slot]
-[Empty Slot]
-[Empty Slot]"
+text = "[PLACEHOLDER]
+[empty]
+[empty]
+[empty]
+[empty]"

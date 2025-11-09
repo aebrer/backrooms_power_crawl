@@ -44,12 +44,13 @@ func _update_ui() -> void:
 		return
 
 	# Update character sheet
-	char_stats.text = "Health: 100 / 100
-Sanity: 80 / 100
-Stamina: 50 / 50
+	char_stats.text = "[PLACEHOLDER]
+hp  100/100
+sn   80/100
+st   50/50
 
-Turn: %d
-Position: (%d, %d)" % [
+turn %d
+pos  (%d, %d)" % [
 		player.turn_count,
 		player.grid_position.x,
 		player.grid_position.y

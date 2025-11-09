@@ -1,0 +1,31 @@
+[gd_resource type="FontFile" format=3]
+
+[resource]
+cache/0/16/0/ascent = 0.0
+cache/0/16/0/descent = 0.0
+cache/0/16/0/underline_position = 0.0
+cache/0/16/0/underline_thickness = 0.0
+cache/0/16/0/scale = 1.0
+face_index = 0
+antialiasing = 1
+generate_mipmaps = false
+disable_embedded_bitmaps = true
+multichannel_signed_distance_field = false
+msdf_pixel_range = 8
+msdf_size = 48
+allow_system_fallback = true
+force_autohinter = false
+hinting = 1
+subpixel_positioning = 1
+oversampling = 0.0
+fallbacks = []
+data = ""
+font_name = "IBM Plex Mono"
+style_name = "Regular"
+font_style = 0
+font_weight = 400
+font_stretch = 100
+subpixel_positioning = 1
+embolden = 0.0
+transform = Transform2D(1, 0, 0, 1, 0, 0)
+opentype_features = {}
