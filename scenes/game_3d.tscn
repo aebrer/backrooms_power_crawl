@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://cy7w8qn1yf3d"]
+[gd_scene load_steps=8 format=3 uid="uid://cy7w8qn1yf3d"]
 
 [ext_resource type="Script" path="res://scripts/game_3d.gd" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/grid_3d.gd" id="2_grid3d"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://scripts/player/states/idle_state.gd" id="6_idle"]
 [ext_resource type="Script" path="res://scripts/player/states/executing_turn_state.gd" id="8_executing"]
 [ext_resource type="Script" path="res://scripts/player/tactical_camera.gd" id="10_camera"]
+[ext_resource type="Material" path="res://post_process/dither-banding_mat.tres" id="9_dither"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
 
@@ -136,3 +137,12 @@ LB / RB / MOUSE WHEEL: Zoom camera
 ESC: Toggle mouse capture
 
 TURN-BASED: Each action = 1 discrete turn. Snap movement!"
+
+[node name="PostProcessDither" type="ColorRect" parent="UI"]
+material = ExtResource("9_dither")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2

@@ -1,0 +1,10 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/psx_lit.gdshader" id="1_floor"]
+
+[resource]
+shader = ExtResource("1_floor")
+shader_parameter/modulate_color = Color(0.82, 0.71, 0.55, 1)
+shader_parameter/uv_scale = Vector2(1, 1)
+shader_parameter/uv_offset = Vector2(0, 0)
+shader_parameter/uv_pan_velocity = Vector2(0, 0)

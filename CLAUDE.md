@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-08 (Added input parity lessons + forward indicator system)
+**Last Updated**: 2025-11-09 (Added Python tooling section, _claude_scripts/ directory, context window management strategy)
 
 ---
 
@@ -627,7 +627,9 @@ Let me know if you find any issues, or if it works as expected and you'd like to
 │   ├── actions/       # Command pattern actions
 │   ├── player/        # Player controller and states
 │   └── [systems]/     # Future: grid, entities, etc.
-├── assets/            # Art, audio, fonts (future)
+├── assets/            # Art, audio, fonts, resources
+├── _claude_scripts/   # Python maintenance scripts (context window management, etc.)
+├── venv/              # Python virtual environment (gitignored)
 └── data/              # JSON configs (future)
 ```
 
@@ -646,6 +648,121 @@ User values detailed commit messages:
 - File structure changes
 - Testing notes
 - "🤖 Generated with Claude Code" footer (auto-added)
+
+---
+
+## 11. Python Tooling & Maintenance Scripts
+
+### Python Virtual Environment
+
+**Location**: `/home/andrew/projects/backrooms_power_crawl/venv/`
+
+The project includes a Python virtual environment for running maintenance scripts and tools. This venv is used by Claude instances for automation tasks.
+
+**Activation**:
+```bash
+source venv/bin/activate
+```
+
+**Usage**:
+- Python scripts for file manipulation (e.g., editing large .tres files)
+- Automation tools that Claude can run
+- Pre-commit hooks (future)
+
+**Important**: The venv is in `.gitignore` - it's a local development tool, not part of the source code.
+
+---
+
+### The `_claude_scripts/` Directory
+
+**Purpose**: Maintenance scripts for managing Godot resource files and other automation tasks that Claude instances may need to run.
+
+**Location**: `/home/andrew/projects/backrooms_power_crawl/_claude_scripts/`
+
+These scripts are part of the project's tooling infrastructure and should be committed to version control.
+
+---
+
+### Stripping MeshLibrary Preview Images
+
+**Problem**: Godot MeshLibrary files (`.tres`) contain embedded preview thumbnails as `PackedByteArray` data, making them enormous:
+- With previews: ~99KB (99,117 tokens - **EXCEEDS Read tool's context window limit!**)
+- Without previews: ~3KB (readable by Claude)
+
+**This is about context window management, not version control!** Claude instances cannot read files that exceed ~30,000 tokens. The preview images make the file literally unreadable.
+
+**Solution**: `_claude_scripts/strip_mesh_library_previews.py`
+
+**What it does**:
+1. Removes `[sub_resource type="Image"]` blocks (embedded byte arrays)
+2. Removes `[sub_resource type="ImageTexture"]` blocks (reference images)
+3. Removes `item/N/preview` assignments
+4. Cleans up extra blank lines
+5. Writes back to `assets/grid_mesh_library.tres`
+
+**When to use**:
+- **When Claude needs to read the file** - Run this FIRST before asking Claude to edit grid_mesh_library.tres
+- After editing the MeshLibrary in Godot Editor (which regenerates previews and blows up file size again)
+- Anytime the file exceeds ~30,000 tokens and can't be read
+
+**How to run**:
+```bash
+# From project root:
+python3 _claude_scripts/strip_mesh_library_previews.py
+```
+
+**Output**:
+```
+✓ Stripped preview images from assets/grid_mesh_library.tres
+  Original size: 99,117 bytes
+  New size: 3,456 bytes
+  Saved: 95,661 bytes (96.5%)
+```
+
+**Note**: Godot Editor will regenerate preview images the next time you open the MeshLibrary, so you'll need to re-run this script before each commit if you've edited the file in Godot.
+
+---
+
+### Strategy for Large Godot Resource Files
+
+**General Pattern for .tres/.tscn files that blow up Claude's context window**:
+
+1. **Comments don't work** - Godot Editor strips comments (`;`) on save, so they're unreliable for marking sections
+
+2. **Externalize when possible**:
+   - Use `[ext_resource]` instead of `[sub_resource]` when you can
+   - Example: We externalized PSX materials to separate `.tres` files
+   - This keeps the main file small enough for Claude to read
+   - Makes changes easier to understand and edit
+
+3. **Strip generated data**:
+   - Preview images, thumbnails, and other generated content bloat files
+   - Use Python scripts like `strip_mesh_library_previews.py` to remove them
+   - Godot will regenerate them when needed
+   - **Primary goal**: Keep files under ~30,000 tokens so Claude can read them
+
+4. **Direct text editing is preferred**:
+   - Godot resource files are text-based - take advantage!
+   - Use Python scripts with regex for surgical edits
+   - Avoid "open in editor → manual changes → export" workflows when you can automate
+   - But if file is too large, you MUST strip it first or Claude can't read it
+
+5. **Future consideration: Programmatic generation**:
+   - For very complex resources, consider generating them via EditorScript
+   - Store source files in git, generate the .tres at build time
+   - See planning session on MeshLibrary generation for full strategy
+
+**Example workflow for Claude working with large files**:
+```bash
+# BEFORE asking Claude to edit a large .tres file:
+python3 _claude_scripts/strip_mesh_library_previews.py
+
+# Now Claude can actually read it
+# Claude edits the file...
+
+# Later: Godot regenerates previews when you open the file
+# Next time Claude needs to edit it, strip again
+```
 
 ---
 
