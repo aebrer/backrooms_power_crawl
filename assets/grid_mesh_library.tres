@@ -1,6 +1,6 @@
 [gd_resource type="MeshLibrary" load_steps=7 format=3 uid="uid://beijc8l4th7t4"]
 
-[ext_resource type="ShaderMaterial" path="res://assets/materials/psx_floor.tres" id="1_floor_mat"]
+[ext_resource type="ShaderMaterial" path="res://assets/levels/level_00/floor_brown.tres" id="1_floor_mat"]
 [ext_resource type="ShaderMaterial" path="res://assets/levels/level_00/wall_yellow.tres" id="2_wall_mat"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_qclfb"]
