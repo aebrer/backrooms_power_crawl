@@ -732,11 +732,15 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 1. **Spawn Creator Agent**
    - Provide detailed description of texture needed
    - Pull reference details from Backrooms wiki or design docs
-   - Agent creates JavaScript code in `_claude_scripts/textures/` that:
-     - Renders texture using Canvas 2D API or WebGL shaders
-     - Outputs PNG at required resolution (e.g., 128×128, 64×64)
-     - Uses headless Chromium for rendering
-   - Clear filesystem layout: `_claude_scripts/textures/texture_name/generate.js`
+   - Agent creates standalone JavaScript in `_claude_scripts/textures/texture_name/`
+   - **No npm/package.json** - use plain browser APIs (Canvas 2D, WebGL)
+   - See `/home/andrew/pico8_carts/series/screensavers/the_seed_marche/index.js` for reference
+   - Code structure:
+     - Create canvas element: `document.createElement('canvas')`
+     - Use Canvas 2D API or WebGL for procedural rendering
+     - Export to PNG: `canvas.toDataURL()` or `canvas.toBlob()`
+     - Run in browser or headless Chromium
+   - Clear filesystem layout: `_claude_scripts/textures/texture_name/generate.html` + `generate.js`
 
 2. **Spawn Comparison Critic Agent**
    - Provide original description + path to generated PNG
