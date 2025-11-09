@@ -16,6 +16,9 @@ size = Vector3(2, 4, 2)
 material = ExtResource("3_ceiling_mat")
 size = Vector2(2, 2)
 
+[sub_resource type="BoxShape3D" id="BoxShape3D_wall"]
+size = Vector3(2, 4, 2)
+
 [resource]
 item/0/name = "Floor"
 item/0/mesh = SubResource("PlaneMesh_qclfb")
@@ -29,7 +32,14 @@ item/1/name = "Wall"
 item/1/mesh = SubResource("BoxMesh_i67ov")
 item/1/mesh_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
 item/1/mesh_cast_shadow = 1
-item/1/shapes = []
+item/1/shapes = [
+{
+"shape": SubResource("BoxShape3D_wall"),
+"transform": Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
+}
+]
+item/1/collision_layer = 2
+item/1/collision_mask = 0
 item/1/navigation_mesh_transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0)
 item/1/navigation_layers = 1
 

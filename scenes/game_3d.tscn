@@ -23,6 +23,9 @@ sky = SubResource("Sky_1")
 radius = 0.4
 height = 1.8
 
+[sub_resource type="SphereShape3D" id="SphereShape3D_springarm"]
+radius = 0.3
+
 [sub_resource type="StandardMaterial3D" id="StandardMaterial3D_indicator"]
 transparency = 1
 albedo_color = Color(0, 1, 0, 0.6)
@@ -100,6 +103,7 @@ pitch_far = -60.0
 [node name="VerticalPivot" type="Node3D" parent="Player3D/CameraRig/HorizontalPivot"]
 
 [node name="SpringArm3D" type="SpringArm3D" parent="Player3D/CameraRig/HorizontalPivot/VerticalPivot"]
+shape = SubResource("SphereShape3D_springarm")
 spring_length = 15.0
 collision_mask = 2
 

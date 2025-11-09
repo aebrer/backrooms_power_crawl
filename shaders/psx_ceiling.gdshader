@@ -25,14 +25,14 @@ uniform float player_fade_inner_radius : hint_range(0.0, 20.0) = 3.0;
 uniform float player_fade_outer_radius : hint_range(0.0, 20.0) = 8.0;
 uniform float player_fade_power : hint_range(0.1, 4.0) = 2.0;
 
-// Wireframe rendering
+// Wireframe rendering (UV-based grid, no barycentric)
 uniform vec4 wireframe_color : source_color = vec4(0.0, 1.0, 0.8, 0.5);
 uniform float wire_width : hint_range(0.0, 40.0) = 8.0;
 uniform float wire_smoothness : hint_range(0.0, 0.1) = 0.01;
 uniform float wireframe_threshold : hint_range(0.0, 1.0) = 0.6;
+uniform float grid_scale : hint_range(0.1, 10.0) = 1.0;  // Grid cells per UV unit
 
-// Varying variables for wireframe and world position
-varying vec3 barys;
+// Varying variables for world position and screen coords
 varying vec3 world_position;
 varying vec2 screen_uv;
 
@@ -68,26 +68,12 @@ float calculate_world_space_fade() {
 	return fade_factor;
 }
 
-float calculate_combined_fade() {
-	float screen_fade = calculate_screen_space_fade();
-	float world_fade = calculate_world_space_fade();
-	return min(screen_fade, world_fade);
-}
+// Removed - vignettes are now separate, not combined
 
 void vertex() {
 	// UV panning
 	UV = UV * uv_scale + uv_offset;
 	UV += uv_pan_velocity * TIME;
-
-	// Barycentric coordinates for wireframe
-	int index = VERTEX_ID % 3;
-	if (index == 0) {
-		barys = vec3(1.0, 0.0, 0.0);
-	} else if (index == 1) {
-		barys = vec3(0.0, 1.0, 0.0);
-	} else {
-		barys = vec3(0.0, 0.0, 1.0);
-	}
 
 	// World position for distance fade
 	world_position = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
@@ -114,20 +100,40 @@ void fragment() {
 
 	// Ceiling fade system
 	if (enable_ceiling_fade) {
-		float fade = calculate_combined_fade();
+		// Simple check: is camera above or below the ceiling surface?
+		// Calculate camera position in world space
+		vec3 camera_world_pos = (INV_VIEW_MATRIX * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 
-		// fade = 0.0 at center/near player, 1.0 at edges/far from player
-		// Low fade = wireframe, high fade = opaque
+		// If camera Y is below surface Y, we're viewing from inside the room
+		// Only apply vignette when camera is ABOVE the ceiling
+		if (camera_world_pos.y > world_position.y) {
+			// Calculate BOTH vignettes independently
+			float screen_fade = calculate_screen_space_fade();
+			float player_fade = calculate_world_space_fade();
 
-		if (fade < wireframe_threshold) {
-			// Wireframe rendering
-			vec3 deltas = fwidth(barys);
-			vec3 barys_s = smoothstep(
-				deltas * wire_width - wire_smoothness,
-				deltas * wire_width + wire_smoothness,
-				barys
-			);
-			float wire_mix = min(barys_s.x, min(barys_s.y, barys_s.z));
+			// Multiply fades together so BOTH contribute
+			// If either vignette says "transparent", result is transparent
+			float fade = screen_fade * player_fade;
+
+			// fade = 0.0 when near center OR near player
+			// fade = 1.0 when at edges AND far from player
+
+			if (fade < wireframe_threshold) {
+			// UV-based grid wireframe (no triangle diagonals!)
+			// Calculate position within grid cell (0 to 1 range)
+			vec2 grid_uv = fract(UV * grid_scale);
+
+			// Distance from cell edges (0 at edges, 0.5 at center)
+			vec2 edge_dist = min(grid_uv, 1.0 - grid_uv);
+
+			// Convert to edge proximity (screen-space consistent)
+			vec2 edge_proximity = edge_dist / fwidth(UV * grid_scale);
+
+			// Detect if we're near either horizontal or vertical grid line
+			float grid_line = min(edge_proximity.x, edge_proximity.y);
+
+			// Smoothstep for anti-aliased grid lines
+			float wire_mix = smoothstep(wire_width - wire_smoothness, wire_width + wire_smoothness, grid_line);
 
 			ALBEDO = mix(wireframe_color.rgb, ALBEDO, wire_mix);
 			ALPHA = mix(wireframe_color.a, 0.0, wire_mix);
@@ -135,12 +141,14 @@ void fragment() {
 			if (ALPHA < 0.01) {
 				discard;
 			}
-		} else {
-			// Fade in based on distance
-			ALPHA *= fade;
-			if (ALPHA < 0.01) {
-				discard;
+			} else {
+				// Fade in based on distance
+				ALPHA *= fade;
+				if (ALPHA < 0.01) {
+					discard;
+				}
 			}
 		}
+		// If viewing_from_above <= 0.01, keep ceiling fully opaque
 	}
 }
