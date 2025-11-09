@@ -25,4 +25,7 @@ func _ready() -> void:
 	player.grid = grid
 	player.move_indicator = move_indicator
 
+	# Set player reference in grid for ceiling transparency system
+	grid.set_player(player)
+
 	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "3D viewport ready - controls active")

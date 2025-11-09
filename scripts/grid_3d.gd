@@ -21,6 +21,12 @@ var walkable_cells: Array[Vector2i] = []
 # Current level configuration
 var current_level: LevelConfig = null
 
+# Player reference for ceiling shader updates
+var player: Node3D = null
+
+# Cached ceiling material for performance
+var ceiling_material: ShaderMaterial = null
+
 # MeshLibrary item IDs
 enum TileType {
 	FLOOR = 0,
@@ -35,6 +41,19 @@ enum TileType {
 func _ready() -> void:
 	grid_map.cell_size = CELL_SIZE
 	print("[Grid3D] Initialized: %d x %d" % [grid_size.x, grid_size.y])
+
+	# Cache ceiling material reference
+	_cache_ceiling_material()
+
+func _process(_delta: float) -> void:
+	"""Update ceiling shader with player position each frame"""
+	if player and ceiling_material:
+		var player_pos = player.global_position
+		ceiling_material.set_shader_parameter("player_world_position", player_pos)
+
+		# Debug: Log once per second
+		if Engine.get_frames_drawn() % 60 == 0:
+			Log.system("Ceiling shader updated - Player at: %s" % player_pos)
 
 func initialize(size: Vector2i) -> void:
 	"""Initialize grid with given size (legacy method)"""
@@ -151,3 +170,51 @@ func get_random_walkable_position() -> Vector2i:
 	if walkable_cells.is_empty():
 		return Vector2i(grid_size.x / 2, grid_size.y / 2)
 	return walkable_cells.pick_random()
+
+# ============================================================================
+# CEILING TRANSPARENCY SYSTEM
+# ============================================================================
+
+func set_player(player_node: Node3D) -> void:
+	"""Set the player reference for ceiling shader updates"""
+	player = player_node
+	Log.system("Grid3D: Player reference set for ceiling transparency")
+
+func _cache_ceiling_material() -> void:
+	"""Cache ceiling material from MeshLibrary for performance"""
+	if not grid_map:
+		Log.system("Grid3D: No GridMap found!")
+		return
+
+	if not grid_map.mesh_library:
+		Log.system("Grid3D: GridMap has no MeshLibrary!")
+		return
+
+	var mesh_lib = grid_map.mesh_library as MeshLibrary
+	if not mesh_lib:
+		Log.system("Grid3D: MeshLibrary cast failed!")
+		return
+
+	Log.system("Grid3D: MeshLibrary found, checking ceiling tile...")
+
+	# Get ceiling tile mesh
+	var ceiling_mesh = mesh_lib.get_item_mesh(TileType.CEILING)
+	if not ceiling_mesh:
+		Log.system("Grid3D: ERROR - No ceiling mesh found in MeshLibrary (TileType.CEILING = %d)" % TileType.CEILING)
+		return
+
+	Log.system("Grid3D: Ceiling mesh found with %d surfaces" % ceiling_mesh.get_surface_count())
+
+	# Get material from ceiling mesh (surface 0)
+	if ceiling_mesh.get_surface_count() > 0:
+		var mat = ceiling_mesh.surface_get_material(0)
+		Log.system("Grid3D: Surface 0 material type: %s" % (mat.get_class() if mat else "null"))
+
+		ceiling_material = mat as ShaderMaterial
+		if ceiling_material:
+			var shader_path = ceiling_material.shader.resource_path if ceiling_material.shader else "no shader"
+			Log.system("Grid3D: ✅ Ceiling material cached! Shader: %s" % shader_path)
+		else:
+			Log.system("Grid3D: ❌ Ceiling mesh material is not a ShaderMaterial")
+	else:
+		Log.system("Grid3D: ❌ Ceiling mesh has no surfaces")
