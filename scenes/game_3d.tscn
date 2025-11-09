@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://cy7w8qn1yf3d"]
+[gd_scene load_steps=7 format=3 uid="uid://cy7w8qn1yf3d"]
 
 [ext_resource type="Script" path="res://scripts/game_3d.gd" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/grid_3d.gd" id="2_grid3d"]
@@ -6,9 +6,7 @@
 [ext_resource type="Script" path="res://scripts/player/player_3d.gd" id="4_player3d"]
 [ext_resource type="Script" path="res://scripts/player/input_state_machine.gd" id="5_statemachine"]
 [ext_resource type="Script" path="res://scripts/player/states/idle_state.gd" id="6_idle"]
-[ext_resource type="Script" path="res://scripts/player/states/aiming_move_state.gd" id="7_aiming"]
 [ext_resource type="Script" path="res://scripts/player/states/executing_turn_state.gd" id="8_executing"]
-[ext_resource type="Script" path="res://scripts/player/mouse_grid_input.gd" id="9_mouse"]
 [ext_resource type="Script" path="res://scripts/player/tactical_camera.gd" id="10_camera"]
 
 [sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
@@ -77,14 +75,8 @@ script = ExtResource("5_statemachine")
 [node name="IdleState" type="Node" parent="Player3D/InputStateMachine"]
 script = ExtResource("6_idle")
 
-[node name="AimingMoveState" type="Node" parent="Player3D/InputStateMachine"]
-script = ExtResource("7_aiming")
-
 [node name="ExecutingTurnState" type="Node" parent="Player3D/InputStateMachine"]
 script = ExtResource("8_executing")
-
-[node name="MouseGridInput" type="Node" parent="Player3D"]
-script = ExtResource("9_mouse")
 
 [node name="CameraRig" type="Node3D" parent="Player3D"]
 script = ExtResource("10_camera")
@@ -135,10 +127,12 @@ offset_bottom = -10.0
 grow_vertical = 0
 theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)
 theme_override_font_sizes/font_size = 14
-text = "LEFT STICK / WASD: Aim movement (camera-relative!)
-RIGHT TRIGGER / SPACE: Advance turn (hold = rapid turns!)
+text = "EXPERIMENTAL: Forward Indicator Mode
+Green arrow = 1 cell ahead in camera direction
+
 RIGHT STICK / MOUSE: Rotate camera (Fortnite-style!)
+RT / SPACE / LEFT CLICK: Move forward (hold = rapid turns!)
 LB / RB / MOUSE WHEEL: Zoom camera
 ESC: Toggle mouse capture
 
-TURN-BASED: Each RT press = 1 discrete turn. Snap movement!"
+TURN-BASED: Each action = 1 discrete turn. Snap movement!"

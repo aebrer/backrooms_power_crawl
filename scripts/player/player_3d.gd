@@ -8,7 +8,6 @@ extends CharacterBody3D
 
 # Grid state (SAME AS 2D VERSION)
 var grid_position: Vector2i = Vector2i(64, 64)
-var movement_target: Vector2i = Vector2i.ZERO
 var pending_action = null
 var turn_count: int = 0
 
@@ -62,67 +61,52 @@ func update_visual_position() -> void:
 	global_position = world_pos
 
 # ============================================================================
-# CAMERA-RELATIVE MOVEMENT
-# ============================================================================
-
-func get_camera_relative_direction(input_dir: Vector2i) -> Vector2i:
-	"""Transform input direction to be camera-relative"""
-	if not camera_rig or input_dir == Vector2i.ZERO:
-		return input_dir
-
-	# Get camera yaw (horizontal rotation only, ignore pitch)
-	var camera_yaw_deg = camera_rig.h_pivot.rotation_degrees.y
-
-	# Convert to radians - NEGATIVE rotation (inverse of camera)
-	# Use EXACT camera angle, don't snap (input already snaps to 8-way)
-	var yaw_rad = -deg_to_rad(camera_yaw_deg)
-
-	# Convert input Vector2i to Vector2 for rotation math
-	var input_vec = Vector2(input_dir.x, input_dir.y)
-
-	# Rotate input by camera yaw
-	var rotated = input_vec.rotated(yaw_rad)
-
-	# Round and snap to nearest 8-way direction
-	var length = rotated.length()
-	if length < 0.1:
-		return Vector2i.ZERO
-
-	# Normalize and re-snap to 8-way grid
-	var angle = rotated.angle()
-	var octant = int(round(angle / (PI / 4.0))) % 8
-
-	var directions := [
-		Vector2i(1, 0),   # 0: Right
-		Vector2i(1, 1),   # 1: Down-Right
-		Vector2i(0, 1),   # 2: Down
-		Vector2i(-1, 1),  # 3: Down-Left
-		Vector2i(-1, 0),  # 4: Left
-		Vector2i(-1, -1), # 5: Up-Left
-		Vector2i(0, -1),  # 6: Up
-		Vector2i(1, -1)   # 7: Up-Right
-	]
-
-	var result = directions[octant]
-
-	# Debug
-	if result != Vector2i.ZERO:
-		print("[Player3D] Camera-relative: %s → %s (yaw=%.0f° octant=%d)" % [input_dir, result, camera_yaw_deg, octant])
-
-	return result
-
-# ============================================================================
 # MOVEMENT INDICATOR (3D)
 # ============================================================================
 
+func get_camera_forward_grid_direction() -> Vector2i:
+	"""Get the grid direction the camera is facing (1 cell ahead)"""
+	if not camera_rig:
+		return Vector2i(0, 1)  # Default forward
+
+	# Get camera yaw - this is the direction the camera is rotated
+	# We want forward direction to rotate WITH the camera (same direction)
+	var camera_yaw_deg = camera_rig.h_pivot.rotation_degrees.y
+
+	# Negate to match rotation direction, then add 270° offset to go from "left" to "forward"
+	# (180° was left, 270° is forward)
+	var forward_yaw_deg = -camera_yaw_deg + 270.0
+	var yaw_rad = deg_to_rad(forward_yaw_deg)
+
+	# Convert angle directly to octant (no need to rotate a vector)
+	# Normalize angle to 0-2π range for clean octant calculation
+	var normalized_angle = fmod(yaw_rad, 2.0 * PI)
+	if normalized_angle < 0:
+		normalized_angle += 2.0 * PI
+
+	var octant = int(round(normalized_angle / (PI / 4.0))) % 8
+
+	var directions := [
+		Vector2i(1, 0),   # 0: Right (0°)
+		Vector2i(1, 1),   # 1: Down-Right (45°)
+		Vector2i(0, 1),   # 2: Down (90°)
+		Vector2i(-1, 1),  # 3: Down-Left (135°)
+		Vector2i(-1, 0),  # 4: Left (180°)
+		Vector2i(-1, -1), # 5: Up-Left (225°)
+		Vector2i(0, -1),  # 6: Up (270°)
+		Vector2i(1, -1)   # 7: Up-Right (315°)
+	]
+
+	return directions[octant]
+
 func update_move_indicator() -> void:
-	"""Show movement preview at target position"""
+	"""Show forward indicator 1 cell ahead in camera direction"""
 	if not grid or not move_indicator:
 		return
 
-	# Calculate target position with camera-relative direction
-	var camera_relative_target = get_camera_relative_direction(movement_target)
-	var target_pos = grid_position + camera_relative_target
+	# Show indicator 1 cell ahead in camera direction
+	var forward_direction = get_camera_forward_grid_direction()
+	var target_pos = grid_position + forward_direction
 
 	# Check if target is valid
 	if grid.is_walkable(target_pos):

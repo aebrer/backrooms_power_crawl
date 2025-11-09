@@ -25,10 +25,10 @@ This document outlines the technical architecture for Backrooms Power Crawl, foc
 ┌──────────────────▼──────────────────────────────────────────┐
 │              STATE MACHINE LAYER                            │
 │  Player → InputStateMachine → Current State                 │
-│    States: IdleState, AimingMoveState, ExecutingTurnState   │
+│    States: IdleState, ExecutingTurnState                    │
 │  - State-specific input handling                            │
 │  - Turn boundaries explicit                                 │
-│  - Queries InputManager for normalized input                │
+│  - Forward indicator system (camera-based movement)         │
 └──────────────────┬──────────────────────────────────────────┘
                    │
 ┌──────────────────▼──────────────────────────────────────────┐
@@ -88,14 +88,14 @@ if InputManager.is_action_just_pressed("move_confirm"):
 
 **States**:
 1. **IdleState**: Waiting for player input
-   - Transitions to AimingMoveState when stick/WASD pressed
-2. **AimingMoveState**: Player aiming movement direction
-   - Shows preview indicator (green if valid, red if blocked)
-   - Confirms with move_confirm action
-   - Returns to IdleState if stick released
+   - Shows forward indicator (1 cell ahead in camera direction)
+   - Indicator updates in real-time as camera rotates
+   - RT/Space/Left Click moves forward
+   - Hold-to-repeat with ramping speed (0.25s→0.08s)
    - Transitions to ExecutingTurnState on confirm
-3. **ExecutingTurnState**: Processing turn
+2. **ExecutingTurnState**: Processing turn
    - Input blocked during turn execution
+   - Hides movement indicator
    - Executes pending action
    - Processes enemy turns (future)
    - Returns to IdleState when complete
@@ -103,13 +103,9 @@ if InputManager.is_action_just_pressed("move_confirm"):
 **State Lifecycle**:
 ```
 IdleState
-  ├─ stick_moved → AimingMoveState
-  └─ (waiting)
-
-AimingMoveState
-  ├─ stick_released → IdleState
-  ├─ move_confirm + valid → ExecutingTurnState
-  └─ move_confirm + invalid → (stay, show error)
+  ├─ move_confirm (RT/Space/Click) + valid → ExecutingTurnState
+  ├─ move_confirm + invalid → (stay, show blocked feedback)
+  └─ (showing forward indicator, updates with camera rotation)
 
 ExecutingTurnState
   ├─ execute_action()

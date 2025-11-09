@@ -12,7 +12,6 @@ extends Node
 ##   Player/
 ##     ├─ InputStateMachine/
 ##     │   ├─ IdleState
-##     │   ├─ AimingMoveState
 ##     │   └─ ExecutingTurnState
 ##     └─ ... (other player components)
 

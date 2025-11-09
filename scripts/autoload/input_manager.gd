@@ -54,6 +54,10 @@ var right_trigger_pressed: bool = false
 var _left_trigger_just_pressed: bool = false
 var _right_trigger_just_pressed: bool = false
 
+## Mouse button state - for input parity (left click = RT)
+var left_mouse_pressed: bool = false
+var _left_mouse_just_pressed: bool = false
+
 # ============================================================================
 # LIFECYCLE
 # ============================================================================
@@ -77,9 +81,13 @@ func _process(_delta: float) -> void:
 	_actions_this_frame.clear()
 	_left_trigger_just_pressed = false
 	_right_trigger_just_pressed = false
+	_left_mouse_just_pressed = false
 
 	# Update trigger state
 	_update_triggers()
+
+	# Update mouse button state
+	_update_mouse_buttons()
 
 	# Update continuous aim direction every frame
 	_update_aim_direction()
@@ -202,6 +210,30 @@ func _update_triggers() -> void:
 	# LT (left trigger) currently unmapped
 	# Future: Could map to examine_mode or other actions
 
+func _update_mouse_buttons() -> void:
+	"""Track mouse button state for input parity (left click = RT)"""
+	# Only track when mouse is captured (otherwise it's for UI/camera)
+	if Input.mouse_mode != Input.MOUSE_MODE_CAPTURED:
+		left_mouse_pressed = false
+		_left_mouse_just_pressed = false
+		return
+
+	# Check current state
+	var mouse_now_pressed = Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+
+	# Track "just pressed" (transition from not pressed -> pressed)
+	_left_mouse_just_pressed = mouse_now_pressed and not left_mouse_pressed
+
+	# Update pressed state for next frame
+	left_mouse_pressed = mouse_now_pressed
+
+	# Synthesize action events for mouse buttons
+	# Left click -> move_confirm action (same as RT)
+	if _left_mouse_just_pressed:
+		_actions_this_frame["move_confirm"] = true
+		if debug_input:
+			print("[InputManager] Left mouse clicked -> move_confirm (input parity)")
+
 # ============================================================================
 # ACTION QUERIES
 # ============================================================================
@@ -214,12 +246,13 @@ func is_action_just_pressed(action: String) -> bool:
 ## Check if an action is currently held down
 ## Handles both regular actions AND trigger-synthesized actions
 func is_action_pressed(action: String) -> bool:
-	# Special handling for move_confirm - check RT trigger state
+	# Special handling for move_confirm - check RT trigger state + mouse button
 	if action == "move_confirm":
-		# RT is "pressed" if either:
-		# 1. Physical trigger is above threshold
-		# 2. Regular keyboard/button action is pressed
-		return right_trigger_pressed or Input.is_action_pressed(action)
+		# move_confirm is "pressed" if any of:
+		# 1. Physical RT trigger is above threshold
+		# 2. Left mouse button is pressed (input parity!)
+		# 3. Regular keyboard/button action is pressed (Space)
+		return right_trigger_pressed or left_mouse_pressed or Input.is_action_pressed(action)
 
 	# For other actions, use Godot's built-in system
 	return Input.is_action_pressed(action)

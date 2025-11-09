@@ -42,10 +42,5 @@ func _execute_turn() -> void:
 
 	print("[ExecutingTurnState] ===== TURN %d COMPLETE =====" % player.turn_count)
 
-	# Turn complete - check if player is still aiming
-	# If stick is still tilted, go back to AimingMoveState (not IdleState)
-	# This prevents the movement indicator from flickering off between turns
-	if InputManager and InputManager.get_aim_direction_grid() != Vector2i.ZERO:
-		transition_to("AimingMoveState")
-	else:
-		transition_to("IdleState")
+	# Turn complete - return to idle state
+	transition_to("IdleState")

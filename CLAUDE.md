@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-08 (Added critical lessons on input parity)
+**Last Updated**: 2025-11-08 (Added input parity lessons + forward indicator system)
 
 ---
 
@@ -150,16 +150,20 @@
 - **Never** add real-time pressure unless explicitly designed (e.g., resource drain over turns, not seconds)
 
 **Controller-First, Not Controller-Optional**
-- Left stick aims, R2 confirms (committed movement)
-- WASD + Space as fallback for keyboard users
 - All inputs have BOTH controller and keyboard mappings
+- Input parity is NON-NEGOTIABLE (see Section 5)
 - **Test with controller** before considering a feature "done"
 
-**8-Way Grid Movement**
-- Angle-based conversion for clean diagonals
-- Radial deadzone (0.2) prevents drift
-- No free analog movement - snaps to 8 directions
-- **Why**: Grid-based tactics require precise direction input
+**Forward Indicator Movement System (THE NEW ERA)**
+- Always-on green arrow shows 1 cell ahead in camera direction
+- Rotate camera to aim where you want to go
+- RT/Space/Left Click to move forward (with hold-to-repeat)
+- Simple, intuitive, works identically on all input devices
+- **Why this replaced stick-based aiming:**
+  - Better input parity (mouse has no "left stick")
+  - More intuitive for third-person camera control
+  - Simpler mental model: look where you want to go, click to move
+  - User preference: "THE NEW ERA IS THE ERA OF ALWAYS ON INDICATOR"
 
 **Viewport Culling from Day One**
 - 128x128 grid = 16,384 tiles (would crash without culling)
@@ -374,6 +378,22 @@ If you're implementing camera controls, ask: "What does Fortnite/Gears of War/ev
 - NO continuous movement or real-time reactions
 - Pressure comes from resources/escalation, not timers
 - Each action is discrete and turn-based
+
+### Movement System: Forward Indicator Only
+
+**The project uses forward indicator movement (camera-based)**
+- Green arrow always shows 1 cell ahead in camera direction
+- RT/Space/Left Click moves forward
+- Camera rotation controls where indicator points
+- **DO NOT** re-implement stick-based directional aiming
+- **DO NOT** add movement_target tracking from stick input
+- The old AimingMoveState system was removed for better input parity
+
+**Why forward indicator won:**
+- Perfect parity: mouse/gamepad/keyboard all work identically
+- Simpler: rotate camera to aim, click to move
+- More intuitive for third-person camera perspective
+- User preference: simplicity and consistency
 
 ---
 
