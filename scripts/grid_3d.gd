@@ -21,13 +21,6 @@ var walkable_cells: Array[Vector2i] = []
 # Current level configuration
 var current_level: LevelConfig = null
 
-# Player reference for shader updates
-var player: Node3D = null
-
-# Obstruction system: any material can register for camera→player updates
-var obstruction_materials: Array[ShaderMaterial] = []  # All materials using psx_wall_obstruction.gdshader
-var obstructed_cells: Array[Vector3i] = []  # Cells currently obstructed by raycasting
-
 # MeshLibrary item IDs
 enum TileType {
 	FLOOR = 0,
@@ -42,44 +35,6 @@ enum TileType {
 func _ready() -> void:
 	grid_map.cell_size = CELL_SIZE
 	print("[Grid3D] Initialized: %d x %d" % [grid_size.x, grid_size.y])
-
-	# Cache shader material references
-	_cache_shader_materials()
-
-func _process(_delta: float) -> void:
-	"""Update shaders with camera and player positions each frame"""
-	if not player:
-		return
-
-	# Get camera and player positions
-	var camera_pos = Vector3.ZERO
-	if player.camera_rig and player.camera_rig.camera:
-		camera_pos = player.camera_rig.camera.global_position
-	var player_pos = player.global_position
-
-	# Raycast from camera to player to find obstructed cells
-	obstructed_cells.clear()
-	_raycast_obstructions(camera_pos, player_pos)
-
-	# DEBUG: Log raycast results
-	if obstructed_cells.size() > 0:
-		Log.system("Grid3D: Raycasting found %d obstructed cells" % obstructed_cells.size())
-
-	# Convert Vector3i array to PackedVector3Array for shader
-	var obstructed_positions = PackedVector3Array()
-	for cell in obstructed_cells:
-		obstructed_positions.append(Vector3(cell))
-
-	# Update all registered materials with obstruction data
-	for mat in obstruction_materials:
-		if mat:
-			mat.set_shader_parameter("player_world_position", player_pos)
-			mat.set_shader_parameter("obstructed_cell_count", obstructed_cells.size())
-			mat.set_shader_parameter("obstructed_cells", obstructed_positions)
-
-	# DEBUG: Log what we're sending to shader (disabled)
-	# if obstructed_cells.size() > 0:
-	# 	Log.system("Grid3D: Updated %d materials with %d obstructed cells" % [obstruction_materials.size(), obstructed_cells.size()])
 
 func initialize(size: Vector2i) -> void:
 	"""Initialize grid with given size (legacy method)"""
@@ -196,87 +151,3 @@ func get_random_walkable_position() -> Vector2i:
 	if walkable_cells.is_empty():
 		return Vector2i(grid_size.x / 2, grid_size.y / 2)
 	return walkable_cells.pick_random()
-
-# ============================================================================
-# CEILING TRANSPARENCY SYSTEM
-# ============================================================================
-
-func set_player(player_node: Node3D) -> void:
-	"""Set the player reference for ceiling shader updates"""
-	player = player_node
-	Log.system("Grid3D: Player reference set for ceiling transparency")
-
-func _cache_shader_materials() -> void:
-	"""Cache shader materials from MeshLibrary for performance"""
-	if not grid_map or not grid_map.mesh_library:
-		Log.system("Grid3D: No GridMap or MeshLibrary found!")
-		return
-
-	var mesh_lib = grid_map.mesh_library as MeshLibrary
-	if not mesh_lib:
-		Log.system("Grid3D: MeshLibrary cast failed!")
-		return
-
-	Log.system("Grid3D: Caching shader materials from MeshLibrary...")
-
-	# Check all tile types and register their materials
-	for tile_id in [TileType.FLOOR, TileType.WALL, TileType.CEILING]:
-		var mesh = mesh_lib.get_item_mesh(tile_id)
-		if not mesh or mesh.get_surface_count() == 0:
-			continue
-
-		var mat = mesh.surface_get_material(0) as ShaderMaterial
-		if not mat or not mat.shader:
-			continue
-
-		var shader_path = mat.shader.resource_path
-
-		# Register obstruction materials (camera→player cone + player cylinder)
-		if "psx_wall_obstruction" in shader_path:
-			register_obstruction_material(mat)
-			var tile_name = ["Floor", "Wall", "Ceiling"][tile_id]
-			Log.system("Grid3D: ✅ Registered %s obstruction material" % tile_name)
-
-func register_obstruction_material(mat: ShaderMaterial) -> void:
-	"""Register a material to receive camera→player obstruction updates
-
-	Any entity (wall, ceiling, enemy, etc.) can call this to enable
-	camera→player cone transparency/wireframe rendering.
-	"""
-	if mat and mat not in obstruction_materials:
-		obstruction_materials.append(mat)
-		Log.system("Grid3D: Material registered for obstruction (%d total)" % obstruction_materials.size())
-
-func _raycast_obstructions(camera_pos: Vector3, player_pos: Vector3) -> void:
-	"""Use ShapeCast3D to detect obstructions between player and camera
-
-	ShapeCast3D is a box matching camera's frustum - only hits what camera can see.
-	This prevents hitting walls behind the player (unlike circle-based raycasting).
-	"""
-	var player_node = get_tree().get_first_node_in_group("player")
-	if not player_node:
-		return
-
-	var shape_cast = player_node.get_node_or_null("ObstructionDetector")
-	if not shape_cast:
-		return
-
-	# Orient shape_cast toward camera
-	var to_camera = camera_pos - player_pos
-	var distance = to_camera.length()
-	shape_cast.target_position = player_node.to_local(camera_pos)
-
-	# Force update
-	shape_cast.force_shapecast_update()
-
-	# Collect all collisions
-	if shape_cast.is_colliding():
-		for i in range(shape_cast.get_collision_count()):
-			var collider = shape_cast.get_collider(i)
-			if collider == grid_map:
-				var hit_point = shape_cast.get_collision_point(i)
-				var hit_cell = grid_map.local_to_map(grid_map.to_local(hit_point))
-				# Project to floor cell (Y=0)
-				var floor_cell = Vector3i(hit_cell.x, 0, hit_cell.z)
-				if floor_cell not in obstructed_cells:
-					obstructed_cells.append(floor_cell)

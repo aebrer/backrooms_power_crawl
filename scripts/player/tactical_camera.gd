@@ -31,8 +31,7 @@ extends Node3D
 # Node references
 @onready var h_pivot: Node3D = $HorizontalPivot
 @onready var v_pivot: Node3D = $HorizontalPivot/VerticalPivot
-@onready var spring_arm: SpringArm3D = $HorizontalPivot/VerticalPivot/SpringArm3D
-@onready var camera: Camera3D = $HorizontalPivot/VerticalPivot/SpringArm3D/Camera3D
+@onready var camera: Camera3D = $HorizontalPivot/VerticalPivot/Camera3D
 
 # State
 var current_zoom: float
@@ -43,15 +42,14 @@ var manual_pitch_override: bool = false  # Track if user manually adjusted pitch
 # ============================================================================
 
 func _ready() -> void:
-	# Configure SpringArm for collision
-	spring_arm.spring_length = default_distance
-	spring_arm.collision_mask = 2  # Walls on layer 2
-
 	# Set initial angles
 	v_pivot.rotation_degrees.x = default_pitch
 	h_pivot.rotation_degrees.y = default_yaw
 
 	current_zoom = default_distance
+
+	# Position camera at default distance (no SpringArm, direct positioning)
+	camera.position.z = default_distance
 
 	# Camera settings
 	camera.fov = 70.0  # Field of view
@@ -118,7 +116,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func zoom(delta: float) -> void:
 	"""Adjust camera distance"""
 	current_zoom = clampf(current_zoom + delta, zoom_min, zoom_max)
-	spring_arm.spring_length = current_zoom
+	camera.position.z = current_zoom  # Direct camera positioning (no SpringArm)
 
 	# Auto-adjust pitch based on zoom ONLY if user hasn't manually controlled it
 	if not manual_pitch_override:
