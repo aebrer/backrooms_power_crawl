@@ -20,12 +20,14 @@ var current_target: Examinable = null
 # ============================================================================
 
 func _ready() -> void:
+	Log.system("ExaminationUI _ready() called")
 	# Build UI programmatically
 	_build_ui()
 
 	# Hide everything by default
 	crosshair.visible = false
 	panel.visible = false
+	Log.system("ExaminationUI initialization complete")
 
 func _build_ui() -> void:
 	"""Build examination UI programmatically"""
@@ -37,6 +39,15 @@ func _build_ui() -> void:
 	var crosshair_container = Control.new()
 	crosshair_container.name = "CrosshairContainer"
 	crosshair_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Manually set to fill parent (anchors aren't working)
+	crosshair_container.anchor_left = 0.0
+	crosshair_container.anchor_top = 0.0
+	crosshair_container.anchor_right = 1.0
+	crosshair_container.anchor_bottom = 1.0
+	crosshair_container.offset_left = 0.0
+	crosshair_container.offset_top = 0.0
+	crosshair_container.offset_right = 0.0
+	crosshair_container.offset_bottom = 0.0
 	add_child(crosshair_container)
 
 	# Create crosshair as a simple cross (vertical and horizontal lines)
@@ -60,11 +71,15 @@ func _build_ui() -> void:
 	horizontal_line.position = Vector2(-10, -1)  # Offset from anchor center
 	crosshair_container.add_child(horizontal_line)
 
-	# Set container to fill screen so child anchors work
-	crosshair_container.set_anchors_preset(Control.PRESET_FULL_RECT)
-
 	# Store reference to container (so we can show/hide it)
 	crosshair = crosshair_container
+
+	# Debug: Log crosshair setup
+	Log.system("Crosshair created - Container size: %s, V-line size: %s, H-line size: %s" % [
+		crosshair_container.size,
+		vertical_line.size,
+		horizontal_line.size
+	])
 
 	# Create examination panel (bottom-center)
 	panel = PanelContainer.new()
@@ -150,7 +165,13 @@ func _build_ui() -> void:
 
 func show_crosshair() -> void:
 	crosshair.visible = true
-	crosshair.color = Color.WHITE  # Default color
+	crosshair.modulate = Color.WHITE  # Reset to default color
+	Log.system("Crosshair shown - Visible: %s, Size: %s, Position: %s, Modulate: %s" % [
+		crosshair.visible,
+		crosshair.size,
+		crosshair.position,
+		crosshair.modulate
+	])
 
 func hide_crosshair() -> void:
 	crosshair.visible = false

@@ -29,7 +29,9 @@ func enter() -> void:
 	if not tactical_camera:
 		tactical_camera = player.get_node_or_null("CameraRig")
 	if not examination_ui:
-		examination_ui = player.get_node_or_null("/root/Game/UI/ExaminationUI")
+		# Navigate up to scene root, then to UI/ExaminationUI
+		var game_root = player.get_parent()  # Game node
+		examination_ui = game_root.get_node_or_null("UI/ExaminationUI")
 
 	if not first_person_camera:
 		push_error("[LookModeState] FirstPersonCamera not found!")
@@ -54,6 +56,8 @@ func enter() -> void:
 	# Show examination UI (crosshair)
 	if examination_ui:
 		examination_ui.show_crosshair()
+	else:
+		Log.warn(Log.Category.STATE, "ExaminationUI not found at path: /root/Game/UI/ExaminationUI")
 
 func exit() -> void:
 	super.exit()
