@@ -70,8 +70,25 @@ func configure_from_level(level_config: LevelConfig) -> void:
 	level_config.on_generation_complete()
 
 func _apply_level_visuals(config: LevelConfig) -> void:
-	"""Apply visual settings from level config"""
-	# Apply materials if provided
+	"""Apply visual settings from level config to scene nodes at runtime
+
+	This function is the bridge between level configs and the actual scene.
+	It takes level-specific settings (colors, lighting, materials) and applies
+	them to the WorldEnvironment, DirectionalLight3D, and GridMap nodes.
+
+	WHY: Each Backrooms level has unique atmosphere. Level 0 has fluorescent
+	lighting and beige ceilings, but Level 1 might have red emergency lighting
+	and dark industrial backgrounds. By centralizing this logic here, we can
+	easily add new levels without touching scene files.
+
+	IMPORTANT: game_3d.tscn has NEUTRAL DEFAULTS (grey background, white light).
+	Those defaults are ALWAYS overridden by level config values at runtime.
+	"""
+
+	# ========================================================================
+	# MATERIALS - Per-tile materials for walls, floors, ceilings
+	# ========================================================================
+	# Future: When level-specific materials are implemented, apply them here
 	if config.floor_material:
 		Log.system("Applying custom floor material")
 		# TODO: Apply to GridMap when material system is implemented
@@ -80,14 +97,66 @@ func _apply_level_visuals(config: LevelConfig) -> void:
 		Log.system("Applying custom wall material")
 		# TODO: Apply to GridMap when material system is implemented
 
-	# Apply fog settings
-	if has_node("/root/Game3D/WorldEnvironment"):
-		var env = get_node("/root/Game3D/WorldEnvironment").environment
+	# ========================================================================
+	# ENVIRONMENT - Background, fog, ambient lighting
+	# ========================================================================
+	# The WorldEnvironment defines what you see beyond geometry (horizon/skybox)
+	# and atmospheric effects like fog.
+	# NOTE: Using relative path "../WorldEnvironment" because Grid3D is a sibling
+	var world_env = get_node_or_null("../WorldEnvironment")
+	if world_env:
+		var env = world_env.environment
 		if env:
-			# TODO: Configure fog when Environment is set up
-			pass
+			# Background color: What player sees at horizon in tactical cam
+			# Level 0: Greyish-beige (like stained office ceiling tiles)
+			# Future levels: Could be black void, red emergency lights, etc.
+			env.background_mode = Environment.BG_COLOR
+			env.background_color = config.background_color
+			Log.system("Applied background color: %s" % config.background_color)
 
-	# Load custom MeshLibrary if specified
+			# Fog settings (future: enable when fog system is ready)
+			# Will create depth and atmosphere, hide distant geometry
+			# env.fog_enabled = true
+			# env.fog_light_color = config.fog_color
+			# env.fog_density = ...
+	else:
+		push_warning("[Grid3D] WorldEnvironment node not found - cannot apply background color")
+
+	# ========================================================================
+	# DIRECTIONAL LIGHT - Main scene lighting (sun/overhead lights)
+	# ========================================================================
+	# DirectionalLight3D illuminates the entire level uniformly from one direction.
+	# Think of it as the "sun" for outdoor scenes, or "fluorescent panels" for
+	# indoor scenes like the Backrooms.
+	# NOTE: Using relative path "../OverheadLight" because Grid3D is a sibling
+	var light = get_node_or_null("../OverheadLight")
+	if light and light is DirectionalLight3D:
+		# Color: Tints the lighting (white = neutral, blue = cold, yellow = warm)
+		# Level 0: Slight blue tint for fluorescent light feel
+		light.light_color = config.directional_light_color
+
+		# Energy: Brightness/intensity (0.0 = off, 1.0 = standard, 2.0 = very bright)
+		# Level 0: 0.9 for well-lit office environment
+		light.light_energy = config.directional_light_energy
+
+		# Rotation: Direction light comes from (in degrees)
+		# Level 0: (0, 0, 80) = nearly straight down from above (overhead fluorescents)
+		# Future: (45, 0, 45) might be angled like setting sun, etc.
+		light.rotation_degrees = config.directional_light_rotation
+
+		Log.system("Applied directional light: color=%s energy=%.2f rotation=%s" % [
+			config.directional_light_color,
+			config.directional_light_energy,
+			config.directional_light_rotation
+		])
+	else:
+		push_warning("[Grid3D] OverheadLight node not found - cannot apply lighting settings")
+
+	# ========================================================================
+	# MESH LIBRARY - Tile geometry and materials
+	# ========================================================================
+	# Each level can have different wall/floor/ceiling meshes and textures.
+	# MeshLibrary defines what gets placed when GridMap sets a cell.
 	if not config.mesh_library_path.is_empty() and config.mesh_library_path != grid_map.mesh_library.resource_path:
 		var mesh_lib = load(config.mesh_library_path) as MeshLibrary
 		if mesh_lib:

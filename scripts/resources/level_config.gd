@@ -69,6 +69,34 @@ class_name LevelConfig
 ## Fog end distance
 @export var fog_end: float = 30.0
 
+## Background/skybox color (what player sees at horizon in tactical cam)
+## Examples:
+##   - Level 0: Color(0.82, 0.8, 0.75) = greyish-beige ceiling tiles
+##   - Level 1: Color(0.1, 0.1, 0.1) = black void
+##   - Level 2: Color(0.3, 0.0, 0.0) = dark red emergency lighting
+## IMPORTANT: This is NOT outdoor sky - it's what fills the "void" beyond geometry
+@export var background_color: Color = Color(0.5, 0.5, 0.5, 1.0)
+
+## Directional light color (tints all level lighting)
+## Examples:
+##   - Color(1.0, 1.0, 1.0) = pure white (neutral)
+##   - Color(0.95, 0.97, 1.0) = slight blue tint (fluorescent lights)
+##   - Color(1.0, 0.9, 0.7) = warm yellow (incandescent bulbs)
+##   - Color(1.0, 0.3, 0.3) = red emergency lighting
+@export var directional_light_color: Color = Color(1.0, 1.0, 1.0, 1.0)
+
+## Directional light energy/intensity
+## 0.0 = completely dark, 1.0 = standard brightness, 2.0 = very bright
+## Examples: Level 0 = 0.9 (well-lit office), dark level = 0.3
+@export_range(0.0, 2.0) var directional_light_energy: float = 0.8
+
+## Directional light rotation in degrees (X=pitch, Y=yaw, Z=roll)
+## Determines where light comes from:
+##   - Vector3(0, 0, 80) = nearly straight down (overhead fluorescents)
+##   - Vector3(0, 0, 45) = 45° angle from above (angled sun)
+##   - Vector3(0, 90, 10) = light from side (dramatic shadows)
+@export var directional_light_rotation: Vector3 = Vector3(0, 0, 80)
+
 # ============================================================================
 # GENERATION PARAMETERS
 # ============================================================================

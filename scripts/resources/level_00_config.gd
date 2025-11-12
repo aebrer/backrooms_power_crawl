@@ -44,6 +44,23 @@ entity density: very low"""
 	fog_end = 35.0
 
 	# ========================================================================
+	# ENVIRONMENT & LIGHTING - The "Backrooms Level 0" aesthetic
+	# ========================================================================
+	# Indoor ceiling background (no outdoor sky - this is an endless building)
+	# When player zooms out in tactical cam, they see this color at the horizon.
+	# Greyish-beige represents stained office ceiling tiles stretching to infinity.
+	background_color = Color(0.82, 0.8, 0.75, 1.0)
+
+	# Overhead fluorescent lighting - The iconic buzzing lights of Level 0
+	# Slight blue tint gives that harsh, artificial fluorescent office feel
+	# Bright energy (0.9) ensures good visibility while maintaining atmosphere
+	# Rotation (-90, 0, 0) = straight down from above, like ceiling-mounted fluorescent panels
+	# This creates even illumination on all walls without harsh shadows
+	directional_light_color = Color(0.95, 0.97, 1.0, 1.0)
+	directional_light_energy = 0.9
+	directional_light_rotation = Vector3(-90, 0, 0)
+
+	# ========================================================================
 	# GENERATION PARAMETERS
 	# ========================================================================
 	grid_size = Vector2i(128, 128)

@@ -10,14 +10,9 @@
 [ext_resource type="Script" path="res://scripts/player/tactical_camera.gd" id="10_camera"]
 [ext_resource type="Material" path="res://post_process/dither-banding_mat.tres" id="9_dither"]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_1"]
-
-[sub_resource type="Sky" id="Sky_1"]
-sky_material = SubResource("ProceduralSkyMaterial_1")
-
 [sub_resource type="Environment" id="Environment_1"]
-background_mode = 2
-sky = SubResource("Sky_1")
+background_mode = 1
+background_color = Color(0.5, 0.5, 0.5, 1)
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_1"]
 radius = 0.4
@@ -39,8 +34,9 @@ script = ExtResource("1_game3d")
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = SubResource("Environment_1")
 
-[node name="SunLight" type="DirectionalLight3D" parent="."]
-transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 0, 0, 0)
+[node name="OverheadLight" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.174, 0.985, 0, -0.985, 0.174, 0, 0, 0)
+light_color = Color(1, 1, 1, 1)
 light_energy = 0.8
 shadow_enabled = true
 
