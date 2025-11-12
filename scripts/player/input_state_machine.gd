@@ -72,7 +72,7 @@ func change_state(new_state_name: String) -> void:
 
 func get_current_state_name() -> String:
 	"""Get name of current state for debugging"""
-	return current_state.name if current_state else "None"
+	return current_state.name if current_state else ""
 
 # ============================================================================
 # INPUT DELEGATION

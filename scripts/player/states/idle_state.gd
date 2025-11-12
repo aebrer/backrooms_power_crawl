@@ -35,7 +35,7 @@ func enter() -> void:
 		rt_hold_time = 0.0
 		rt_repeat_timer = 0.0
 
-func handle_input(event: InputEvent) -> void:
+func handle_input(_event: InputEvent) -> void:
 	# Initial press is handled in process_frame for consistent timing
 	pass
 

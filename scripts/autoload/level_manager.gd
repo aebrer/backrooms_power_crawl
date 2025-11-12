@@ -120,11 +120,11 @@ func load_level(level_id: int) -> LevelConfig:
 
 	# Check preloaded
 	if _preloaded_levels.has(level_id):
-		var config: LevelConfig = _preloaded_levels[level_id]
-		_add_to_cache(level_id, config)
+		var preloaded_config: LevelConfig = _preloaded_levels[level_id]
+		_add_to_cache(level_id, preloaded_config)
 		_preloaded_levels.erase(level_id)
 		Log.system("Level %d loaded from preload" % level_id)
-		return config
+		return preloaded_config
 
 	# Load from disk
 	level_load_started.emit(level_id)

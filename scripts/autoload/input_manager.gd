@@ -177,8 +177,8 @@ func _update_triggers() -> void:
 	"""Read trigger axes and synthesize button events for actions"""
 	# Read raw axis values from controller 0
 	# Note: Triggers return 0.0 to 1.0 (not -1.0 to 1.0 like sticks)
-	left_trigger_value = Input.get_joy_axis(0, TRIGGER_AXIS_LEFT)
-	right_trigger_value = Input.get_joy_axis(0, TRIGGER_AXIS_RIGHT)
+	left_trigger_value = Input.get_joy_axis(0, TRIGGER_AXIS_LEFT as JoyAxis)
+	right_trigger_value = Input.get_joy_axis(0, TRIGGER_AXIS_RIGHT as JoyAxis)
 
 	# Convert to digital state (above threshold = "pressed")
 	var left_now_pressed = left_trigger_value > TRIGGER_THRESHOLD
