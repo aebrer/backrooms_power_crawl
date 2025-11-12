@@ -67,6 +67,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 140, 1.0, 4)
 pixel_size = 0.01
 billboard = 2
 render_priority = 127
+outline_render_priority = 126
 text = "👻"
 font_size = 128
 
@@ -81,6 +82,7 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
 pixel_size = 0.01
 billboard = 2
 render_priority = 127
+outline_render_priority = 126
 text = "🚶"
 font_size = 128
 
