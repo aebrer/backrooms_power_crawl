@@ -218,6 +218,12 @@ func show_panel_for_grid_tile(tile_info: Dictionary) -> void:
 
 	# Map tile type to entity_id
 	var entity_id = ""
+	var surface_name = tile_info.get("surface_type", "UNKNOWN")
+	Log.system("Examining grid tile: tile_type=%d, surface=%s, pos=%s" % [
+		tile_info.tile_type,
+		surface_name,
+		tile_info.get("position", Vector3.ZERO)
+	])
 	match tile_info.tile_type:
 		0:  # FLOOR
 			entity_id = "level_0_floor"
@@ -230,6 +236,12 @@ func show_panel_for_grid_tile(tile_info: Dictionary) -> void:
 
 	# Get entity info from knowledge database
 	var info = KnowledgeDB.get_entity_info(entity_id)
+
+	# Debug: Log what we're displaying
+	Log.system("Grid tile examination: entity_id='%s', name='%s'" % [
+		entity_id,
+		info.get("name", "Unknown")
+	])
 
 	# Update labels
 	entity_name_label.text = info.get("name", "Unknown")  # No "Entity:" prefix for environment
