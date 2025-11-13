@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3 uid="uid://cy7w8qn1yf3d"]
+[gd_scene load_steps=11 format=3 uid="uid://cy7w8qn1yf3d"]
 
 [ext_resource type="Script" path="res://scripts/game_3d.gd" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/grid_3d.gd" id="2_grid3d"]
@@ -8,11 +8,13 @@
 [ext_resource type="Script" path="res://scripts/player/states/idle_state.gd" id="6_idle"]
 [ext_resource type="Script" path="res://scripts/player/states/look_mode_state.gd" id="7_lookmode"]
 [ext_resource type="Script" path="res://scripts/player/states/executing_turn_state.gd" id="8_executing"]
-[ext_resource type="Script" path="res://scripts/player/tactical_camera.gd" id="10_camera"]
-[ext_resource type="Script" path="res://scripts/player/first_person_camera.gd" id="11_fpcamera"]
-[ext_resource type="Script" path="res://scripts/ui/examination_ui.gd" id="12_examui"]
-[ext_resource type="Script" path="res://scripts/components/examinable.gd" id="13_examinable"]
-[ext_resource type="Material" path="res://post_process/dither-banding_mat.tres" id="9_dither"]
+[ext_resource type="Material" uid="uid://player_hazmat" path="res://assets/sprites/player/hazmat_suit.tres" id="9_hazmat_material"]
+[ext_resource type="Texture2D" path="res://assets/sprites/player/hazmat_suit.png" id="10_hazmat_texture"]
+[ext_resource type="Script" path="res://scripts/player/tactical_camera.gd" id="11_camera"]
+[ext_resource type="Script" path="res://scripts/player/first_person_camera.gd" id="12_fpcamera"]
+[ext_resource type="Script" path="res://scripts/ui/examination_ui.gd" id="13_examui"]
+[ext_resource type="Script" path="res://scripts/components/examinable.gd" id="14_examinable"]
+[ext_resource type="Material" path="res://post_process/dither-banding_mat.tres" id="15_dither"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -77,14 +79,11 @@ script = ExtResource("4_player3d")
 [node name="CollisionShape3D" type="CollisionShape3D" parent="Player3D"]
 shape = SubResource("CapsuleShape3D_1")
 
-[node name="Model" type="Label3D" parent="Player3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
-pixel_size = 0.01
-billboard = 2
-render_priority = 127
-outline_render_priority = 126
-text = "🚶"
-font_size = 128
+[node name="Model" type="Sprite3D" parent="Player3D"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+material_override = ExtResource("9_hazmat_material")
+texture = ExtResource("10_hazmat_texture")
+pixel_size = 0.03
 
 [node name="InputStateMachine" type="Node" parent="Player3D"]
 script = ExtResource("5_statemachine")
@@ -99,7 +98,7 @@ script = ExtResource("7_lookmode")
 script = ExtResource("8_executing")
 
 [node name="CameraRig" type="Node3D" parent="Player3D"]
-script = ExtResource("10_camera")
+script = ExtResource("11_camera")
 default_distance = 15.0
 default_pitch = -45.0
 default_yaw = 45.0
@@ -124,7 +123,7 @@ fov = 70.0
 
 [node name="FirstPersonCamera" type="Node3D" parent="Player3D"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
-script = ExtResource("11_fpcamera")
+script = ExtResource("12_fpcamera")
 rotation_speed = 360.0
 mouse_sensitivity = 0.15
 rotation_deadzone = 0.3
@@ -153,10 +152,10 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-script = ExtResource("12_examui")
+script = ExtResource("13_examui")
 
 [node name="PostProcessDither" type="ColorRect" parent="UI"]
-material = ExtResource("9_dither")
+material = ExtResource("15_dither")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0

@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-12 (Added GDScript vs Python differences section after ternary operator debugging)
+**Last Updated**: 2025-11-13 (Added critical rules for agentic texture workflow - no pink elephants!)
 
 ---
 
@@ -873,6 +873,53 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 **When you need to create texture assets** (e.g., yellow wallpaper, concrete floors, ceiling tiles), use this iterative multi-agent workflow instead of manually creating assets or asking the user to find them.
 
 **The Virtuous Cycle**:
+
+### ⚠️ CRITICAL RULES - DO NOT VIOLATE THESE ⚠️
+
+**YOU (the main Claude instance) must NEVER:**
+- ❌ Write or edit `generate.py` yourself
+- ❌ Run the generation script yourself
+- ❌ Launch multiple agents simultaneously in the cycle (spawn one, wait, then spawn next)
+- ❌ Provide ANY context to the blind critic (the "pink elephant problem"!)
+
+**The Pink Elephant Problem:**
+```
+❌ WRONG - Information leakage:
+"Look at the image. Don't mention 'hazmat' or reference requirements."
+   ⬆️ This tells them it's a hazmat suit!
+
+✅ CORRECT - Pure objective description:
+"Look at the image at `path/to/output.png` and describe what you see."
+```
+
+**The Correct Sequential Flow:**
+
+**Iteration 1:**
+1. Spawn CREATOR agent with full requirements
+2. ⏸️ WAIT for creator to finish and report back
+3. Spawn COMPARISON CRITIC with requirements + image path
+4. Spawn BLIND CRITIC with ONLY image path (absolutely no context!)
+5. ⏸️ WAIT for both critics to report back
+6. YOU synthesize the feedback
+
+**Iteration 2+ (if revisions needed):**
+7. Spawn NEW CREATOR agent with: original requirements + critic feedback
+8. ⏸️ WAIT for creator to finish
+9. Spawn NEW CRITICS (same rules as before)
+10. ⏸️ WAIT for reports
+11. YOU synthesize feedback
+12. Repeat until BOTH critics approve
+
+**Why This Matters:**
+- Blind critic catches unintended artifacts you didn't ask for
+- Comparison critic ensures specs are met
+- Iteration refines quality through multiple passes
+- Real example: wallpaper took 7 iterations to get tiling right
+- **DO NOT SKIP ITERATIONS** - the cycle exists for a reason!
+
+---
+
+**Detailed Steps:**
 
 1. **Spawn Creator Agent**
    - Provide detailed description of texture needed
