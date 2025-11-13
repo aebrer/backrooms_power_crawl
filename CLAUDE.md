@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-09 (Added Python tooling section, _claude_scripts/ directory, context window management strategy)
+**Last Updated**: 2025-11-12 (Added GDScript vs Python differences section after ternary operator debugging)
 
 ---
 
@@ -329,6 +329,37 @@ When ready for testing, say: "This is ready for you to test. When you run it, yo
 - Explain game dev concepts: state machines, command pattern, ECS
 - Don't assume knowledge of common game dev terminology
 - **DO** reference Python equivalents when helpful
+
+### GDScript is NOT Python - Key Differences
+
+**Critical differences between Python and GDScript 4.x when debugging:**
+
+**Ternary Operator Evaluation**
+- Python: `x.value if x else "null"` - short-circuits, won't access `x.value` if `x` is None
+- GDScript: `x.value if x else "null"` - evaluates BOTH sides first, crashes if `x` is null
+- **Solution**: Use temporary variable or reverse condition
+  ```gdscript
+  # ❌ WRONG (crashes if x is null):
+  var msg = x.entity_id if x else "null"
+
+  # ✅ CORRECT (safe):
+  var msg = "null" if not x else x.entity_id
+  # OR:
+  var msg = x.entity_id if x != null else "null"
+  ```
+
+**Type System Strictness**
+- GDScript has optional static typing but it's enforced at parse time
+- Type hints must resolve before runtime (no forward references without workarounds)
+- Circular dependencies between typed parameters break script loading
+- **Solution**: Use untyped parameters (Variant) when needed to break cycles
+
+**Common Gotchas**
+- `null` not `None`
+- `not x` works, but `x == null` is more explicit
+- String formatting uses `%` operator like Python 2, not f-strings
+- No list comprehensions - use loops or `map()`/`filter()` with lambdas
+- Tabs for indentation (unlike Python where spaces are standard)
 
 ### Don't Skip Architecture Updates
 

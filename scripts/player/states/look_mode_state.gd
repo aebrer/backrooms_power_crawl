@@ -96,24 +96,26 @@ func handle_input(event: InputEvent) -> void:
 	# (Camera rotation handled by FirstPersonCamera directly)
 
 func process_frame(_delta: float) -> void:
-	# Update raycast and examination target (now uses simple overlay system!)
-	if first_person_camera:
-		var new_target = first_person_camera.get_current_target()
+	# Update raycast and examination target (uses examination overlay system)
+	if not first_person_camera:
+		return
 
-		# Check if target changed
-		var target_changed = (new_target != current_target)
-		current_target = new_target
+	var new_target = first_person_camera.get_current_target()
 
-		# Update UI with target (or hide if nothing)
-		if target_changed:
-			if new_target:
-				# Examine the target (entity or environment tile)
-				KnowledgeDB.examine_entity(new_target.entity_id)
-				if examination_ui:
-					examination_ui.show_panel(new_target)
-			else:
-				# Looking at nothing
-				if examination_ui:
-					examination_ui.hide_panel()
+	# Check if target changed
+	var target_changed = (new_target != current_target)
+	current_target = new_target
+
+	# Update UI with target (or hide if nothing)
+	if target_changed:
+		if new_target:
+			# Examine the target (entity or environment tile)
+			KnowledgeDB.examine_entity(new_target.entity_id)
+			if examination_ui:
+				examination_ui.show_panel(new_target)
+		else:
+			# Looking at nothing
+			if examination_ui:
+				examination_ui.hide_panel()
 
 # All target handling now unified - no special cases for grid tiles vs entities

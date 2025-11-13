@@ -1,16 +1,14 @@
 class_name ExaminableEnvironmentTile
-extends Examinable
+extends StaticBody3D
 ## Invisible examination area for environment tiles (walls/floors/ceilings)
 ##
-## Inherits from Examinable (which extends Area3D).
+## Uses StaticBody3D (not Area3D) so raycasts can detect it.
 ## Positioned at same world location as GridMap visual tile.
 ##
 ## This is part of the examination overlay system - separate from GridMap rendering.
-## GridMap handles visuals, these Area3D nodes handle examination interaction.
+## GridMap handles visuals, these StaticBody3D nodes handle examination interaction.
 
-func _init() -> void:
-	"""Set entity_id early to avoid _ready() warning"""
-	entity_id = "pending"  # Will be set properly in setup()
+var examinable: Examinable = null
 
 func setup(tile_type: String, entity_id_param: String, grid_pos: Vector2i, world_pos: Vector3) -> void:
 	"""Initialize this examination tile
@@ -24,14 +22,13 @@ func setup(tile_type: String, entity_id_param: String, grid_pos: Vector2i, world
 	name = "Exam_%s_%d_%d" % [tile_type, grid_pos.x, grid_pos.y]
 	global_position = world_pos
 
-	# Configure Examinable properties (inherited from parent)
-	entity_id = entity_id_param
-	entity_type = Examinable.EntityType.ENVIRONMENT
+	# Create Examinable component as child
+	examinable = Examinable.new()
+	examinable.entity_id = entity_id_param
+	examinable.entity_type = Examinable.EntityType.ENVIRONMENT
+	add_child(examinable)
 
 	# Collision layer for examination (layer 4 = bit 8)
 	# Separate from GridMap movement collision (layer 2)
 	collision_layer = 8
 	collision_mask = 0
-
-	# Removed per-tile logging - was causing output overflow with large grids
-	# Log.system("Created examinable tile: %s at %s (grid: %s)" % [entity_id, world_pos, grid_pos])
