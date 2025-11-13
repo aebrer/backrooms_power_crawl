@@ -268,54 +268,6 @@ func show_panel(target: Examinable) -> void:
 	# Show panel
 	panel.visible = true
 
-func show_panel_for_grid_tile(tile_info: Dictionary) -> void:
-	"""Display examination info for grid tile (wall/floor/ceiling)"""
-	if tile_info.is_empty():
-		hide_panel()
-		return
-
-	# Map tile type to entity_id
-	var entity_id = ""
-	var surface_name = tile_info.get("surface_type", "UNKNOWN")
-	Log.system("Examining grid tile: tile_type=%d, surface=%s, pos=%s" % [
-		tile_info.tile_type,
-		surface_name,
-		tile_info.get("position", Vector3.ZERO)
-	])
-	match tile_info.tile_type:
-		0:  # FLOOR
-			entity_id = "level_0_floor"
-		1:  # WALL
-			entity_id = "level_0_wall"
-		2:  # CEILING
-			entity_id = "level_0_ceiling"
-		_:
-			entity_id = "unknown_tile"
-
-	# Get entity info from knowledge database
-	var info = KnowledgeDB.get_entity_info(entity_id)
-
-	# Debug: Log what we're displaying
-	Log.system("Grid tile examination: entity_id='%s', name='%s'" % [
-		entity_id,
-		info.get("name", "Unknown")
-	])
-
-	# Update labels
-	entity_name_label.text = info.get("name", "Unknown")  # No "Entity:" prefix for environment
-	object_class_label.text = "Class: " + info.get("object_class", "[REDACTED]")
-	threat_level_label.text = "Threat: " + _format_threat_level(info.get("threat_level", 0))
-	description_label.text = info.get("description", "[DATA EXPUNGED]")
-
-	# Environment tiles have no threat
-	_set_threat_colors(0)
-
-	# Set crosshair color (white for environment)
-	set_crosshair_color(Color.WHITE)
-
-	# Show panel
-	panel.visible = true
-
 func hide_panel() -> void:
 	panel.visible = false
 
