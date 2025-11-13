@@ -10,7 +10,7 @@ extends Action
 func _init() -> void:
 	action_name = "Wait"
 
-func can_execute(player) -> bool:
+func can_execute(_player) -> bool:
 	"""Waiting is always valid"""
 	return true
 

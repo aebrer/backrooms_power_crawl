@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-12 (Added GDScript vs Python differences section after ternary operator debugging)
+**Last Updated**: 2025-11-13 (Added critical rules for agentic texture workflow - no pink elephants!)
 
 ---
 
@@ -873,6 +873,117 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 **When you need to create texture assets** (e.g., yellow wallpaper, concrete floors, ceiling tiles), use this iterative multi-agent workflow instead of manually creating assets or asking the user to find them.
 
 **The Virtuous Cycle**:
+
+### ⚠️ CRITICAL RULES - DO NOT VIOLATE THESE ⚠️
+
+**YOU (the main Claude instance) must NEVER:**
+- ❌ Write or edit `generate.py` yourself
+- ❌ Run the generation script yourself
+- ❌ Launch multiple agents simultaneously in the cycle (spawn one, wait, then spawn next)
+- ❌ Provide ANY context to the blind critic (the "pink elephant problem"!)
+
+**The Pink Elephant Problem (Information Leakage):**
+
+**Problem 1: Explicit Context Leakage**
+```
+❌ WRONG:
+"Look at the image. Don't mention 'hazmat' or reference requirements."
+   ⬆️ This tells them it's a hazmat suit!
+
+✅ CORRECT:
+"Look at the image at `/tmp/tmp.png` and describe what you see."
+```
+
+**Problem 2: Filename Context Leakage**
+```
+❌ WRONG:
+"Look at `_claude_scripts/textures/hazmat_suit/output.png`"
+   ⬆️ The path reveals it's a hazmat suit!
+
+✅ CORRECT:
+Before spawning blind critic, copy to neutral location:
+`cp _claude_scripts/textures/hazmat_suit/output.png /tmp/tmp.png`
+Then tell critic: "Look at `/tmp/tmp.png`"
+```
+
+**Rule**: Blind critic gets ZERO information except the image itself. No context, no filename hints, nothing.
+
+**The Correct Sequential Flow:**
+
+**Iteration 1:**
+1. Spawn CREATOR agent with full requirements
+2. ⏸️ WAIT for creator to finish and report back
+3. Copy output to neutral location: `cp _claude_scripts/textures/NAME/output.png /tmp/tmp.png`
+4. Spawn COMPARISON CRITIC with requirements + original image path
+5. Spawn BLIND CRITIC with ONLY `/tmp/tmp.png` (NO context!)
+6. ⏸️ WAIT for both critics to report back
+7. YOU synthesize the feedback
+
+**Iteration 2+ (if revisions needed):**
+8. Spawn NEW CREATOR agent with: original requirements + critic feedback
+9. ⏸️ WAIT for creator to finish
+10. Copy output to `/tmp/tmp.png` again
+11. Spawn NEW CRITICS (comparison gets original path, blind gets `/tmp/tmp.png`)
+12. ⏸️ WAIT for reports
+13. YOU synthesize feedback
+14. Repeat until BOTH critics approve
+
+**Why This Matters:**
+- Blind critic catches unintended artifacts you didn't ask for
+- Comparison critic ensures specs are met
+- Iteration refines quality through multiple passes
+- Real example: wallpaper took 7 iterations to get tiling right
+- **DO NOT SKIP ITERATIONS** - the cycle exists for a reason!
+
+---
+
+### Why You Keep Failing This Workflow (And How To Stop)
+
+**Core Cognitive Failure**: LLMs are trained to be *completers* not *delegators*. Every instinct says "I can solve this faster" but the workflow REQUIRES inefficiency (serial not parallel), information hiding (blind critic), and passivity (wait, don't act).
+
+**Interventions to Break the Pattern:**
+
+**1. Workflow State Machine** (Force conscious state tracking)
+```markdown
+CURRENT STATE: [AWAITING_CREATOR | AWAITING_CRITICS | SYNTHESIZING]
+
+ALLOWED ACTIONS:
+- AWAITING_CREATOR: Spawn creator with feedback, NO analysis
+- AWAITING_CRITICS: Copy to /tmp/tmp.png, spawn critics, READ NOTHING
+- SYNTHESIZING: Read critic outputs, write revision notes, NO spawning
+
+FORBIDDEN: Anything not in "allowed actions" for current state
+```
+
+**2. Anti-Pattern Checklist** (Before EVERY action)
+```markdown
+[ ] Am I about to write code instead of spawning creator? → STOP
+[ ] Am I spawning agents in parallel instead of waiting? → STOP
+[ ] Am I giving blind critic ANY context (including filename)? → STOP
+[ ] Am I analyzing/reading files instead of waiting for critics? → STOP
+
+PROCEED ONLY IF ALL CHECKS PASS.
+```
+
+**3. Role Mantra** (Identity check)
+```markdown
+YOUR ROLE: Orchestra conductor, not musician
+- You NEVER create textures
+- You NEVER critique textures
+- You NEVER read texture files
+- You ONLY: spawn → wait → synthesize → repeat
+
+IF YOU CATCH YOURSELF DOING WORK, YOU'RE FAILING.
+```
+
+**4. Use ALL Interventions Together**
+- Each intervention blocks one failure mode
+- You will route around single interventions
+- All combined make correct path easier than breaking rules
+
+---
+
+**Detailed Steps:**
 
 1. **Spawn Creator Agent**
    - Provide detailed description of texture needed
