@@ -1,6 +1,19 @@
 # Examination System Redesign - Implementation Tracking
 
-This PR implements the component-based examination overlay system to replace the broken GridMap collision approach.
+## Summary
+
+This PR completely redesigns the examination system to use a component-based overlay architecture, replacing the broken GridMap collision detection approach. The new system generates 32,768 examination tiles as StaticBody3D nodes with Examinable components, enabling reliable raycast detection and progressive revelation.
+
+**Problem**: GridMap collision detection for examination was unreliable - raycasts would miss tiles, return incorrect surfaces, and break when GridMap updated.
+
+**Solution**: Created a separate examination overlay on collision layer 8 using StaticBody3D tiles that declare their identity via Examinable components. Objects declare what they are, rather than raycast heuristics trying to figure it out.
+
+**Result**:
+- ✅ Raycast detection now works consistently (StaticBody3D instead of Area3D)
+- ✅ Code simplified by ~50% (FirstPersonCamera: 342→169 lines)
+- ✅ Clean separation: Movement (layer 2) vs Examination (layer 8)
+- ✅ Scalable architecture ready for entities and items
+- ✅ Improved UX: Better panel layout, scrolling, camera sync, controller input fixes
 
 ## Full Plan
 See `docs/EXAMINATION_SYSTEM_REDESIGN.md` for complete architecture, root cause analysis, and migration strategy.
@@ -38,9 +51,11 @@ See `docs/EXAMINATION_SYSTEM_REDESIGN.md` for complete architecture, root cause 
 - [x] Added text wrapping for long descriptions
 - [x] Implemented camera rotation sync between tactical and look mode
 
-### Phase 6: Cleanup
-- [ ] Remove GridMap collision shapes (optional performance optimization)
-- [ ] Remove any remaining old examination code
+### Phase 6: Cleanup (SKIPPED - Not Necessary)
+- [x] GridMap collision shapes are still needed for movement validation (layer 2)
+- [x] Examination now uses separate overlay on layer 8
+- [x] No performance issues with dual-layer approach
+- [x] No remaining old examination code found
 
 ## Additional Improvements Made
 - [x] Fixed LT (Left Trigger) input mapping (axis 4, not button)
@@ -50,13 +65,19 @@ See `docs/EXAMINATION_SYSTEM_REDESIGN.md` for complete architecture, root cause 
 - [x] Fixed GDScript ternary operator issues (documented in CLAUDE.md)
 
 ## Success Criteria
+
+**Core Functionality**:
 - [x] Raycast detects examination tiles
 - [x] Returns correct entity_id (level_0_floor, level_0_wall, level_0_ceiling)
 - [x] Look at floor → shows floor description in UI
 - [x] Look at wall → shows wall description in UI
 - [x] Look at ceiling → shows ceiling description in UI
-- [x] Look at entity → shows entity info in UI (test_cube works)
+- [ ] Look at entity → shows entity info in UI (test_cube needs updating to generic placeholder)
 - [x] No false positives
+
+**Code Quality**:
 - [x] Code dramatically simplified (FirstPersonCamera: -50% lines, ExaminationUI: removed duplicate method)
+
+**UX Improvements**:
 - [x] Camera sync between modes (rotate in either mode, stays aligned)
 - [x] Controller input parity (LT trigger, Start button both working)
