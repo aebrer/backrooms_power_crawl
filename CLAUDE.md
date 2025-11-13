@@ -882,33 +882,51 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 - ❌ Launch multiple agents simultaneously in the cycle (spawn one, wait, then spawn next)
 - ❌ Provide ANY context to the blind critic (the "pink elephant problem"!)
 
-**The Pink Elephant Problem:**
+**The Pink Elephant Problem (Information Leakage):**
+
+**Problem 1: Explicit Context Leakage**
 ```
-❌ WRONG - Information leakage:
+❌ WRONG:
 "Look at the image. Don't mention 'hazmat' or reference requirements."
    ⬆️ This tells them it's a hazmat suit!
 
-✅ CORRECT - Pure objective description:
-"Look at the image at `path/to/output.png` and describe what you see."
+✅ CORRECT:
+"Look at the image at `/tmp/tmp.png` and describe what you see."
 ```
+
+**Problem 2: Filename Context Leakage**
+```
+❌ WRONG:
+"Look at `_claude_scripts/textures/hazmat_suit/output.png`"
+   ⬆️ The path reveals it's a hazmat suit!
+
+✅ CORRECT:
+Before spawning blind critic, copy to neutral location:
+`cp _claude_scripts/textures/hazmat_suit/output.png /tmp/tmp.png`
+Then tell critic: "Look at `/tmp/tmp.png`"
+```
+
+**Rule**: Blind critic gets ZERO information except the image itself. No context, no filename hints, nothing.
 
 **The Correct Sequential Flow:**
 
 **Iteration 1:**
 1. Spawn CREATOR agent with full requirements
 2. ⏸️ WAIT for creator to finish and report back
-3. Spawn COMPARISON CRITIC with requirements + image path
-4. Spawn BLIND CRITIC with ONLY image path (absolutely no context!)
-5. ⏸️ WAIT for both critics to report back
-6. YOU synthesize the feedback
+3. Copy output to neutral location: `cp _claude_scripts/textures/NAME/output.png /tmp/tmp.png`
+4. Spawn COMPARISON CRITIC with requirements + original image path
+5. Spawn BLIND CRITIC with ONLY `/tmp/tmp.png` (NO context!)
+6. ⏸️ WAIT for both critics to report back
+7. YOU synthesize the feedback
 
 **Iteration 2+ (if revisions needed):**
-7. Spawn NEW CREATOR agent with: original requirements + critic feedback
-8. ⏸️ WAIT for creator to finish
-9. Spawn NEW CRITICS (same rules as before)
-10. ⏸️ WAIT for reports
-11. YOU synthesize feedback
-12. Repeat until BOTH critics approve
+8. Spawn NEW CREATOR agent with: original requirements + critic feedback
+9. ⏸️ WAIT for creator to finish
+10. Copy output to `/tmp/tmp.png` again
+11. Spawn NEW CRITICS (comparison gets original path, blind gets `/tmp/tmp.png`)
+12. ⏸️ WAIT for reports
+13. YOU synthesize feedback
+14. Repeat until BOTH critics approve
 
 **Why This Matters:**
 - Blind critic catches unintended artifacts you didn't ask for
@@ -916,6 +934,52 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 - Iteration refines quality through multiple passes
 - Real example: wallpaper took 7 iterations to get tiling right
 - **DO NOT SKIP ITERATIONS** - the cycle exists for a reason!
+
+---
+
+### Why You Keep Failing This Workflow (And How To Stop)
+
+**Core Cognitive Failure**: LLMs are trained to be *completers* not *delegators*. Every instinct says "I can solve this faster" but the workflow REQUIRES inefficiency (serial not parallel), information hiding (blind critic), and passivity (wait, don't act).
+
+**Interventions to Break the Pattern:**
+
+**1. Workflow State Machine** (Force conscious state tracking)
+```markdown
+CURRENT STATE: [AWAITING_CREATOR | AWAITING_CRITICS | SYNTHESIZING]
+
+ALLOWED ACTIONS:
+- AWAITING_CREATOR: Spawn creator with feedback, NO analysis
+- AWAITING_CRITICS: Copy to /tmp/tmp.png, spawn critics, READ NOTHING
+- SYNTHESIZING: Read critic outputs, write revision notes, NO spawning
+
+FORBIDDEN: Anything not in "allowed actions" for current state
+```
+
+**2. Anti-Pattern Checklist** (Before EVERY action)
+```markdown
+[ ] Am I about to write code instead of spawning creator? → STOP
+[ ] Am I spawning agents in parallel instead of waiting? → STOP
+[ ] Am I giving blind critic ANY context (including filename)? → STOP
+[ ] Am I analyzing/reading files instead of waiting for critics? → STOP
+
+PROCEED ONLY IF ALL CHECKS PASS.
+```
+
+**3. Role Mantra** (Identity check)
+```markdown
+YOUR ROLE: Orchestra conductor, not musician
+- You NEVER create textures
+- You NEVER critique textures
+- You NEVER read texture files
+- You ONLY: spawn → wait → synthesize → repeat
+
+IF YOU CATCH YOURSELF DOING WORK, YOU'RE FAILING.
+```
+
+**4. Use ALL Interventions Together**
+- Each intervention blocks one failure mode
+- You will route around single interventions
+- All combined make correct path easier than breaking rules
 
 ---
 
