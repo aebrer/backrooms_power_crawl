@@ -26,56 +26,32 @@ func _ready() -> void:
 
 func _load_entities() -> void:
 	"""Load all EntityInfo resources from data directory"""
-	# TODO: When entity data files are created, load them here
-	# For now, create some placeholder test entities
+	# TODO: When entity data files are created, load them from /data/entities/
+	# For now, minimal placeholders for testing examination system
 
-	# Create test entity: Test Cube
-	var test_cube = EntityInfo.new()
-	test_cube.entity_id = "test_cube"
-	var test_cube_names: Array[String] = [
+	# Generic placeholder for unregistered entities
+	var unknown = EntityInfo.new()
+	unknown.entity_id = "unknown_entity"
+	var unknown_names: Array[String] = [
 		"████████",
 		"???",
-		"Unknown Object",
-		"Test Cube"
+		"Unidentified Object",
+		"Unknown Entity"
 	]
-	test_cube.name_levels = test_cube_names
-	var test_cube_descs: Array[String] = [
+	unknown.name_levels = unknown_names
+	var unknown_descs: Array[String] = [
 		"[DATA EXPUNGED]",
-		"An object has been detected. Approach with caution.",
-		"Object identified as a geometric structure. Purpose unknown. [REQUIRES CLEARANCE 2]",
-		"Test entity for examination system. A simple cube placed for testing raycast detection and UI display."
+		"Movement detected. Origin unknown. Recommend maintaining distance.",
+		"Entity classification pending. Exhibits anomalous properties. [CLEARANCE REQUIRED]",
+		"Placeholder entity for examination system testing. Actual entity data will be loaded from Backrooms/SCP wikis."
 	]
-	test_cube.description_levels = test_cube_descs
-	var test_cube_clearance: Array[int] = [0, 0, 1, 2]
-	test_cube.clearance_required = test_cube_clearance
-	var test_cube_classes: Array[String] = ["[REDACTED]", "Unknown", "Safe", "Safe"]
-	test_cube.object_class_levels = test_cube_classes
-	test_cube.threat_level = 0
-	_entities["test_cube"] = test_cube
-
-	# Create test entity: Yellow Wallpaper
-	var wallpaper = EntityInfo.new()
-	wallpaper.entity_id = "yellow_wallpaper"
-	var wallpaper_names: Array[String] = [
-		"Wall Surface",
-		"Wallpaper",
-		"Yellow Wallpaper",
-		"Level 0 Wallpaper"
-	]
-	wallpaper.name_levels = wallpaper_names
-	var wallpaper_descs: Array[String] = [
-		"A surface of unknown composition.",
-		"Standard wallpaper. Shows signs of age and moisture damage.",
-		"Yellow wallpaper with geometric patterns. Typical of Level 0. Slight water staining visible.",
-		"Level 0's signature yellow wallpaper with chevron patterns. Greyish-yellow color (#D4C5A0). Shows aging and water damage consistent with the Backrooms environment. No anomalous properties detected."
-	]
-	wallpaper.description_levels = wallpaper_descs
-	var wallpaper_clearance: Array[int] = [0, 0, 0, 1]
-	wallpaper.clearance_required = wallpaper_clearance
-	var wallpaper_classes: Array[String] = ["N/A", "N/A", "N/A", "Safe"]
-	wallpaper.object_class_levels = wallpaper_classes
-	wallpaper.threat_level = 0
-	_entities["yellow_wallpaper"] = wallpaper
+	unknown.description_levels = unknown_descs
+	var unknown_clearance: Array[int] = [0, 0, 1, 2]
+	unknown.clearance_required = unknown_clearance
+	var unknown_classes: Array[String] = ["[REDACTED]", "Unknown", "Unclassified", "Pending"]
+	unknown.object_class_levels = unknown_classes
+	unknown.threat_level = 1  # Low threat placeholder
+	_entities["unknown_entity"] = unknown
 
 	# Create Level 0: Wall (same as wallpaper since walls ARE wallpaper)
 	var wall = EntityInfo.new()
