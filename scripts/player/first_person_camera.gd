@@ -151,19 +151,26 @@ func get_current_target() -> Examinable:
 	"""
 	var hit = get_look_raycast()
 	if hit.is_empty():
+		Log.trace(Log.Category.CAMERA, "Raycast hit nothing")
 		return null
 
 	var collider = hit.get("collider")
 	if not collider:
+		Log.trace(Log.Category.CAMERA, "Raycast hit but no collider")
 		return null
+
+	Log.trace(Log.Category.CAMERA, "Raycast hit: %s (type: %s)" % [collider.name, collider.get_class()])
 
 	# Check if collider IS an Examinable (new overlay tiles)
 	if collider is Examinable:
+		Log.trace(Log.Category.CAMERA, "Collider is Examinable: %s" % collider.entity_id)
 		return collider
 
 	# Check descendants for Examinable (entities with component as child)
 	for child in collider.get_children():
 		if child is Examinable:
+			Log.trace(Log.Category.CAMERA, "Child is Examinable: %s" % child.entity_id)
 			return child
 
+	Log.trace(Log.Category.CAMERA, "Collider is not Examinable")
 	return null

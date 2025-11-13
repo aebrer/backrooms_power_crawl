@@ -34,6 +34,8 @@ func generate_examination_layer(grid, parent: Node3D) -> void:
 	examination_world.name = "ExaminationWorld"
 	parent.add_child(examination_world)
 
+	Log.system("ExaminationWorld node created and added to parent: %s" % parent.name)
+
 	var tiles_created = 0
 
 	# Iterate through grid data

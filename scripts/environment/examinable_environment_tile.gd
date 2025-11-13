@@ -33,4 +33,5 @@ func setup(tile_type: String, entity_id_param: String, grid_pos: Vector2i, world
 	collision_layer = 8
 	collision_mask = 0
 
-	Log.system("Created examinable tile: %s at %s (grid: %s)" % [entity_id, world_pos, grid_pos])
+	# Removed per-tile logging - was causing output overflow with large grids
+	# Log.system("Created examinable tile: %s at %s (grid: %s)" % [entity_id, world_pos, grid_pos])
