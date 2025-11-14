@@ -8,7 +8,8 @@ extends PlayerInputState
 # NOTE: These will be initialized in enter() since they depend on player node
 var first_person_camera: FirstPersonCamera = null
 var tactical_camera: TacticalCamera = null
-var examination_ui: ExaminationUI = null
+var examination_crosshair: ExaminationCrosshair = null  # In viewport (can have effects)
+var examination_panel: ExaminationPanel = null  # In main viewport (clean text)
 
 var current_target: Examinable = null
 var current_grid_tile: Dictionary = {}  # For grid tile examination
@@ -28,10 +29,13 @@ func enter() -> void:
 		first_person_camera = player.get_node_or_null("FirstPersonCamera")
 	if not tactical_camera:
 		tactical_camera = player.get_node_or_null("CameraRig")
-	if not examination_ui:
-		# Navigate up to scene root, then to UI/ExaminationUI
-		var game_root = player.get_parent()  # Game node
-		examination_ui = game_root.get_node_or_null("UI/ExaminationUI")
+
+	# Get split examination UI components
+	if not examination_crosshair:
+		var game_3d = player.get_parent()
+		examination_crosshair = game_3d.get_node_or_null("ViewportUILayer/ExaminationCrosshair")
+	if not examination_panel:
+		examination_panel = get_node_or_null("/root/Game/TextUIOverlay/ExaminationPanel")
 
 	if not first_person_camera:
 		push_error("[LookModeState] FirstPersonCamera not found!")
@@ -57,11 +61,11 @@ func enter() -> void:
 	if player.has_method("hide_move_indicator"):
 		player.hide_move_indicator()
 
-	# Show examination UI (crosshair)
-	if examination_ui:
-		examination_ui.show_crosshair()
+	# Show examination crosshair (in viewport, can have effects)
+	if examination_crosshair:
+		examination_crosshair.show_crosshair()
 	else:
-		Log.warn(Log.Category.STATE, "ExaminationUI not found at path: /root/Game/UI/ExaminationUI")
+		Log.warn(Log.Category.STATE, "ExaminationCrosshair not found in ViewportUILayer")
 
 	# Update action preview to show wait action
 	_update_action_preview()
@@ -82,10 +86,11 @@ func exit() -> void:
 	if tactical_camera:
 		tactical_camera.camera.current = true
 
-	# Hide examination UI
-	if examination_ui:
-		examination_ui.hide_crosshair()
-		examination_ui.hide_panel()
+	# Hide examination UI components
+	if examination_crosshair:
+		examination_crosshair.hide_crosshair()
+	if examination_panel:
+		examination_panel.hide_panel()
 
 	# Restore tactical UI
 	if player.has_method("update_move_indicator"):
@@ -129,12 +134,12 @@ func process_frame(_delta: float) -> void:
 		if new_target:
 			# Examine the target (entity or environment tile)
 			KnowledgeDB.examine_entity(new_target.entity_id)
-			if examination_ui:
-				examination_ui.show_panel(new_target)
+			if examination_panel:
+				examination_panel.show_panel(new_target)
 		else:
 			# Looking at nothing
-			if examination_ui:
-				examination_ui.hide_panel()
+			if examination_panel:
+				examination_panel.hide_panel()
 
 # ============================================================================
 # ACTIONS
