@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://cy7w8qn1yf3d"]
+[gd_scene load_steps=12 format=3 uid="uid://cy7w8qn1yf3d"]
 
 [ext_resource type="Script" path="res://scripts/game_3d.gd" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/grid_3d.gd" id="2_grid3d"]
@@ -15,6 +15,7 @@
 [ext_resource type="Script" path="res://scripts/ui/examination_crosshair.gd" id="13_crosshair"]
 [ext_resource type="Script" path="res://scripts/components/examinable.gd" id="15_examinable"]
 [ext_resource type="Material" path="res://post_process/dither-banding_mat.tres" id="16_dither"]
+[ext_resource type="Material" path="res://post_process/vhs_post_process_mat.tres" id="17_vhs"]
 
 [sub_resource type="Environment" id="Environment_1"]
 background_mode = 1
@@ -147,6 +148,15 @@ layer = 999
 
 [node name="PostProcessDither" type="ColorRect" parent="PostProcessLayer"]
 material = ExtResource("16_dither")
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="PostProcessVHS" type="ColorRect" parent="PostProcessLayer"]
+material = ExtResource("17_vhs")
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
