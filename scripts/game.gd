@@ -13,6 +13,8 @@ extends Control
 @onready var log_text: RichTextLabel = $MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer/LogText
 @onready var char_stats: Label = $MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet/Stats
 @onready var inventory_items: Label = $MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CoreInventory/Items
+@onready var examination_panel: ExaminationPanel = $TextUIOverlay/ExaminationPanel
+@onready var action_preview_ui: ActionPreviewUI = $TextUIOverlay/ActionPreviewUI
 
 ## Access to player in 3D scene
 var player: Node3D
@@ -33,8 +35,8 @@ func _ready() -> void:
 		Log.msg(Log.Category.SYSTEM, Log.Level.ERROR, "Failed to find Player3D in game_3d scene")
 		return
 
-	# Connect to player signals if needed
-	# player.turn_changed.connect(_on_turn_changed)
+	# Connect to player signals
+	player.action_preview_changed.connect(_on_player_action_preview_changed)
 
 	_update_ui()
 
@@ -116,3 +118,8 @@ func _on_log_message(category: Log.Category, level: Log.Level, message: String) 
 
 	# Append to log with minimal formatting
 	log_text.append_text("[color=%s][%s] %s[/color]\n" % [color, category_name, message.to_lower()])
+
+func _on_player_action_preview_changed(actions: Array[Action]) -> void:
+	"""Forward action preview to UI (text overlay - always clean)"""
+	if action_preview_ui:
+		action_preview_ui.show_preview(actions, player)
