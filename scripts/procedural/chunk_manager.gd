@@ -90,11 +90,20 @@ func _process_generation_queue() -> void:
 	# if has_node("/root/Game/Grid"):
 	#     get_node("/root/Game/Grid").load_chunk(chunk)
 
+	# Log to both Grid (for detail) and System (for visibility)
 	Log.grid("Loaded chunk %s on Level %d (corruption: %.2f)" % [
 		chunk_pos,
 		level_id,
 		corruption_tracker.get_corruption(level_id)
 	])
+
+	# Also log first few chunks to System for visibility
+	if loaded_chunks.size() <= 5 or loaded_chunks.size() % 25 == 0:
+		Log.system("ChunkManager: %d chunks loaded (latest: %s, corruption: %.2f)" % [
+			loaded_chunks.size(),
+			chunk_pos,
+			corruption_tracker.get_corruption(level_id)
+		])
 
 func _generate_chunk(chunk_pos: Vector2i, level_id: int) -> Chunk:
 	"""Generate a new chunk
