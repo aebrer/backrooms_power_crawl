@@ -16,6 +16,10 @@ extends CharacterBody3D
 @warning_ignore("unused_signal")
 signal action_preview_changed(actions: Array[Action])
 
+## Emitted when a turn completes (for turn-based systems like ChunkManager)
+@warning_ignore("unused_signal")
+signal turn_completed()
+
 # ============================================================================
 # STATE
 # ============================================================================

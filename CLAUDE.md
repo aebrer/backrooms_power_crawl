@@ -26,6 +26,57 @@ When ready for testing, say: "This is ready for you to test. When you run it, yo
 
 ---
 
+## ⚠️ SUPER IMPORTANT DESIGN RULE: NO QUICK FIXES
+
+**When a bug is reported, NEVER immediately push a "fix" without understanding the root cause.**
+
+**The Correct Debugging Process:**
+1. **Investigate**: Read relevant code, understand the system architecture
+2. **Diagnose**: Identify what you observe and form hypotheses about root causes
+3. **Report**: Share what you observed and what you understand so far. If you're uncertain about the root cause, say so and ask for the user's input or additional context.
+4. **Propose**: Suggest a hypothesis to verify, or ask for help if the cause isn't clear
+5. **Implement**: Only after user agrees with the diagnosis and approach
+
+**Bad Example (Quick Fix):**
+```
+User: "Chunks stopped loading after x=512"
+Bad Response: "Let me increase the generation radius!"
+*immediately edits constants without understanding why*
+```
+
+**Good Example (Proper Debugging):**
+```
+User: "Chunks stopped loading after x=512"
+Good Response: "Let me investigate the chunk loading system to understand why..."
+*reads chunk_manager.gd, checks if _process() is being called, examines logs*
+"I investigated the chunk loading system. Here's what I observed: [observations].
+Based on this, I think the issue might be [hypothesis], but I'd like to verify [X]
+to be certain. Does this align with what you're seeing?"
+```
+
+**Why This Matters:**
+- Quick fixes mask symptoms without solving problems
+- User values understanding over speed
+- Proper diagnosis prevents future bugs
+- Clean architecture requires understanding root causes
+- "Quality over speed" is the project philosophy
+
+**Red Flags That You're Quick-Fixing:**
+- Changing constants without understanding the system
+- Adding conditions to suppress symptoms
+- Implementing workarounds instead of real solutions
+- Not reading the relevant code before proposing fixes
+- Saying "let me try..." instead of "let me understand..."
+
+**When In Doubt:**
+- Read the code first
+- Share what you observed, or ask for help if the cause isn't clear
+- Ask clarifying questions
+- Model uncertainty - it's okay to say "I'm not sure" or "I need more info"
+- Only then propose a hypothesis to verify
+
+---
+
 ## 1. Behavioral Patterns Observed
 
 ### What Worked Well

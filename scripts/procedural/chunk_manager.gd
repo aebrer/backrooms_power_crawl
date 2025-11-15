@@ -8,12 +8,16 @@ extends Node
 ## - Coordinating with generators and spawners
 ## - Providing chunk query API
 
+## Emitted when chunk updates complete (for PostTurnState to unblock input)
+@warning_ignore("unused_signal")
+signal chunk_updates_completed()
+
 # Constants
 const CHUNK_SIZE := 128
 const ACTIVE_RADIUS := 3  # Chunks to keep loaded around player
 const GENERATION_RADIUS := 3  # Chunks to pre-generate (7×7 = 49 chunks)
 const UNLOAD_RADIUS := 5  # Chunks beyond this distance are candidates for unloading
-const MAX_LOADED_CHUNKS := 60  # Increased for larger generation radius
+const MAX_LOADED_CHUNKS := 32  # Memory limit
 const CHUNK_BUDGET_MS := 4.0  # Max milliseconds per frame for chunk operations
 const MAX_CHUNKS_PER_FRAME := 3  # Hard limit to prevent burst overload
 
@@ -23,6 +27,9 @@ var generating_chunks: Array[Vector3i] = []  # Chunks queued for generation
 var world_seed: int = 0
 var visited_chunks: Dictionary = {}  # Vector3i -> bool (chunks player has entered)
 var last_player_chunk: Vector3i = Vector3i(-999, -999, -999)  # Track chunk changes
+var hit_chunk_limit: bool = false  # Track if we've logged hitting the limit
+var was_generating: bool = false  # Track if chunks were queued (for completion signal)
+var initial_load_complete: bool = false  # Track if initial area load is done
 
 # Systems (will be initialized when available)
 var corruption_tracker: CorruptionTracker
@@ -53,18 +60,52 @@ func _ready() -> void:
 		level_generators.size()
 	])
 
+	# Connect to player's turn_completed signal (deferred to ensure player exists)
+	call_deferred("_connect_to_player_signal")
+
+	# Do initial chunk load (deferred to ensure player position is set)
+	call_deferred("on_turn_completed")
+
 func _process(_delta: float) -> void:
+	# TURN-BASED: Only process generation queue to spread chunk generation over frames
+	# Actual chunk loading/unloading happens in on_turn_completed() triggered by player signal
+	_process_generation_queue()
+
+func _connect_to_player_signal() -> void:
+	"""Connect to player's turn_completed signal"""
+	var player_path := "/root/Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D/Player3D"
+	if has_node(player_path):
+		var player = get_node(player_path)
+		if not player.turn_completed.is_connected(on_turn_completed):
+			player.turn_completed.connect(on_turn_completed)
+			Log.system("[ChunkManager] Connected to player turn_completed signal")
+	else:
+		Log.warn(Log.Category.SYSTEM, "Player not found at %s for turn signal connection" % player_path)
+
+func on_turn_completed() -> void:
+	"""Called when a turn completes (triggered by player's turn_completed signal)"""
+	# Track if we had chunks queued before this turn
+	was_generating = not generating_chunks.is_empty()
+
 	# Check if player entered a new chunk (for corruption tracking)
 	_check_player_chunk_change()
 
-	# Update chunks around player
+	# Update chunks around player (queue new chunks if needed)
 	_update_chunks_around_player()
-
-	# Process generation queue
-	_process_generation_queue()
 
 	# Unload distant chunks
 	_unload_distant_chunks()
+
+	# If nothing was queued, emit completion signal immediately
+	# (PostTurnState can transition to IdleState without waiting)
+	if not was_generating and generating_chunks.is_empty():
+		chunk_updates_completed.emit()
+
+	# Mark initial load as complete after first turn
+	# (subsequent turns will load/unload max 1 chunk to avoid lag spikes)
+	if not initial_load_complete and loaded_chunks.size() > 0:
+		initial_load_complete = true
+		Log.system("Initial chunk load complete, switching to 1-chunk-per-turn mode")
 
 # ============================================================================
 # CHUNK LOADING
@@ -93,12 +134,25 @@ func _update_chunks_around_player() -> void:
 			var distance := player_chunk.distance_to(chunk_pos)
 			chunks_to_queue.append({"key": chunk_key, "distance": distance})
 
+	# Log if we found chunks to queue
+	if not chunks_to_queue.is_empty():
+		Log.grid("Found %d new chunks to queue around player chunk %s" % [
+			chunks_to_queue.size(),
+			player_chunk
+		])
+
 	# Sort by distance (nearest first - CRITICAL for performance!)
 	chunks_to_queue.sort_custom(func(a, b): return a.distance < b.distance)
 
 	# Add to queue in sorted order
-	for chunk_data in chunks_to_queue:
-		generating_chunks.append(chunk_data.key)
+	# After initial load, limit to 1 chunk per turn to avoid lag spikes
+	var chunks_to_add := chunks_to_queue.size()
+	if initial_load_complete and chunks_to_add > 1:
+		chunks_to_add = 1
+		Log.grid("Limiting to 1 chunk per turn (post-initial load)")
+
+	for i in range(chunks_to_add):
+		generating_chunks.append(chunks_to_queue[i].key)
 
 func _check_player_chunk_change() -> void:
 	"""Check if player entered a new chunk and increase corruption"""
@@ -146,7 +200,14 @@ func _process_generation_queue() -> void:
 
 		# Check memory limit
 		if loaded_chunks.size() >= MAX_LOADED_CHUNKS:
-			Log.grid("Hit MAX_LOADED_CHUNKS (%d), stopping generation" % MAX_LOADED_CHUNKS)
+			if not hit_chunk_limit:
+				Log.grid("Hit MAX_LOADED_CHUNKS (%d), stopping generation (queue: %d)" % [MAX_LOADED_CHUNKS, generating_chunks.size()])
+				hit_chunk_limit = true
+			# Emit completion signal since we can't generate more chunks
+			# (PostTurnState would otherwise wait forever)
+			if was_generating:
+				chunk_updates_completed.emit()
+				was_generating = false
 			break
 
 		# Check frame budget (skip check on first chunk to avoid zero-chunk frames)
@@ -192,6 +253,12 @@ func _process_generation_queue() -> void:
 			Log.grid("Generated 1 chunk in %.2fms" % elapsed_ms)
 		else:
 			Log.grid("Burst loaded %d chunks in %.2fms" % [chunks_this_frame, elapsed_ms])
+
+	# Emit completion signal when generation finishes
+	# (only if we were generating - avoids spurious emissions)
+	if was_generating and generating_chunks.is_empty():
+		chunk_updates_completed.emit()
+		was_generating = false  # Reset flag
 
 func _generate_chunk(chunk_pos: Vector2i, level_id: int) -> Chunk:
 	"""Generate a new chunk using LevelGenerator"""
@@ -249,9 +316,6 @@ func _generate_placeholder_chunk(chunk: Chunk) -> void:
 
 func _unload_distant_chunks() -> void:
 	"""Unload chunks far from player"""
-	if loaded_chunks.size() <= MAX_LOADED_CHUNKS:
-		return
-
 	var player_tile := _get_player_position()
 	var player_level := _get_player_level()
 
@@ -271,11 +335,21 @@ func _unload_distant_chunks() -> void:
 		if distance > UNLOAD_RADIUS:
 			chunks_to_unload.append(chunk_key)
 
-	# Unload chunks (TODO: sort by last access time)
+	# Unload distant chunks
+	if not chunks_to_unload.is_empty():
+		Log.grid("Unloading %d chunks beyond radius %d" % [chunks_to_unload.size(), UNLOAD_RADIUS])
+		hit_chunk_limit = false  # Reset limit flag since we're freeing up space
+
+	var unload_count := 0
 	for chunk_key in chunks_to_unload:
 		_unload_chunk(chunk_key)
+		unload_count += 1
 
-		# Stop if we're back under limit
+		# After initial load, limit to 1 chunk per turn to avoid lag spikes
+		if initial_load_complete and unload_count >= 1:
+			break
+
+		# Stop if we're back under comfortable limit
 		if loaded_chunks.size() <= MAX_LOADED_CHUNKS * 0.8:
 			break
 
@@ -379,10 +453,15 @@ func _get_player_position() -> Vector2i:
 	Returns default (64, 64) if player not found.
 	"""
 	# Try to get player from game scene
-	if has_node("/root/Game/Player"):
-		var player: Node = get_node("/root/Game/Player")
-		if player.has("grid_position"):
-			return player.grid_position
+	# Player is at: /root/Game/.../SubViewport/Game3D/Player3D
+	var player_path := "/root/Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D/Player3D"
+
+	if has_node(player_path):
+		var player = get_node(player_path)
+		# Player3D script has grid_position property
+		return player.grid_position
+	else:
+		Log.warn(Log.Category.GRID, "Player node not found at %s" % player_path)
 
 	# Fallback to default spawn position
 	return Vector2i(64, 64)
@@ -464,6 +543,7 @@ func start_new_run(new_seed: int = -1) -> void:
 	generating_chunks.clear()
 	visited_chunks.clear()
 	last_player_chunk = Vector3i(-999, -999, -999)
+	initial_load_complete = false  # Reset for new run
 	corruption_tracker.reset_all()
 
 	# Re-initialize level generators (fresh instances for new run)

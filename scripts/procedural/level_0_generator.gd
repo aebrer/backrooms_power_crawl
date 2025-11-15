@@ -83,12 +83,31 @@ func generate_chunk(chunk: Chunk, world_seed: int) -> void:
 	"""
 	# Phase 1: Initialize WFC grid (all tiles in superposition)
 	var wfc_grid := _init_wfc_grid()
+	var counts := _count_wfc_tiles(wfc_grid)
+	Log.grid("[WFC] Phase 1 (Init): Chunk %s - Floor:%d Wall:%d Superposition:%d" % [
+		chunk.position, counts["FLOOR"], counts["WALL"], counts["SUPERPOSITION"]
+	])
 
 	# Phase 2: Add path constraints (force corridors at chunk edges for connectivity)
 	_add_edge_constraints(wfc_grid, chunk.position)
+	counts = _count_wfc_tiles(wfc_grid)
+	Log.grid("[WFC] Phase 2 (EdgeConstraints): Chunk %s - Floor:%d Wall:%d Superposition:%d" % [
+		chunk.position, counts["FLOOR"], counts["WALL"], counts["SUPERPOSITION"]
+	])
 
 	# Phase 3: Collapse tiles using WFC algorithm with world-space seeding
 	_collapse_wfc(wfc_grid, chunk.position, world_seed)
+	counts = _count_wfc_tiles(wfc_grid)
+	Log.grid("[WFC] Phase 3 (Collapse): Chunk %s - Floor:%d Wall:%d Superposition:%d" % [
+		chunk.position, counts["FLOOR"], counts["WALL"], counts["SUPERPOSITION"]
+	])
+
+	# Phase 3.5: Enforce wall connectivity (isolated walls look weird)
+	_enforce_wall_connectivity(wfc_grid, world_seed)
+	counts = _count_wfc_tiles(wfc_grid)
+	Log.grid("[WFC] Phase 3.5 (WallConnectivity): Chunk %s - Floor:%d Wall:%d Superposition:%d" % [
+		chunk.position, counts["FLOOR"], counts["WALL"], counts["SUPERPOSITION"]
+	])
 
 	# Phase 4: Apply WFC result to chunk tiles
 	_apply_wfc_to_chunk(wfc_grid, chunk)
@@ -121,6 +140,27 @@ func _init_wfc_grid() -> Array:
 		grid[y] = row
 
 	return grid
+
+func _count_wfc_tiles(wfc_grid: Array) -> Dictionary:
+	"""Count how many tiles are in each WFC state (for debugging)"""
+	var counts := {
+		"FLOOR": 0,
+		"WALL": 0,
+		"SUPERPOSITION": 0
+	}
+
+	for y in range(Chunk.SIZE):
+		for x in range(Chunk.SIZE):
+			var tile = wfc_grid[y][x]
+			match tile:
+				WFCTile.FLOOR:
+					counts["FLOOR"] += 1
+				WFCTile.WALL:
+					counts["WALL"] += 1
+				WFCTile.SUPERPOSITION:
+					counts["SUPERPOSITION"] += 1
+
+	return counts
 
 func _add_edge_constraints(wfc_grid: Array, chunk_pos: Vector2i) -> void:
 	"""Add path constraints at chunk edges for guaranteed inter-chunk connectivity
@@ -192,11 +232,67 @@ func _collapse_wfc(wfc_grid: Array, chunk_pos: Vector2i, world_seed: int) -> voi
 			else:
 				wfc_grid[y][x] = WFCTile.WALL
 
+func _enforce_wall_connectivity(wfc_grid: Array, world_seed: int) -> void:
+	"""Enforce wall connectivity rule: walls should connect to other walls
+
+	Rule: Except for 0.1% chance, a wall should always be connected to at least
+	one other wall tile (orthogonally, diagonal doesn't count).
+
+	This prevents odd isolated single-wall tiles that look unnatural.
+	Post-processing pass after WFC collapse.
+	"""
+	var rng := RandomNumberGenerator.new()
+	var isolated_walls_fixed := 0
+
+	for y in range(Chunk.SIZE):
+		for x in range(Chunk.SIZE):
+			# Only check wall tiles
+			if wfc_grid[y][x] != WFCTile.WALL:
+				continue
+
+			# Count orthogonal wall neighbors
+			var wall_neighbors := 0
+			var neighbors := [
+				Vector2i(x, y - 1),  # North
+				Vector2i(x + 1, y),  # East
+				Vector2i(x, y + 1),  # South
+				Vector2i(x - 1, y),  # West
+			]
+
+			for neighbor in neighbors:
+				# Skip out of bounds
+				if neighbor.x < 0 or neighbor.x >= Chunk.SIZE or \
+				   neighbor.y < 0 or neighbor.y >= Chunk.SIZE:
+					continue
+
+				if wfc_grid[neighbor.y][neighbor.x] == WFCTile.WALL:
+					wall_neighbors += 1
+
+			# If isolated (no wall neighbors)
+			if wall_neighbors == 0:
+				# 0.1% chance to keep isolated wall (visual noise)
+				# Use deterministic seed based on position for consistency
+				var tile_seed := hash(Vector3i(x, y, world_seed))
+				rng.seed = tile_seed
+				var keep_isolated := rng.randf() < 0.001  # 0.1%
+
+				if not keep_isolated:
+					# Convert to floor
+					wfc_grid[y][x] = WFCTile.FLOOR
+					isolated_walls_fixed += 1
+
+	if isolated_walls_fixed > 0:
+		Log.grid("Fixed %d isolated wall tiles (enforced connectivity)" % isolated_walls_fixed)
+
 func _apply_wfc_to_chunk(wfc_grid: Array, chunk: Chunk) -> void:
 	"""Convert WFC grid to chunk tile data
 
 	Maps WFCTile values to SubChunk.TileType values
 	"""
+	var floor_count := 0
+	var wall_count := 0
+	var superposition_count := 0
+
 	for y in range(Chunk.SIZE):
 		for x in range(Chunk.SIZE):
 			var wfc_tile = wfc_grid[y][x]
@@ -205,10 +301,27 @@ func _apply_wfc_to_chunk(wfc_grid: Array, chunk: Chunk) -> void:
 			match wfc_tile:
 				WFCTile.FLOOR:
 					tile_type = SubChunk.TileType.FLOOR
-				WFCTile.WALL, WFCTile.SUPERPOSITION:  # Treat uncollapsed as wall (shouldn't happen)
+					floor_count += 1
+				WFCTile.WALL:
 					tile_type = SubChunk.TileType.WALL
+					wall_count += 1
+				WFCTile.SUPERPOSITION:  # Treat uncollapsed as wall (shouldn't happen)
+					tile_type = SubChunk.TileType.WALL
+					superposition_count += 1
 
-			_set_tile_in_chunk(chunk, Vector2i(x, y), tile_type)
+			# Convert chunk-local coordinates (0-127) to world coordinates
+			# Chunk API expects world coords, not local coords!
+			var world_pos := chunk.position * Chunk.SIZE + Vector2i(x, y)
+			chunk.set_tile(world_pos, tile_type)
+
+	Log.grid("[WFC] Phase 4 (Apply): Chunk %s - Applied Floor:%d Wall:%d (Uncollapsed:%d)" % [
+		chunk.position, floor_count, wall_count, superposition_count
+	])
+
+	if superposition_count > 0:
+		push_warning("[WFC] Chunk %s has %d uncollapsed tiles! This shouldn't happen." % [
+			chunk.position, superposition_count
+		])
 
 func _ensure_connectivity(chunk: Chunk) -> void:
 	"""Ensure all floor tiles are connected (flood fill validation)
@@ -221,13 +334,17 @@ func _ensure_connectivity(chunk: Chunk) -> void:
 	var floor_tiles: Array[Vector2i] = []
 	for y in range(Chunk.SIZE):
 		for x in range(Chunk.SIZE):
-			var tile := chunk.get_tile(Vector2i(x, y))
+			# Convert chunk-local coords to world coords for reading
+			var world_pos := chunk.position * Chunk.SIZE + Vector2i(x, y)
+			var tile := chunk.get_tile(world_pos)
 			if tile == SubChunk.TileType.FLOOR:
-				floor_tiles.append(Vector2i(x, y))
+				floor_tiles.append(world_pos)  # Store world coords
 
 	if floor_tiles.is_empty():
 		push_warning("Chunk %s has NO floor tiles! Forcing center tile to floor." % chunk.position)
-		_set_tile_in_chunk(chunk, Vector2i(Chunk.SIZE / 2, Chunk.SIZE / 2), SubChunk.TileType.FLOOR)
+		# Convert center position to world coords for writing
+		var center_world := chunk.position * Chunk.SIZE + Vector2i(Chunk.SIZE / 2, Chunk.SIZE / 2)
+		chunk.set_tile(center_world, SubChunk.TileType.FLOOR)
 		return
 
 	# Flood fill from first floor tile
@@ -247,16 +364,18 @@ func _ensure_connectivity(chunk: Chunk) -> void:
 		]
 
 		for neighbor in neighbors:
-			# Skip if out of bounds
-			if neighbor.x < 0 or neighbor.x >= Chunk.SIZE or \
-			   neighbor.y < 0 or neighbor.y >= Chunk.SIZE:
+			# Skip if out of bounds (check against chunk world bounds)
+			var chunk_min := chunk.position * Chunk.SIZE
+			var chunk_max := chunk_min + Vector2i(Chunk.SIZE, Chunk.SIZE)
+			if neighbor.x < chunk_min.x or neighbor.x >= chunk_max.x or \
+			   neighbor.y < chunk_min.y or neighbor.y >= chunk_max.y:
 				continue
 
 			# Skip if already visited
 			if visited.get(neighbor, false):
 				continue
 
-			# Skip if not floor
+			# Skip if not floor (neighbor is already world coords)
 			var tile := chunk.get_tile(neighbor)
 			if tile != SubChunk.TileType.FLOOR:
 				continue

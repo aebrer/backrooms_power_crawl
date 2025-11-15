@@ -16,7 +16,7 @@ const CELL_SIZE := Vector3(2.0, 1.0, 2.0)  # X, Y (height), Z - doubled for visi
 
 # Grid data (same as 2D version)
 var grid_size: Vector2i = GRID_SIZE
-var walkable_cells: Array[Vector2i] = []
+var walkable_cells: Dictionary = {}  # Vector2i -> bool (using Dictionary for O(1) erase instead of O(n))
 
 # Current level configuration
 var current_level: LevelConfig = null
@@ -210,7 +210,7 @@ func _generate_grid() -> void:
 			else:
 				# Place floor
 				grid_map.set_cell_item(Vector3i(x, 0, y), TileType.FLOOR)
-				walkable_cells.append(pos)
+				walkable_cells[pos] = true
 
 			# Place ceiling everywhere (at y=1 in grid space, which is y=4 in world space due to mesh_transform)
 			grid_map.set_cell_item(Vector3i(x, 1, y), TileType.CEILING)
@@ -270,7 +270,7 @@ func load_chunk(chunk: Chunk) -> void:
 					elif tile_type == SubChunk.TileType.FLOOR:
 						grid_map.set_cell_item(grid_pos, TileType.FLOOR)
 						floor_count += 1
-						walkable_cells.append(world_tile_pos)
+						walkable_cells[world_tile_pos] = true
 					# TODO: Add support for EXIT_STAIRS and other special tiles
 
 					# Place ceiling everywhere
@@ -487,7 +487,7 @@ func get_random_walkable_position() -> Vector2i:
 		@warning_ignore("integer_division")
 		var center_y: int = grid_size.y / 2
 		return Vector2i(center_x, center_y)
-	return walkable_cells.pick_random()
+	return walkable_cells.keys().pick_random()
 
 # ============================================================================
 # EXAMINATION OVERLAY SYSTEM
