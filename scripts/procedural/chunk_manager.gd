@@ -10,10 +10,12 @@ extends Node
 
 # Constants
 const CHUNK_SIZE := 128
-const ACTIVE_RADIUS := 3  # Chunks to keep loaded around player
-const GENERATION_RADIUS := 5  # Chunks to pre-generate
-const UNLOAD_RADIUS := 8  # Chunks beyond this distance are candidates for unloading
-const MAX_LOADED_CHUNKS := 50  # Hard limit to prevent memory issues
+const ACTIVE_RADIUS := 2  # Chunks to keep loaded around player
+const GENERATION_RADIUS := 2  # Chunks to pre-generate (5×5 = 25 chunks)
+const UNLOAD_RADIUS := 4  # Chunks beyond this distance are candidates for unloading
+const MAX_LOADED_CHUNKS := 50  # Conservative limit for GridMap performance
+const CHUNK_BUDGET_MS := 4.0  # Max milliseconds per frame for chunk operations
+const MAX_CHUNKS_PER_FRAME := 3  # Hard limit to prevent burst overload
 
 # State
 var loaded_chunks: Dictionary = {}  # Vector3i(x, y, level) -> Chunk
@@ -69,14 +71,16 @@ func _process(_delta: float) -> void:
 # ============================================================================
 
 func _update_chunks_around_player() -> void:
-	"""Queue chunks for loading near player"""
+	"""Queue chunks for loading near player (distance-sorted priority queue)"""
 	# Get actual player position from game scene
 	var player_tile := _get_player_position()
 	var player_level := _get_player_level()
 
 	var player_chunk := tile_to_chunk(player_tile)
 
-	# Queue generation for nearby chunks
+	# Collect chunks with distances
+	var chunks_to_queue: Array[Dictionary] = []
+
 	for y in range(-GENERATION_RADIUS, GENERATION_RADIUS + 1):
 		for x in range(-GENERATION_RADIUS, GENERATION_RADIUS + 1):
 			var chunk_pos := player_chunk + Vector2i(x, y)
@@ -86,7 +90,15 @@ func _update_chunks_around_player() -> void:
 			if chunk_key in loaded_chunks or chunk_key in generating_chunks:
 				continue
 
-			generating_chunks.append(chunk_key)
+			var distance := player_chunk.distance_to(chunk_pos)
+			chunks_to_queue.append({"key": chunk_key, "distance": distance})
+
+	# Sort by distance (nearest first - CRITICAL for performance!)
+	chunks_to_queue.sort_custom(func(a, b): return a.distance < b.distance)
+
+	# Add to queue in sorted order
+	for chunk_data in chunks_to_queue:
+		generating_chunks.append(chunk_data.key)
 
 func _check_player_chunk_change() -> void:
 	"""Check if player entered a new chunk and increase corruption"""
@@ -119,37 +131,67 @@ func _check_player_chunk_change() -> void:
 			])
 
 func _process_generation_queue() -> void:
-	"""Generate one chunk per frame to avoid stuttering"""
+	"""Generate chunks with frame budget limiting (burst load nearest chunks)"""
 	if generating_chunks.is_empty():
 		return
 
-	var chunk_key: Vector3i = generating_chunks.pop_front()
-	var chunk_pos := Vector2i(chunk_key.x, chunk_key.y)
-	var level_id: int = chunk_key.z
+	var frame_start := Time.get_ticks_usec()
+	var chunks_this_frame := 0
 
-	var chunk := _generate_chunk(chunk_pos, level_id)
-	loaded_chunks[chunk_key] = chunk
+	# Burst load chunks while within frame budget and limits
+	while not generating_chunks.is_empty():
+		# Check hard limit per frame
+		if chunks_this_frame >= MAX_CHUNKS_PER_FRAME:
+			break
 
-	# Notify Grid3D to render it (use cached reference)
-	if not grid_3d:
-		_find_grid_3d()  # Try to find it again if not cached
+		# Check memory limit
+		if loaded_chunks.size() >= MAX_LOADED_CHUNKS:
+			Log.grid("Hit MAX_LOADED_CHUNKS (%d), stopping generation" % MAX_LOADED_CHUNKS)
+			break
 
-	if grid_3d:
-		grid_3d.load_chunk(chunk)
-	else:
-		# Only warn once per session
-		if loaded_chunks.size() == 1:
-			push_warning("[ChunkManager] Grid3D not found in scene tree - procedural generation disabled")
+		# Check frame budget (skip check on first chunk to avoid zero-chunk frames)
+		if chunks_this_frame > 0:
+			var elapsed_ms := (Time.get_ticks_usec() - frame_start) / 1000.0
+			if elapsed_ms > CHUNK_BUDGET_MS:
+				break
 
-	# Log chunk generation (no corruption increase here)
-	Log.grid("Generated chunk %s on Level %d" % [chunk_pos, level_id])
+		var chunk_key: Vector3i = generating_chunks.pop_front()
+		var chunk_pos := Vector2i(chunk_key.x, chunk_key.y)
+		var level_id: int = chunk_key.z
 
-	# Also log first few chunks to System for visibility
-	if loaded_chunks.size() <= 5 or loaded_chunks.size() % 25 == 0:
-		Log.system("ChunkManager: %d chunks generated (latest: %s)" % [
-			loaded_chunks.size(),
-			chunk_pos
-		])
+		var chunk := _generate_chunk(chunk_pos, level_id)
+		loaded_chunks[chunk_key] = chunk
+
+		# Notify Grid3D to render it (use cached reference)
+		if not grid_3d:
+			_find_grid_3d()  # Try to find it again if not cached
+
+		if grid_3d:
+			grid_3d.load_chunk(chunk)
+		else:
+			# Only warn once per session
+			if loaded_chunks.size() == 1:
+				push_warning("[ChunkManager] Grid3D not found in scene tree - procedural generation disabled")
+
+		# Log chunk generation (no corruption increase here)
+		Log.grid("Generated chunk %s on Level %d" % [chunk_pos, level_id])
+
+		# Also log first few chunks to System for visibility
+		if loaded_chunks.size() <= 5 or loaded_chunks.size() % 25 == 0:
+			Log.system("ChunkManager: %d chunks generated (latest: %s)" % [
+				loaded_chunks.size(),
+				chunk_pos
+			])
+
+		chunks_this_frame += 1
+
+	# Log burst performance
+	if chunks_this_frame > 0:
+		var elapsed_ms := (Time.get_ticks_usec() - frame_start) / 1000.0
+		if chunks_this_frame == 1:
+			Log.grid("Generated 1 chunk in %.2fms" % elapsed_ms)
+		else:
+			Log.grid("Burst loaded %d chunks in %.2fms" % [chunks_this_frame, elapsed_ms])
 
 func _generate_chunk(chunk_pos: Vector2i, level_id: int) -> Chunk:
 	"""Generate a new chunk using LevelGenerator"""
