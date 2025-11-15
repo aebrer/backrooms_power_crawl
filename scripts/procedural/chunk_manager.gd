@@ -188,7 +188,7 @@ func _unload_distant_chunks() -> void:
 
 func _unload_chunk(chunk_key: Vector3i) -> void:
 	"""Unload a chunk from memory"""
-	var chunk: Chunk = loaded_chunks[chunk_key]
+	var _chunk: Chunk = loaded_chunks[chunk_key]
 
 	# TODO: Phase 7 - Save chunk state if modified (entities killed, items taken)
 
@@ -287,16 +287,16 @@ func get_tile_type(tile_pos: Vector2i, level_id: int) -> int:
 # RUN MANAGEMENT
 # ============================================================================
 
-func start_new_run(seed: int = -1) -> void:
+func start_new_run(new_seed: int = -1) -> void:
 	"""Start a new run, clear all state
 
 	Args:
-		seed: World seed (-1 for random)
+		new_seed: World seed (-1 for random)
 	"""
-	if seed == -1:
+	if new_seed == -1:
 		world_seed = randi()
 	else:
-		world_seed = seed
+		world_seed = new_seed
 
 	loaded_chunks.clear()
 	generating_chunks.clear()

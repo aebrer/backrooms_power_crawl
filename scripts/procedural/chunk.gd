@@ -100,8 +100,8 @@ func get_tile(tile_pos: Vector2i) -> int:
 	# Convert world tile to local tile within sub-chunk
 	var local_tile := tile_pos - (position * SIZE)
 	var sub_local_tile := Vector2i(
-		local_tile.x % SUB_CHUNK_SIZE,
-		local_tile.y % SUB_CHUNK_SIZE
+		posmod(local_tile.x, SUB_CHUNK_SIZE),
+		posmod(local_tile.y, SUB_CHUNK_SIZE)
 	)
 
 	return sub.get_tile(sub_local_tile)
@@ -128,8 +128,8 @@ func is_walkable(tile_pos: Vector2i) -> bool:
 
 	var local_tile := tile_pos - (position * SIZE)
 	var sub_local_tile := Vector2i(
-		local_tile.x % SUB_CHUNK_SIZE,
-		local_tile.y % SUB_CHUNK_SIZE
+		posmod(local_tile.x, SUB_CHUNK_SIZE),
+		posmod(local_tile.y, SUB_CHUNK_SIZE)
 	)
 
 	return sub.is_walkable(sub_local_tile)
