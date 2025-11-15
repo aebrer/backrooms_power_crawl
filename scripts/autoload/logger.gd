@@ -65,7 +65,7 @@ enum Category {
 @export var log_movement: bool = true
 @export var log_action: bool = true
 @export var log_turn: bool = true
-@export var log_grid: bool = false      # Disabled by default (verbose)
+@export var log_grid: bool = true       # ENABLED for procedural generation debugging
 @export var log_camera: bool = false    # Disabled by default (verbose)
 @export var log_entity: bool = true
 @export var log_ability: bool = true

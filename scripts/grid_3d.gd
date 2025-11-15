@@ -239,6 +239,10 @@ func load_chunk(chunk: Chunk) -> void:
 	# Convert chunk position to world tile offset
 	var chunk_world_offset := chunk.position * Chunk.SIZE
 
+	# Track tile counts for debugging
+	var wall_count := 0
+	var floor_count := 0
+
 	# Iterate through all sub-chunks in the chunk
 	for sub_y in range(Chunk.SUB_CHUNKS_PER_SIDE):
 		for sub_x in range(Chunk.SUB_CHUNKS_PER_SIDE):
@@ -262,16 +266,20 @@ func load_chunk(chunk: Chunk) -> void:
 					# Place floor or wall based on tile type
 					if tile_type == SubChunk.TileType.WALL:
 						grid_map.set_cell_item(grid_pos, TileType.WALL)
+						wall_count += 1
 					elif tile_type == SubChunk.TileType.FLOOR:
 						grid_map.set_cell_item(grid_pos, TileType.FLOOR)
+						floor_count += 1
 						walkable_cells.append(world_tile_pos)
 					# TODO: Add support for EXIT_STAIRS and other special tiles
 
 					# Place ceiling everywhere
 					grid_map.set_cell_item(Vector3i(world_tile_pos.x, 1, world_tile_pos.y), TileType.CEILING)
 
-	Log.grid("Loaded chunk %s into GridMap (%d walkable cells total)" % [
+	Log.grid("Loaded chunk %s into GridMap (walls: %d, floors: %d, total walkable: %d)" % [
 		chunk.position,
+		wall_count,
+		floor_count,
 		walkable_cells.size()
 	])
 
@@ -426,7 +434,17 @@ func world_to_grid(world_pos: Vector3) -> Vector2i:
 # ============================================================================
 
 func is_walkable(pos: Vector2i) -> bool:
-	"""Check if grid position is walkable"""
+	"""Check if grid position is walkable
+
+	For procedural generation (infinite world), queries GridMap directly.
+	For static levels, checks bounds first.
+	"""
+	# For procedural generation: infinite world, no bounds checking
+	if use_procedural_generation:
+		var cell_item = grid_map.get_cell_item(Vector3i(pos.x, 0, pos.y))
+		return cell_item == TileType.FLOOR
+
+	# For static levels: check bounds first
 	if not is_in_bounds(pos):
 		return false
 
@@ -434,7 +452,16 @@ func is_walkable(pos: Vector2i) -> bool:
 	return cell_item == TileType.FLOOR
 
 func is_in_bounds(pos: Vector2i) -> bool:
-	"""Check if position is within grid bounds"""
+	"""Check if position is within grid bounds
+
+	For procedural generation (infinite world), always returns true.
+	For static levels, checks against grid_size.
+	"""
+	# For procedural generation: infinite world, no bounds
+	if use_procedural_generation:
+		return true
+
+	# For static levels: check actual bounds
 	return pos.x >= 0 and pos.x < grid_size.x and \
 		   pos.y >= 0 and pos.y < grid_size.y
 
