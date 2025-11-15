@@ -25,6 +25,7 @@ var last_player_chunk: Vector3i = Vector3i(-999, -999, -999)  # Track chunk chan
 # Systems (will be initialized when available)
 var corruption_tracker: CorruptionTracker
 var level_generators: Dictionary = {}  # level_id → LevelGenerator
+var grid_3d: Grid3D = null  # Cached reference to Grid3D (found via search)
 # var island_manager: IslandManager  # TODO: Phase 5
 # var entity_spawner: EntitySpawner  # TODO: Phase 4
 
@@ -41,6 +42,9 @@ func _ready() -> void:
 
 	# Generate world seed
 	world_seed = randi()
+
+	# Find Grid3D in scene tree (it may be nested in UI structure)
+	_find_grid_3d()
 
 	Log.system("ChunkManager initialized (seed: %d, generators: %d)" % [
 		world_seed,
@@ -126,9 +130,16 @@ func _process_generation_queue() -> void:
 	var chunk := _generate_chunk(chunk_pos, level_id)
 	loaded_chunks[chunk_key] = chunk
 
-	# TODO: Notify Grid to render it (Phase 8)
-	# if has_node("/root/Game/Grid"):
-	#     get_node("/root/Game/Grid").load_chunk(chunk)
+	# Notify Grid3D to render it (use cached reference)
+	if not grid_3d:
+		_find_grid_3d()  # Try to find it again if not cached
+
+	if grid_3d:
+		grid_3d.load_chunk(chunk)
+	else:
+		# Only warn once per session
+		if loaded_chunks.size() == 1:
+			push_warning("[ChunkManager] Grid3D not found in scene tree - procedural generation disabled")
 
 	# Log chunk generation (no corruption increase here)
 	Log.grid("Generated chunk %s on Level %d" % [chunk_pos, level_id])
@@ -228,13 +239,13 @@ func _unload_distant_chunks() -> void:
 
 func _unload_chunk(chunk_key: Vector3i) -> void:
 	"""Unload a chunk from memory"""
-	var _chunk: Chunk = loaded_chunks[chunk_key]
+	var chunk: Chunk = loaded_chunks[chunk_key]
 
 	# TODO: Phase 7 - Save chunk state if modified (entities killed, items taken)
 
-	# TODO: Phase 8 - Remove from render
-	# if has_node("/root/Game/Grid"):
-	#     get_node("/root/Game/Grid").unload_chunk(chunk)
+	# Remove from Grid3D render (use cached reference)
+	if grid_3d:
+		grid_3d.unload_chunk(chunk)
 
 	# Remove from memory
 	loaded_chunks.erase(chunk_key)
@@ -279,6 +290,42 @@ func tile_to_local(tile_pos: Vector2i) -> Vector2i:
 		posmod(tile_pos.x, CHUNK_SIZE),
 		posmod(tile_pos.y, CHUNK_SIZE)
 	)
+
+# ============================================================================
+# SCENE TREE QUERIES
+# ============================================================================
+
+func _find_grid_3d() -> void:
+	"""Find Grid3D in scene tree by searching recursively
+
+	Grid3D may be nested deep in UI structure (SubViewport, etc.),
+	so we search the entire tree instead of hardcoding paths.
+	"""
+	if grid_3d:
+		return  # Already found
+
+	# Start search from root
+	var root = get_tree().root
+	grid_3d = _search_for_grid_3d(root)
+
+	if grid_3d:
+		Log.system("Found Grid3D at: %s" % grid_3d.get_path())
+	else:
+		Log.system("Grid3D not found in scene tree")
+
+func _search_for_grid_3d(node: Node) -> Grid3D:
+	"""Recursively search for Grid3D node"""
+	# Check if this node is Grid3D
+	if node is Grid3D:
+		return node
+
+	# Search children
+	for child in node.get_children():
+		var result = _search_for_grid_3d(child)
+		if result:
+			return result
+
+	return null
 
 # ============================================================================
 # PLAYER QUERIES

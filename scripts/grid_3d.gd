@@ -24,6 +24,9 @@ var current_level: LevelConfig = null
 # Player reference (for line-of-sight proximity fade)
 var player_node: Node3D = null
 
+# Procedural generation mode (set by ChunkManager)
+var use_procedural_generation: bool = false
+
 # Cached materials for proximity fade (for updating player_position uniform)
 var wall_materials: Array[ShaderMaterial] = []
 var ceiling_materials: Array[ShaderMaterial] = []
@@ -60,11 +63,28 @@ func configure_from_level(level_config: LevelConfig) -> void:
 	Log.system("Configuring grid for: %s" % level_config.display_name)
 	Log.system("Grid size: %d x %d" % [grid_size.x, grid_size.y])
 
+	# Check if ChunkManager exists (indicates procedural generation mode)
+	if has_node("/root/ChunkManager"):
+		use_procedural_generation = true
+		Log.system("ChunkManager detected - enabling procedural generation mode")
+
+		# Debug: Log our node path so ChunkManager can find us
+		var our_path = get_path()
+		Log.system("Grid3D path: %s" % our_path)
+
 	# Apply visual settings
 	_apply_level_visuals(level_config)
 
-	# Generate grid with level parameters
-	_generate_grid()
+	# Generate grid with level parameters (unless using procedural generation)
+	if not use_procedural_generation:
+		_generate_grid()
+	else:
+		# Procedural mode: ChunkManager will populate via load_chunk()
+		Log.system("Procedural generation mode enabled - waiting for ChunkManager")
+		# Still cache materials and generate examination overlay
+		_cache_wall_materials()
+		_cache_ceiling_materials()
+		# Note: Examination overlay will be generated per-chunk as they load
 
 	# Lifecycle hook
 	level_config.on_generation_complete()
@@ -170,7 +190,12 @@ func _apply_level_visuals(config: LevelConfig) -> void:
 # ============================================================================
 
 func _generate_grid() -> void:
-	"""Generate 3D grid using GridMap"""
+	"""Generate 3D grid using GridMap
+
+	NOTE: This is the legacy method for static level configs.
+	For procedural generation (ChunkManager-based), chunks are loaded
+	dynamically via load_chunk() instead.
+	"""
 	# For now, create simple open area with walls around edges
 	# TODO: Replace with Backrooms procedural generation
 
@@ -196,6 +221,88 @@ func _generate_grid() -> void:
 
 	# Generate examination overlay
 	_generate_examination_overlay()
+
+# ============================================================================
+# CHUNK LOADING (Procedural Generation Integration)
+# ============================================================================
+
+func load_chunk(chunk: Chunk) -> void:
+	"""Load a chunk from ChunkManager into GridMap
+
+	Converts chunk's SubChunk tile data into GridMap cells.
+	Each chunk is 128×128 tiles, organized as 8×8 sub-chunks (16×16 each).
+	"""
+	if not chunk:
+		push_warning("[Grid3D] Attempted to load null chunk")
+		return
+
+	# Convert chunk position to world tile offset
+	var chunk_world_offset := chunk.position * Chunk.SIZE
+
+	# Iterate through all sub-chunks in the chunk
+	for sub_y in range(Chunk.SUB_CHUNKS_PER_SIDE):
+		for sub_x in range(Chunk.SUB_CHUNKS_PER_SIDE):
+			var sub_chunk := chunk.get_sub_chunk(Vector2i(sub_x, sub_y))
+			if not sub_chunk:
+				continue
+
+			# Calculate sub-chunk's world tile offset
+			var sub_world_offset := chunk_world_offset + Vector2i(sub_x, sub_y) * SubChunk.SIZE
+
+			# Place tiles from sub-chunk
+			for tile_y in range(SubChunk.SIZE):
+				for tile_x in range(SubChunk.SIZE):
+					var tile_pos := Vector2i(tile_x, tile_y)
+					var tile_type: int = sub_chunk.get_tile(tile_pos)
+					var world_tile_pos := sub_world_offset + tile_pos
+
+					# Convert to 3D grid coordinates
+					var grid_pos := Vector3i(world_tile_pos.x, 0, world_tile_pos.y)
+
+					# Place floor or wall based on tile type
+					if tile_type == SubChunk.TileType.WALL:
+						grid_map.set_cell_item(grid_pos, TileType.WALL)
+					elif tile_type == SubChunk.TileType.FLOOR:
+						grid_map.set_cell_item(grid_pos, TileType.FLOOR)
+						walkable_cells.append(world_tile_pos)
+					# TODO: Add support for EXIT_STAIRS and other special tiles
+
+					# Place ceiling everywhere
+					grid_map.set_cell_item(Vector3i(world_tile_pos.x, 1, world_tile_pos.y), TileType.CEILING)
+
+	Log.grid("Loaded chunk %s into GridMap (%d walkable cells total)" % [
+		chunk.position,
+		walkable_cells.size()
+	])
+
+func unload_chunk(chunk: Chunk) -> void:
+	"""Unload a chunk from GridMap
+
+	Removes all tiles from this chunk's area.
+	"""
+	if not chunk:
+		push_warning("[Grid3D] Attempted to unload null chunk")
+		return
+
+	# Convert chunk position to world tile offset
+	var chunk_world_offset := chunk.position * Chunk.SIZE
+
+	# Clear all tiles in chunk area
+	for y in range(Chunk.SIZE):
+		for x in range(Chunk.SIZE):
+			var world_tile_pos := chunk_world_offset + Vector2i(x, y)
+			var grid_pos := Vector3i(world_tile_pos.x, 0, world_tile_pos.y)
+
+			# Clear floor/wall
+			grid_map.set_cell_item(grid_pos, GridMap.INVALID_CELL_ITEM)
+
+			# Clear ceiling
+			grid_map.set_cell_item(Vector3i(world_tile_pos.x, 1, world_tile_pos.y), GridMap.INVALID_CELL_ITEM)
+
+			# Remove from walkable cells
+			walkable_cells.erase(world_tile_pos)
+
+	Log.grid("Unloaded chunk %s from GridMap" % chunk.position)
 
 func _cache_wall_materials() -> void:
 	"""Cache wall materials from MeshLibrary for player position updates"""
