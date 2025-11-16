@@ -489,7 +489,7 @@ func _generate_examination_overlay() -> void:
 	Separates examination detection (layer 4) from GridMap rendering.
 
 	NOTE: This is for static levels only. Procedural mode uses on-demand examination
-	      tile creation in FirstPersonCamera (creates tiles only when player looks at them).
+		  tile creation in FirstPersonCamera (creates tiles only when player looks at them).
 	"""
 	var generator = ExaminationWorldGenerator.new()
 	generator.generate_examination_layer(self, get_parent())

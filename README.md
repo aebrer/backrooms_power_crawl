@@ -77,15 +77,16 @@ backrooms_power_crawl/
 
 ### Input Scheme (Controller-First)
 
-- **Left Stick**: Aim movement direction
-- **Right Trigger**: Confirm movement
-- **Right Stick**: Examine mode (view tooltips)
-- **RB**: Toggle Ability 1
-- **LB**: Toggle Ability 2
-- **X**: Toggle Ability 3
-- **Y**: Toggle Ability 4
-- **Start**: Pause/Menu
-- **Select**: Inventory/Character Sheet
+**Current Implementation:**
+- **Right Stick / Mouse**: Rotate camera (third-person perspective)
+- **RT / Space / Left Click**: Move forward (camera-relative direction)
+- **Left Stick**: Move camera pivot (tactical camera mode - not yet implemented)
+- **D-Pad Up**: Toggle examination mode (on-demand tile generation)
+- **Start**: Pause/Menu (not yet implemented)
+
+**Future Features:**
+- **RB/LB/X/Y**: Toggle automatic abilities (ability system planned)
+- **Select**: Inventory/Character Sheet (UI planned)
 
 ## Development Philosophy
 
@@ -105,9 +106,36 @@ This project will be open source when ready. Free software ethos throughout.
 
 ## Current Status
 
-**Phase**: Initial project setup and architecture planning
+**Phase**: Core Systems Implementation - Procedural Generation & Infinite World
 
-See `docs/DESIGN.md` for detailed design documentation and current decisions.
+**Implemented:**
+- ✅ 3D grid system with chunk-based streaming
+- ✅ Wave Function Collapse (WFC) procedural maze generation
+- ✅ Infinite world exploration (island-of-mazes chunks)
+- ✅ Input system (controller + mouse/keyboard parity)
+- ✅ State machine architecture (IdleState, LookModeState, ExecutingTurnState, PostTurnState)
+- ✅ Action/command pattern (MovementAction, WaitAction)
+- ✅ Turn-based movement with forward indicator
+- ✅ Third-person camera controls
+- ✅ Examination mode with on-demand tile generation
+- ✅ Logging system with category/level filtering
+- ✅ Level configuration system (LevelConfig resources)
+- ✅ PSX-style materials and shaders
+- ✅ Knowledge database system (SCP-style progressive revelation)
+
+**In Progress:**
+- 🚧 Bug fixes and stabilization
+- 🚧 Entity spawning system
+- 🚧 Ceiling vignette transparency system
+
+**Planned:**
+- 📋 Automatic ability system
+- 📋 Enemy AI and pathfinding
+- 📋 Physics simulation (liquids, temperature)
+- 📋 Visual corruption shaders
+- 📋 Hub area and NPCs
+
+See `docs/DESIGN.md` for full design documentation and `docs/ARCHITECTURE_AUDIT.md` for complete system inventory.
 
 ## License
 

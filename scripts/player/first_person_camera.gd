@@ -211,8 +211,8 @@ func get_current_target() -> Examinable:
 	var hit_normal: Vector3 = gridmap_hit.get("normal")
 	var grid_pos: Vector2 = grid_3d.world_to_grid(hit_pos)
 
-	# Determine tile type from GridMap using surface normal (industry-standard approach)
-	var tile_type := _get_tile_type_at_position(grid_3d, grid_pos, hit_normal)
+	# Determine tile type from GridMap using hit position and surface normal
+	var tile_type := _get_tile_type_at_position(grid_3d, grid_pos, hit_pos, hit_normal)
 	if tile_type == "":
 		return null
 
@@ -248,22 +248,25 @@ func _raycast_gridmap() -> Dictionary:
 	var result = space_state.intersect_ray(query)
 
 	if not result.is_empty():
-		Log.trace(Log.Category.SYSTEM, "GridMap raycast hit at Y=%.2f, normal=%s" % [result.get("position").y, result.get("normal")])
+		var hit_pos: Vector3 = result.get("position")
+		var hit_normal: Vector3 = result.get("normal")
+		Log.system("📍 Raycast: origin=%.1f,%.1f,%.1f dir=%.2f,%.2f,%.2f → hit=%.1f,%.1f,%.1f normal=%s" % [
+			ray_origin.x, ray_origin.y, ray_origin.z,
+			ray_direction.x, ray_direction.y, ray_direction.z,
+			hit_pos.x, hit_pos.y, hit_pos.z,
+			hit_normal
+		])
 
 	return result
 
-func _get_tile_type_at_position(grid_3d, grid_pos: Vector2, hit_normal: Vector3) -> String:
-	"""Determine tile type (floor/wall/ceiling) from GridMap using surface normal
+func _get_tile_type_at_position(grid_3d, grid_pos: Vector2, hit_pos: Vector3, hit_normal: Vector3) -> String:
+	"""Determine tile type (floor/wall/ceiling) from GridMap using hit position and normal
 
-	Uses dot product with Vector3.UP to determine orientation (industry-standard):
-	- Floor: normal points upward (dot > 0.7)
-	- Ceiling: normal points downward (dot < -0.7)
-	- Wall: normal is horizontal (-0.7 <= dot <= 0.7)
-
-	Threshold of 0.7 ≈ cos(45°) handles slopes and float precision.
-	This is the same approach used by CharacterBody3D.is_on_floor().
+	Checks GridMap tiles and validates hit position is near the expected geometry.
 	"""
-	const THRESHOLD = 0.7  # ~45° tolerance
+	const THRESHOLD = 0.7  # ~45° tolerance for normal direction
+	const CEILING_Y = 2.98  # Ceiling collision height
+	const CEILING_TOLERANCE = 0.2  # Hit must be within 0.2 units of ceiling (ceiling box is 0.1 thick)
 
 	var cell_3d := Vector3i(grid_pos.x, 0, grid_pos.y)
 	var cell_item: int = grid_3d.grid_map.get_cell_item(cell_3d)
@@ -272,26 +275,27 @@ func _get_tile_type_at_position(grid_3d, grid_pos: Vector2, hit_normal: Vector3)
 	var dot_up = hit_normal.dot(Vector3.UP)
 
 	# DEBUG: Always log ceiling detection attempts
-	Log.system("🔍 Tile detection at (%d,%d): Y=0 item=%d, dot_up=%.2f, normal=%s" % [grid_pos.x, grid_pos.y, cell_item, dot_up, hit_normal])
+	Log.system("🔍 Tile detection at (%d,%d): Y=0 item=%d, hit_y=%.2f, dot_up=%.2f, normal=%s" % [grid_pos.x, grid_pos.y, cell_item, hit_pos.y, dot_up, hit_normal])
 
 	# Check if wall (horizontal normal, or explicit wall tile)
 	if cell_item == grid_3d.TileType.WALL:
 		Log.system("→ Detected as WALL")
 		return "wall"
 
-	# Check for ceiling at Y=1 layer (normal points downward)
+	# Check for ceiling at Y=1 layer
+	# Require: ceiling tile exists AND hit position is near ceiling height
 	var ceiling_cell := Vector3i(grid_pos.x, 1, grid_pos.y)
 	var ceiling_item: int = grid_3d.grid_map.get_cell_item(ceiling_cell)
-	var passes_threshold = dot_up < -THRESHOLD
-	Log.system("  🔍 Y=1 ceiling_item=%d (CEILING=%d), dot_up=%.2f < -%.2f? %s" % [ceiling_item, grid_3d.TileType.CEILING, dot_up, THRESHOLD, passes_threshold])
+	var near_ceiling = abs(hit_pos.y - CEILING_Y) < CEILING_TOLERANCE
+	Log.system("  🔍 Y=1 ceiling_item=%d (CEILING=%d), hit_y=%.2f vs ceiling_y=%.2f, near=%s" % [
+		ceiling_item, grid_3d.TileType.CEILING, hit_pos.y, CEILING_Y, near_ceiling
+	])
 
-	if ceiling_item == grid_3d.TileType.CEILING and passes_threshold:
-		Log.system("→ ✓ Detected as CEILING!")
+	if ceiling_item == grid_3d.TileType.CEILING and near_ceiling:
+		Log.system("→ ✓ Detected as CEILING (tile exists and hit near ceiling height)")
 		return "ceiling"
 	elif ceiling_item == grid_3d.TileType.CEILING:
-		Log.system("→ ✗ Ceiling tile exists but normal check failed (dot_up=%.2f, need < -%.2f)" % [dot_up, THRESHOLD])
-	elif passes_threshold:
-		Log.system("→ ✗ Normal points down but no ceiling tile at Y=1 (item=%d)" % ceiling_item)
+		Log.system("→ ✗ Ceiling tile exists but hit too far from ceiling (hit_y=%.2f, ceiling=%.2f)" % [hit_pos.y, CEILING_Y])
 
 	# Check if floor (normal points upward)
 	if cell_item == grid_3d.TileType.FLOOR and dot_up > THRESHOLD:
