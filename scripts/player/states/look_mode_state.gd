@@ -53,11 +53,7 @@ func enter() -> void:
 
 	Log.state("Entering Look Mode - switching to first-person camera")
 
-	# Sync first-person camera rotation to tactical camera (so they stay aligned)
-	first_person_camera.h_pivot.rotation_degrees.y = tactical_camera.h_pivot.rotation_degrees.y
-	first_person_camera.v_pivot.rotation_degrees.x = tactical_camera.v_pivot.rotation_degrees.x
-
-	# Switch cameras
+	# Switch cameras (activate() handles rotation sync)
 	tactical_camera.camera.current = false
 	first_person_camera.activate()
 
@@ -79,12 +75,7 @@ func exit() -> void:
 
 	Log.state("Exiting Look Mode - switching to tactical camera")
 
-	# Sync tactical camera rotation to first-person camera (preserve where player was looking)
-	if first_person_camera and tactical_camera:
-		tactical_camera.h_pivot.rotation_degrees.y = first_person_camera.h_pivot.rotation_degrees.y
-		tactical_camera.v_pivot.rotation_degrees.x = first_person_camera.v_pivot.rotation_degrees.x
-
-	# Switch back to tactical camera
+	# Switch back to tactical camera (deactivate() handles rotation sync)
 	if first_person_camera:
 		first_person_camera.deactivate()
 	if tactical_camera:
