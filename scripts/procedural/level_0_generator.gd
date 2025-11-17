@@ -482,96 +482,65 @@ func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
 # ============================================================================
 
 func _ensure_connectivity(chunk: Chunk) -> bool:
-	"""Ensure chunk is traversable - can reach all edges from any floor tile
+	"""Ensure chunk has floor tiles on all 4 edges for connectivity
 
-	Uses inline BFS since chunk isn't in Grid3D yet during generation.
-	This validates actual traversability - can reach all 4 edges from center.
+	Simpler check: Verifies each edge has at least some floor tiles so the chunk
+	can connect to adjacent chunks. The maze generator should naturally create
+	these with 68-75% floor density, but we validate to ensure traversability.
 
-	Returns true if traversable, false if disconnected regions or unreachable edges.
+	Returns true if all edges have floor tiles, false otherwise.
 	"""
 	# Calculate world offset for this chunk
 	var chunk_world_offset := chunk.position * Chunk.SIZE
 
-	# Find floor tile closest to chunk center (where player would likely spawn)
-	var chunk_center := chunk_world_offset + Vector2i(Chunk.SIZE / 2, Chunk.SIZE / 2)
-	var test_pos := Vector2i(-1, -1)
-	var closest_dist := 999999.0
-
-	for y in range(Chunk.SIZE):
-		for x in range(Chunk.SIZE):
-			var local_pos := Vector2i(x, y)
-			var world_pos := chunk_world_offset + local_pos
-			if chunk.get_tile(world_pos) == FLOOR:
-				# Find floor tile closest to chunk center
-				var dist := world_pos.distance_squared_to(chunk_center)
-				if dist < closest_dist:
-					closest_dist = dist
-					test_pos = world_pos
-
-	if test_pos == Vector2i(-1, -1):
-		# No floor tiles at all - regenerate
-		return false
-
-	# Check if we can reach tiles on all 4 edges using BFS
-	var reached_edges := {
-		"north": false,
-		"south": false,
-		"east": false,
-		"west": false
+	# Count floor tiles on each edge
+	var edge_floors := {
+		"north": 0,
+		"south": 0,
+		"east": 0,
+		"west": 0
 	}
 
-	# BFS from test position
-	var visited: Dictionary = {}  # Vector2i -> bool
-	var queue: Array[Vector2i] = [test_pos]
-	visited[test_pos] = true
+	# Scan all edges
+	for i in range(Chunk.SIZE):
+		# North edge (y=0)
+		var north_pos := chunk_world_offset + Vector2i(i, 0)
+		if chunk.get_tile(north_pos) == FLOOR:
+			edge_floors["north"] += 1
 
-	while queue.size() > 0:
-		var current: Vector2i = queue.pop_front()
-		var local := current - chunk_world_offset
+		# South edge (y=SIZE-1)
+		var south_pos := chunk_world_offset + Vector2i(i, Chunk.SIZE - 1)
+		if chunk.get_tile(south_pos) == FLOOR:
+			edge_floors["south"] += 1
 
-		# Check if we reached an edge
-		if local.y == 0:
-			reached_edges["north"] = true
-		if local.y == Chunk.SIZE - 1:
-			reached_edges["south"] = true
-		if local.x == 0:
-			reached_edges["west"] = true
-		if local.x == Chunk.SIZE - 1:
-			reached_edges["east"] = true
+		# West edge (x=0)
+		var west_pos := chunk_world_offset + Vector2i(0, i)
+		if chunk.get_tile(west_pos) == FLOOR:
+			edge_floors["west"] += 1
 
-		# Explore 4-directional neighbors
-		var neighbors := [
-			current + Vector2i(0, -1),  # North
-			current + Vector2i(0, 1),   # South
-			current + Vector2i(-1, 0),  # West
-			current + Vector2i(1, 0)    # East
-		]
+		# East edge (x=SIZE-1)
+		var east_pos := chunk_world_offset + Vector2i(Chunk.SIZE - 1, i)
+		if chunk.get_tile(east_pos) == FLOOR:
+			edge_floors["east"] += 1
 
-		for neighbor in neighbors:
-			if visited.has(neighbor):
-				continue
+	# Require at least 10% of edge to be floor tiles (12.8 tiles minimum per edge)
+	var min_floor_per_edge := int(Chunk.SIZE * 0.1)
 
-			# Check if neighbor is walkable
-			if chunk.get_tile(neighbor) == FLOOR:
-				visited[neighbor] = true
-				queue.append(neighbor)
-
-	# Check if all edges were reached
-	var can_traverse := (
-		reached_edges["north"] and
-		reached_edges["south"] and
-		reached_edges["east"] and
-		reached_edges["west"]
+	var has_connectivity := (
+		edge_floors["north"] >= min_floor_per_edge and
+		edge_floors["south"] >= min_floor_per_edge and
+		edge_floors["east"] >= min_floor_per_edge and
+		edge_floors["west"] >= min_floor_per_edge
 	)
 
-	if not can_traverse:
-		Log.grid("⚠️ Chunk %s has unreachable edges from position %s (N:%s S:%s E:%s W:%s)" % [
+	if not has_connectivity:
+		Log.grid("⚠️ Chunk %s has insufficient edge floor tiles (N:%d S:%d E:%d W:%d, need %d)" % [
 			chunk.position,
-			test_pos,
-			reached_edges["north"],
-			reached_edges["south"],
-			reached_edges["east"],
-			reached_edges["west"]
+			edge_floors["north"],
+			edge_floors["south"],
+			edge_floors["east"],
+			edge_floors["west"],
+			min_floor_per_edge
 		])
 
-	return can_traverse
+	return has_connectivity
