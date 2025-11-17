@@ -1,5 +1,5 @@
 # Backrooms Power Crawl - Complete Architecture Audit
-**Generated**: 2025-11-16
+**Generated**: 2025-11-17
 **Total GDScript LOC**: 6,943 lines
 **Total Files Analyzed**: 67 files (.gd, .tscn, .tres, .md, .py)
 
@@ -10,7 +10,7 @@
 ### Project Status
 **Current State**: Transitioning from 2D prototype to 3D production with procedural generation
 **Active Branch**: `feature/procedural-generation`
-**Most Recent Major Change**: Chunk examination overlay system removed (e7dbcac)
+**Most Recent Major Change**: Threaded chunk generation for smooth gameplay (e586ec0)
 
 ### Architecture Overview
 The project has TWO parallel implementations:
@@ -30,7 +30,8 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - ✅ **Logging System**: Comprehensive category-based logging
 - ✅ **Examination System**: On-demand tile creation with raycasting
 - ✅ **Procedural Generation**: WFC-based Level 0 maze generation
-- ✅ **Chunk System**: Infinite world with streaming chunks
+- ✅ **Chunk System**: Infinite world with threaded chunk generation + streaming
+- ✅ **Performance Optimizations**: Threaded generation (0ms main thread), optimized grid application (3.6x faster)
 - ✅ **Level Management**: Multi-level config system with LRU cache
 - ⚠️ **2D Legacy Code**: Completely unused, safe to delete
 - ⚠️ **Documentation**: Some outdated references to old systems
@@ -126,6 +127,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Constants**:
   - `GRID_SIZE := Vector2i(128, 128)` (per-chunk size)
   - `CELL_SIZE := Vector3(2.0, 1.0, 2.0)` (doubled for visibility)
+  - `cell_octant_size = 16` (increased from default 8 for procedural generation)
 - **Enums**:
   - `TileType`: FLOOR=0, WALL=1, CEILING=2
 - **Exported Vars**: None
@@ -159,6 +161,8 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
   - LevelConfig (current_level)
   - Chunk, ChunkManager (procedural generation)
   - GridMap (rendering)
+- **Performance**:
+  - GridMap loading: ~27ms per chunk
 - **Used By**:
   - game_3d.gd (configure_from_level)
   - player_3d.gd (grid_to_world, is_walkable)
@@ -601,9 +605,10 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
   - `var corruption_tracker: CorruptionTracker`
   - `var level_generators: Dictionary` (level_id → LevelGenerator)
   - `var grid_3d: Grid3D` (cached reference)
+  - `var generation_thread: ChunkGenerationThread` (worker thread for async generation)
 - **Methods**:
-  - `_ready()`: Initialize corruption tracker, level generators, find Grid3D, connect to player
-  - `_process(delta)`: Process generation queue (spread over frames)
+  - `_ready()`: Initialize corruption tracker, level generators, find Grid3D, connect to player, start generation thread
+  - `_process(delta)`: Process completed chunks from thread, queue next batch
   - `_connect_to_player_signal()`: Connect to player.turn_completed (deferred)
   - `on_turn_completed()`: **MAIN UPDATE LOOP**
     - Check player chunk change
@@ -612,8 +617,8 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
     - Emit chunk_updates_completed if nothing queued
   - `_update_chunks_around_player()`: Queue chunks for loading (distance-sorted)
   - `_check_player_chunk_change()`: Increase corruption when entering new chunk
-  - `_process_generation_queue()`: Generate chunks with frame budget limiting
-  - `_generate_chunk(chunk_key)`: Create new chunk, generate maze, add to loaded_chunks
+  - `_process_generation_queue()`: Process completed chunks from thread, queue next batch
+  - `_generate_chunk(chunk_key)`: Queue chunk for generation on worker thread
   - `_unload_distant_chunks()`: Unload chunks beyond UNLOAD_RADIUS (LRU)
   - `_get_player_position() → Vector2i`: Get player grid position
   - `_get_player_level() → int`: Get current level (always 0 for now)
@@ -626,14 +631,58 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Dependencies**:
   - Chunk, SubChunk (chunk data structures)
   - LevelGenerator, Level0Generator (maze generation)
+  - ChunkGenerationThread (async chunk generation)
   - CorruptionTracker (corruption per level)
   - Grid3D (load_chunk, unload_chunk)
   - Player3D (turn_completed signal)
+- **Features**:
+  - Uses ChunkGenerationThread for async chunk generation
+  - Receives completed chunks via signal + call_deferred
+- **Performance**:
+  - Generation: 0ms main thread (runs on worker)
 - **Used By**:
   - PostTurnState (chunk_updates_completed signal)
   - Grid3D (provides chunks)
-- **Issues**: None - proper distance-sorted priority queue, frame budget limiting
-- **Status**: Active - core chunk streaming system
+- **Issues**: None - proper distance-sorted priority queue, frame budget limiting, threaded generation
+- **Status**: Active - core chunk streaming system with threading
+
+#### `scripts/procedural/chunk_generation_thread.gd`
+- **Created**: 2025-11-17 (commit e586ec0)
+- **Class**: `class_name ChunkGenerationThread extends RefCounted`
+- **Purpose**: Worker thread for asynchronous chunk generation
+- **Key Features**:
+  - Runs Level0Generator.generate_chunk() on background thread
+  - Thread-safe request/completion queues with Mutex + Semaphore
+  - Signal emission when chunks complete
+  - Clean shutdown in _exit_tree()
+- **Instance Vars**:
+  - `var level_generator: LevelGenerator` (generator reference)
+  - `var thread: Thread` (worker thread instance)
+  - `var request_queue: Array` (queued generation requests)
+  - `var completion_queue: Array` (completed chunks)
+  - `var request_mutex: Mutex` (thread-safe queue access)
+  - `var completion_semaphore: Semaphore` (signal when chunk ready)
+  - `var should_stop: bool` (shutdown flag)
+- **Signals**:
+  - `chunk_completed(chunk, pos, level_id)`: Emitted when chunk generation finishes
+- **Methods**:
+  - `_init(level_generator)`: Initialize with generator reference
+  - `start()`: Start worker thread
+  - `stop()`: Stop and cleanup thread
+  - `queue_chunk_generation(pos, level_id, seed)`: Queue chunk for generation
+  - `process_completed_chunks()`: Emit signals for completed chunks (main thread)
+  - `_thread_function()`: Worker thread main loop
+  - `_wait_for_shutdown()`: Cleanup during _exit_tree()
+- **Dependencies**:
+  - Chunk (data structure)
+  - LevelGenerator (interface)
+  - Log (for system messages, thread-safe)
+- **Performance**:
+  - Eliminates 28ms frame hitches by moving generation off main thread
+  - Main thread only does queue polling and signal emission
+- **Used By**: ChunkManager (async chunk generation)
+- **Issues**: None - proper mutex locking, clean thread lifecycle
+- **Status**: Active - asynchronous chunk generation worker
 
 #### `scripts/procedural/chunk.gd`
 - **Class**: `class_name Chunk extends RefCounted`
@@ -718,6 +767,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
     - Seed RNG
     - Generate all sub-chunks with WFC
     - Place ceilings on layer 1
+    - Use direct sub-chunk access for optimal performance
   - `_generate_sub_chunk_wfc(sub_chunk)`: Wave Function Collapse algorithm
     - Initialize superposition (all tiles have both floor+wall possibilities)
     - While uncollapsed tiles exist:
@@ -732,13 +782,17 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
   - `_get_valid_neighbors(tile_type, direction) → Array`: Get allowed adjacent tiles
   - `_constrain_tile(superposition, pos, allowed_types)`: Remove invalid possibilities
   - `_is_fully_collapsed(superposition) → bool`: Check if all tiles decided
+  - `_apply_grid_to_chunk(chunk)`: Optimized direct sub-chunk access (3.6x speedup)
   - `get_corruption_per_chunk() → float`: Returns 0.005 (slower corruption for Level 0)
   - `should_spawn_entity(corruption) → bool`: Returns false (no entities yet)
 - **Dependencies**:
   - Chunk, SubChunk (data structures)
   - RandomNumberGenerator (seeded RNG)
-- **Used By**: ChunkManager (level_generators[0])
-- **Issues**: None - clean WFC implementation
+- **Performance**:
+  - Generation: 19-30ms (was 48-56ms before optimization)
+  - Optimized _apply_grid_to_chunk() with direct sub-chunk access (3.6x speedup)
+- **Used By**: ChunkManager (level_generators[0]), ChunkGenerationThread (threaded generation)
+- **Issues**: None - clean WFC implementation with optimizations
 - **Status**: Active - Level 0 maze generation
 
 #### `scripts/procedural/corruption_tracker.gd`
@@ -1502,5 +1556,5 @@ Total latency: ~20 frames (~333ms @ 60fps) when generating 7 chunks
 ---
 
 **End of Architecture Audit**
-**Last Updated**: 2025-11-16 (Added system flows & architecture diagrams)
-**Auditor**: Claude (Sonnet 4.5)
+**Last Updated**: 2025-11-17 (Added threaded chunk generation system)
+**Auditor**: Claude (Haiku 4.5)

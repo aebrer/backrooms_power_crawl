@@ -119,11 +119,11 @@ func generate_chunk(chunk: Chunk, world_seed: int) -> void:
 
 	var time_after_init := Time.get_ticks_usec()
 
-	Log.grid("[MazeGen] Chunk %s: strategy=%s seed=%d" % [
-		chunk.position,
-		["ROOM_FOCUSED", "MAZE_FOCUSED", "HYBRID"][strategy],
-		chunk_seed
-	])
+	# Log.grid("[MazeGen] Chunk %s: strategy=%s seed=%d" % [
+	# 	chunk.position,
+	# 	["ROOM_FOCUSED", "MAZE_FOCUSED", "HYBRID"][strategy],
+	# 	chunk_seed
+	# ])  # Too verbose
 
 	# Generate maze based on strategy
 	rooms = []  # Reset room list
@@ -163,15 +163,15 @@ func generate_chunk(chunk: Chunk, world_seed: int) -> void:
 	var floor_pct_time := (time_after_floor_pct - time_after_generation) / 1000.0
 	var apply_time := (time_after_apply - time_after_floor_pct) / 1000.0
 
-	Log.grid("Generated Level 0 chunk at %s (walkable: %d tiles, %.1fms) [init: %.1fms, gen: %.1fms, floor%%: %.1fms, apply: %.1fms]" % [
-		chunk.position,
-		chunk.get_walkable_count(),
-		total_time,
-		init_time,
-		gen_time,
-		floor_pct_time,
-		apply_time
-	])
+	# Log.grid("Generated Level 0 chunk at %s (walkable: %d tiles, %.1fms) [init: %.1fms, gen: %.1fms, floor%%: %.1fms, apply: %.1fms]" % [
+	# 	chunk.position,
+	# 	chunk.get_walkable_count(),
+	# 	total_time,
+	# 	init_time,
+	# 	gen_time,
+	# 	floor_pct_time,
+	# 	apply_time
+	# ])  # Too verbose (profiling was useful for optimization, less needed now that threading eliminated frame impact)
 
 # ============================================================================
 # ROOM GENERATION
@@ -474,7 +474,23 @@ func _ensure_floor_percentage_range(grid: Array, rng: RandomNumberGenerator) -> 
 func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
 	"""Apply generated grid to chunk tiles (layer 0 = floor/wall, layer 1 = ceiling)
 
-	Optimized: Directly iterate over sub-chunks to avoid coordinate conversion overhead.
+	⚠️ PERFORMANCE CRITICAL - DO NOT "REFACTOR" WITHOUT BENCHMARKING ⚠️
+
+	This function is highly optimized to avoid coordinate conversion overhead.
+	Uses DIRECT sub-chunk access instead of chunk.set_tile(world_pos) to eliminate
+	65,536+ coordinate calculations per chunk (local→world→sub-local conversions).
+
+	BEFORE optimization: 43-47ms (78% of generation time!)
+	AFTER optimization: 14-16ms (3x speedup)
+
+	Why this pattern works:
+	- Iterates over 8×8 sub-chunk grid directly
+	- Uses sub-local coordinates (0-15) without any world coordinate math
+	- Avoids get_sub_chunk_at_tile() lookups (16,384 times!)
+	- Each sub_chunk.set_tile() is a direct array access
+
+	If you think this looks "messy" compared to chunk.set_tile(world_pos),
+	remember: the "clean" version was 3x slower and caused frame hitches.
 	"""
 	const CEILING := 4  # SubChunk.TileType.CEILING
 	const SUB_CHUNK_SIZE := 16

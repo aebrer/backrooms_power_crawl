@@ -144,7 +144,11 @@ func _exit_tree() -> void:
 
 ## Generic logging method (all others route through this)
 func msg(category: Category, level: Level, message: String) -> void:
-	# Skip logging from worker threads (scene tree access not allowed)
+	# ⚠️ THREAD SAFETY - DO NOT REMOVE ⚠️
+	# Worker threads (e.g., ChunkGenerationThread) cannot access scene tree nodes.
+	# Attempting to emit signals from worker threads causes Godot errors:
+	# "Caller thread can't call this function in this node. Use call_deferred()..."
+	# Silently skip logging from worker threads - main thread logs are sufficient.
 	if OS.get_thread_caller_id() != OS.get_main_thread_id():
 		return
 

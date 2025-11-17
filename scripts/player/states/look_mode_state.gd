@@ -128,16 +128,16 @@ func process_frame(_delta: float) -> void:
 	if target_changed:
 		if new_target:
 			# Examine the target (entity or environment tile)
-			Log.system("Looking at: %s (entity_id: %s)" % [new_target, new_target.entity_id])
+			# Log.system("Looking at: %s (entity_id: %s)" % [new_target, new_target.entity_id])  # Too verbose
 			KnowledgeDB.examine_entity(new_target.entity_id)
 			if examination_panel:
-				Log.system("Showing examination panel")
+				# Log.system("Showing examination panel")  # Too verbose
 				examination_panel.show_panel(new_target)
 			else:
 				Log.warn(Log.Category.STATE, "Cannot show panel - examination_panel is null")
 		else:
 			# Looking at nothing
-			Log.trace(Log.Category.STATE, "Looking at nothing")
+			# Log.trace(Log.Category.STATE, "Looking at nothing")  # Too verbose
 			if examination_panel:
 				examination_panel.hide_panel()
 
