@@ -45,3 +45,5 @@ screenshots/
 tmp/
 tmp_*/
 tmp/*
+
+data/mazes

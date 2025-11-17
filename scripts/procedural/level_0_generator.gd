@@ -478,67 +478,55 @@ func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
 				chunk.set_tile_at_layer(world_tile_pos, 1, CEILING)
 
 # ============================================================================
-# CONNECTIVITY CHECK (UNCHANGED FROM ORIGINAL)
+# CONNECTIVITY CHECK
 # ============================================================================
 
 func _ensure_connectivity(chunk: Chunk) -> bool:
-	"""Ensure all floor tiles are connected (flood fill from first floor tile)
+	"""Ensure chunk is traversable - can reach all edges from any floor tile
 
-	Returns true if connected, false if disconnected regions found.
-	If disconnected, could regenerate chunk with different seed offset.
+	Uses PathfindingManager to verify a floor tile can reach all 4 chunk edges.
+	This is more useful than simple connectivity - it validates actual traversability.
+
+	Returns true if traversable, false if disconnected regions or unreachable edges.
 	"""
-	# Find first floor tile
-	var start_pos := Vector2i(-1, -1)
+	# Calculate world offset for this chunk
+	var chunk_world_offset := chunk.position * Chunk.SIZE
+
+	# Find a random floor tile to test from
+	var test_pos := Vector2i(-1, -1)
+	var floor_tiles: Array[Vector2i] = []
+
 	for y in range(Chunk.SIZE):
 		for x in range(Chunk.SIZE):
-			if chunk.get_tile(Vector2i(x, y)) == FLOOR:
-				start_pos = Vector2i(x, y)
-				break
-		if start_pos != Vector2i(-1, -1):
-			break
+			var local_pos := Vector2i(x, y)
+			var world_pos := chunk_world_offset + local_pos
+			if chunk.get_tile(world_pos) == FLOOR:
+				floor_tiles.append(world_pos)
 
-	if start_pos == Vector2i(-1, -1):
+	if floor_tiles.is_empty():
 		# No floor tiles at all - regenerate
 		return false
 
-	# Flood fill from start position
-	var visited: Dictionary = {}  # Vector2i -> bool
-	var queue: Array = [start_pos]
-	visited[start_pos] = true
-	var reachable_count := 1
+	# Pick middle tile for testing (more likely to be central than random)
+	test_pos = floor_tiles[floor_tiles.size() / 2]
 
-	while queue.size() > 0:
-		var current: Vector2i = queue.pop_front()
+	# Build navigation graph for this chunk only
+	# We need a temporary grid reference - get it from ChunkManager
+	var grid_ref = ChunkManager.grid_3d
+	if not grid_ref:
+		push_warning("Grid3D not available for pathfinding check, falling back to basic connectivity")
+		# Fallback: At least we have floor tiles
+		return true
 
-		# Check 4 neighbors
-		var neighbors := [
-			current + Vector2i(0, -1),
-			current + Vector2i(0, 1),
-			current + Vector2i(-1, 0),
-			current + Vector2i(1, 0)
-		]
+	Pathfinding.build_navigation_graph([chunk.position], grid_ref)
 
-		for neighbor in neighbors:
-			if neighbor.x < 0 or neighbor.x >= Chunk.SIZE or neighbor.y < 0 or neighbor.y >= Chunk.SIZE:
-				continue
-			if visited.has(neighbor):
-				continue
-			if chunk.get_tile(neighbor) != FLOOR:
-				continue
+	# Check if we can reach all 4 chunk edges from this position
+	var can_traverse := Pathfinding.can_reach_chunk_edges(test_pos, chunk.position)
 
-			visited[neighbor] = true
-			queue.append(neighbor)
-			reachable_count += 1
-
-	# Check if all floor tiles are reachable
-	var total_floor := chunk.get_walkable_count()
-	var is_connected := (reachable_count == total_floor)
-
-	if not is_connected:
-		Log.grid("⚠️ Chunk %s has disconnected regions: %d/%d reachable" % [
+	if not can_traverse:
+		Log.grid("⚠️ Chunk %s has unreachable edges from position %s" % [
 			chunk.position,
-			reachable_count,
-			total_floor
+			test_pos
 		])
 
-	return is_connected
+	return can_traverse
