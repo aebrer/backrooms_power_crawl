@@ -44,7 +44,13 @@ enum TileType {
 
 func _ready() -> void:
 	grid_map.cell_size = CELL_SIZE
-	print("[Grid3D] Initialized: %d x %d" % [grid_size.x, grid_size.y])
+
+	# Increase octant size for better procedural generation performance
+	# Default is 8, higher values reduce update overhead during chunk population
+	# Trade-off: More draw calls per octant (acceptable for modern renderers)
+	grid_map.cell_octant_size = 16
+
+	print("[Grid3D] Initialized: %d x %d (octant size: %d)" % [grid_size.x, grid_size.y, grid_map.cell_octant_size])
 
 func initialize(size: Vector2i) -> void:
 	"""Initialize grid with given size (legacy method)"""
@@ -233,6 +239,8 @@ func load_chunk(chunk: Chunk) -> void:
 		push_warning("[Grid3D] Attempted to load null chunk")
 		return
 
+	var load_start := Time.get_ticks_usec()
+
 	# Convert chunk position to world tile offset
 	var chunk_world_offset := chunk.position * Chunk.SIZE
 
@@ -275,11 +283,14 @@ func load_chunk(chunk: Chunk) -> void:
 					if ceiling_tile_type == SubChunk.TileType.CEILING:
 						grid_map.set_cell_item(Vector3i(world_tile_pos.x, 1, world_tile_pos.y), TileType.CEILING)
 
-	Log.grid("Loaded chunk %s into GridMap (walls: %d, floors: %d, total walkable: %d)" % [
+	var load_time := (Time.get_ticks_usec() - load_start) / 1000.0
+
+	Log.grid("Loaded chunk %s into GridMap (walls: %d, floors: %d, total walkable: %d) [%.1fms]" % [
 		chunk.position,
 		wall_count,
 		floor_count,
-		walkable_cells.size()
+		walkable_cells.size(),
+		load_time
 	])
 
 func unload_chunk(chunk: Chunk) -> void:
