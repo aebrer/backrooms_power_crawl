@@ -824,6 +824,40 @@ User values detailed commit messages:
 - Testing notes
 - "🤖 Generated with Claude Code" footer (auto-added)
 
+### Updating Pull Request Descriptions
+
+**Problem**: `gh pr edit` fails with GraphQL error due to Projects (classic) deprecation (as of 2025):
+```
+GraphQL: Projects (classic) is being deprecated in favor of the new Projects experience
+```
+
+**Workaround**: Use the GitHub API directly via `gh api` instead:
+
+```bash
+# Save description to file
+cat > /tmp/pr_description.md <<'EOF'
+Your PR description here...
+EOF
+
+# Update PR via API (bypasses Projects deprecation issue)
+gh api \
+  --method PATCH \
+  -H "Accept: application/vnd.github+json" \
+  /repos/OWNER/REPO/pulls/PR_NUMBER \
+  -F body=@/tmp/pr_description.md
+```
+
+**Why this works**: The API endpoint doesn't query the deprecated projectCards field that causes `gh pr edit` to fail.
+
+**Alternative**: If you know the exact body text, you can pass it inline:
+```bash
+gh api \
+  --method PATCH \
+  -H "Accept: application/vnd.github+json" \
+  /repos/aebrer/backrooms_power_crawl/pulls/7 \
+  -f body='Your description here'
+```
+
 ---
 
 ## 10. Python Tooling & Maintenance Scripts

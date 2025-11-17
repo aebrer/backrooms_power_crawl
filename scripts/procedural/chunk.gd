@@ -20,7 +20,6 @@ var metadata: Dictionary = {}  # Light positions, decorations, etc.
 
 # State
 var state: State = State.UNGENERATED
-var last_access_time: float = 0.0
 
 enum State {
 	UNGENERATED,
@@ -41,8 +40,6 @@ func _init() -> void:
 			sub.local_position = Vector2i(sx, sy)
 			# World position will be set when chunk position is assigned
 			sub_chunks.append(sub)
-
-	last_access_time = Time.get_ticks_msec()
 
 func initialize(chunk_pos: Vector2i, level: int) -> void:
 	"""Initialize chunk with position and level"""
