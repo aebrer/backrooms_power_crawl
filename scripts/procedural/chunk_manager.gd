@@ -66,11 +66,21 @@ func _ready() -> void:
 		level_generators.size()
 	])
 
+	# Connect to scene tree change signal to re-find Grid3D when game scene loads
+	get_tree().tree_changed.connect(_on_scene_tree_changed)
+
 	# Connect to player's turn_completed signal (deferred to ensure player exists)
 	call_deferred("_connect_to_player_signal")
 
 	# Do initial chunk load (deferred to ensure player position is set)
 	call_deferred("on_turn_completed")
+
+func _on_scene_tree_changed() -> void:
+	"""Re-find Grid3D when scene changes (e.g., from start menu to game)"""
+	if not grid_3d:
+		call_deferred("_find_grid_3d")
+		call_deferred("_connect_to_player_signal")
+		call_deferred("on_turn_completed")
 
 func _exit_tree() -> void:
 	"""Clean up worker thread on exit"""
