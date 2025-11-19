@@ -78,8 +78,9 @@ func exit() -> void:
 
 	Log.state("Exiting Look Mode - switching to tactical camera")
 
-	# Release mouse cursor (back to visible)
-	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	# Recapture mouse for tactical camera control (unless paused)
+	if not PauseManager.is_paused:
+		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 	# Switch back to tactical camera (deactivate() handles rotation sync)
 	if first_person_camera:
@@ -133,9 +134,15 @@ func process_frame(_delta: float) -> void:
 	# Update UI with target (or hide if nothing)
 	if target_changed:
 		if new_target:
-			# Examine the target (entity or environment tile)
-			# Log.system("Looking at: %s (entity_id: %s)" % [new_target, new_target.entity_id])  # Too verbose
-			KnowledgeDB.examine_entity(new_target.entity_id)
+			# Examine the target - route to correct examination function based on entity_type
+			if new_target.entity_type == Examinable.EntityType.ENVIRONMENT:
+				# Extract simple type from "level_0_floor" → "floor"
+				var env_type = new_target.entity_id.replace("level_0_", "")
+				KnowledgeDB.examine_environment(env_type)
+			else:
+				# Entities, items, hazards
+				KnowledgeDB.examine_entity(new_target.entity_id)
+
 			if examination_panel:
 				# Log.system("Showing examination panel")  # Too verbose
 				examination_panel.show_panel(new_target)

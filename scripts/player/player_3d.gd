@@ -29,6 +29,9 @@ var grid_position: Vector2i = Vector2i(64, 64)
 var pending_action = null
 var turn_count: int = 0
 
+# Stats (NEW)
+var stats: StatBlock = null
+
 # Node references
 var grid: Grid3D = null
 var move_indicator: Node3D = null  # Set by Game node
@@ -43,6 +46,9 @@ var move_indicator: Node3D = null  # Set by Game node
 func _ready() -> void:
 	# Add to player group for obstruction detection
 	add_to_group("player")
+
+	# Initialize stats system
+	_initialize_stats()
 
 	# Grid reference will be set by Game node
 	await get_tree().process_frame
@@ -163,3 +169,32 @@ func hide_move_indicator() -> void:
 	"""Hide movement preview"""
 	if move_indicator:
 		move_indicator.visible = false
+
+# ============================================================================
+# STATS SYSTEM
+# ============================================================================
+
+func _initialize_stats() -> void:
+	"""Initialize player stats from template (or defaults)"""
+	# TODO: Load from StatTemplate resource when created
+	# For now, use default StatBlock (BODY=5, MIND=5, NULL=0)
+	stats = StatBlock.new()
+
+	# Connect KnowledgeDB signals for EXP rewards
+	KnowledgeDB.discovery_made.connect(_on_discovery_made)
+
+	# Connect StatBlock signals for Clearance syncing
+	stats.clearance_increased.connect(_on_clearance_increased)
+
+	# Log for debugging
+	Log.system("Player stats initialized: %s" % str(stats))
+
+func _on_discovery_made(_subject_type: String, _subject_id: String, exp_reward: int) -> void:
+	"""Called when player discovers something novel - award EXP"""
+	if stats:
+		stats.gain_exp(exp_reward)
+
+func _on_clearance_increased(old_level: int, new_level: int) -> void:
+	"""Called when Clearance level increases - sync with KnowledgeDB"""
+	KnowledgeDB.set_clearance_level(new_level)
+	Log.system("Player Clearance increased: %d → %d" % [old_level, new_level])

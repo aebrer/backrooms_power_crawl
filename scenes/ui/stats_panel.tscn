@@ -1,0 +1,102 @@
+[gd_scene load_steps=2 format=3 uid="uid://stats_panel"]
+
+[ext_resource type="Script" path="res://scripts/ui/stats_panel.gd" id="1"]
+
+[node name="StatsPanel" type="VBoxContainer"]
+script = ExtResource("1")
+
+[node name="BaseStats" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="BaseStatsTitle" type="Label" parent="BaseStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "BASE STATS"
+
+[node name="BodyLabel" type="Label" parent="BaseStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "BODY: 5"
+
+[node name="MindLabel" type="Label" parent="BaseStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "MIND: 5"
+
+[node name="NullLabel" type="Label" parent="BaseStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "NULL: 0"
+
+[node name="Spacer1" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="Resources" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="ResourcesTitle" type="Label" parent="Resources"]
+layout_mode = 2
+text = "RESOURCES"
+
+[node name="HPLabel" type="Label" parent="Resources"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "HP: 50 / 50"
+
+[node name="SanityLabel" type="Label" parent="Resources"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Sanity: 50 / 50"
+
+[node name="ManaLabel" type="Label" parent="Resources"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Mana: [LOCKED]"
+
+[node name="Spacer2" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="CombatStats" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="CombatTitle" type="Label" parent="CombatStats"]
+layout_mode = 2
+text = "COMBAT"
+
+[node name="StrengthLabel" type="Label" parent="CombatStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "STRENGTH: 5"
+
+[node name="PerceptionLabel" type="Label" parent="CombatStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "PERCEPTION: 5"
+
+[node name="AnomalyLabel" type="Label" parent="CombatStats"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "ANOMALY: 0"
+
+[node name="Spacer3" type="Control" parent="."]
+custom_minimum_size = Vector2(0, 10)
+layout_mode = 2
+
+[node name="Progression" type="VBoxContainer" parent="."]
+layout_mode = 2
+
+[node name="ProgressionTitle" type="Label" parent="Progression"]
+layout_mode = 2
+text = "PROGRESSION"
+
+[node name="ClearanceLabel" type="Label" parent="Progression"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Clearance: Level 0"
+
+[node name="EXPLabel" type="Label" parent="Progression"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "EXP: 0 / 100"

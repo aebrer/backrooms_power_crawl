@@ -415,10 +415,6 @@ func _process(_delta: float) -> void:
 	for material in ceiling_materials:
 		material.set_shader_parameter("player_position", player_pos)
 
-	# Debug: Log occasionally
-	if _frame_count % 120 == 0:  # Every 2 seconds
-		print("[Grid3D] Updated %d wall + %d ceiling materials with player pos: %s" % [wall_materials.size(), ceiling_materials.size(), player_pos])
-
 func set_player(player: Node3D) -> void:
 	"""Set player reference for line-of-sight proximity fade"""
 	player_node = player
