@@ -10,6 +10,15 @@ Usage:
 		super.activate()  # Call base implementation
 		# Custom activation logic here
 
+IMPORTANT: Tooltips on Child Labels
+	Labels ignore mouse events by default. To enable tooltips:
+	1. Add tooltip_text to the label
+	2. Set mouse_filter = 0 (MOUSE_FILTER_STOP) in the .tscn file
+	Example:
+		[node name="HPLabel" type="Label"]
+		mouse_filter = 0
+		tooltip_text = "Health Points..."
+
 Signals:
 	element_activated() - When clicked or A button pressed
 	element_hovered() - When mouse enters (paused only)

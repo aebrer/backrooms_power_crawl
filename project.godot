@@ -34,6 +34,10 @@ window/size/viewport_height=900
 window/size/mode=2
 window/stretch/mode="canvas_items"
 
+[gui]
+
+timers/tooltip_delay_sec=0.2
+
 [input]
 
 ui_left={

@@ -4,6 +4,7 @@
 
 [node name="StatsPanel" type="VBoxContainer"]
 script = ExtResource("1")
+mouse_filter = 2
 
 [node name="BaseStats" type="VBoxContainer" parent="."]
 layout_mode = 2
@@ -16,18 +17,21 @@ text = "BASE STATS"
 [node name="BodyLabel" type="Label" parent="BaseStats"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "BODY: 5"
 tooltip_text = "Physical resilience. Determines max HP and STRENGTH.\nHP = (BODY × 10) × (1 + BODY/100)"
 
 [node name="MindLabel" type="Label" parent="BaseStats"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "MIND: 5"
 tooltip_text = "Mental resilience. Determines max Sanity and PERCEPTION.\nSanity = (MIND × 10) × (1 + MIND/100)"
 
 [node name="NullLabel" type="Label" parent="BaseStats"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "NULL: 0"
 tooltip_text = "Anomalous power. Determines max Mana and ANOMALY damage.\nMana = (NULL × 10) × (1 + NULL/100)\nRequires NULL > 0 to unlock Mana."
 
@@ -45,18 +49,21 @@ text = "RESOURCES"
 [node name="HPLabel" type="Label" parent="Resources"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "HP: 50 / 50"
 tooltip_text = "Health Points. Survive damage from entities and hazards.\nReaches 0 = death. Scales with BODY."
 
 [node name="SanityLabel" type="Label" parent="Resources"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "Sanity: 50 / 50"
 tooltip_text = "Mental stability. Resist psychological effects and horror.\nReaches 0 = insanity. Scales with MIND."
 
 [node name="ManaLabel" type="Label" parent="Resources"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "Mana: [LOCKED]"
 tooltip_text = "Anomalous energy. Fuel for reality-bending abilities.\nUnlocks when NULL > 0. Scales with NULL."
 
@@ -74,18 +81,21 @@ text = "COMBAT"
 [node name="StrengthLabel" type="Label" parent="CombatStats"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "STRENGTH: 5"
 tooltip_text = "Physical damage output. Melee and ranged weapon damage.\nFormula: (BODY × 5) × (1 + BODY/100)"
 
 [node name="PerceptionLabel" type="Label" parent="CombatStats"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "PERCEPTION: 5"
 tooltip_text = "Detection range and accuracy. Spot hidden entities and items.\nFormula: (MIND × 5) × (1 + MIND/100)"
 
 [node name="AnomalyLabel" type="Label" parent="CombatStats"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "ANOMALY: 0"
 tooltip_text = "Anomalous damage output. Reality-bending ability power.\nFormula: (NULL × 5) × (1 + NULL/100)"
 
@@ -103,17 +113,20 @@ text = "PROGRESSION"
 [node name="LevelLabel" type="Label" parent="Progression"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "Level: 0"
 tooltip_text = "Character level. Auto-increases when EXP threshold reached.\nTriggers perk selection to choose upgrades."
 
 [node name="EXPLabel" type="Label" parent="Progression"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "EXP: 0 / 100"
 tooltip_text = "Exploration Points. Gain from discoveries and exploration.\nSources: examining entities/items, entering new chunks.\nIncreases Level when threshold reached."
 
 [node name="ClearanceLabel" type="Label" parent="Progression"]
 unique_name_in_owner = true
 layout_mode = 2
+mouse_filter = 0
 text = "Clearance: 0"
-tooltip_text = "Knowledge security level (choose via perks).\nUnlocks deeper entity information.\nMultiplies ALL EXP gains (×1 at CL0, ×2 at CL1, etc.)\n'Glass cannon' build: faster scaling."
+tooltip_text = "Knowledge security level (choose via perks).\nUnlocks deeper entity information.\nMultiplies ALL EXP gains (×1 at CL0, ×2 at CL1, etc.)\n"

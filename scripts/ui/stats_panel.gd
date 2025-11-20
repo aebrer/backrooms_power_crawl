@@ -10,6 +10,12 @@ Updates in real-time as stats change.
 """
 
 var player: Player3D = null
+var tooltip_labels: Array[Label] = []
+var tooltip_texts: Dictionary = {}  # label -> tooltip_text (stored separately to disable native tooltips)
+
+# Tooltip overlay (created programmatically, positioned absolutely)
+var tooltip_panel: PanelContainer = null
+var tooltip_label: Label = null
 
 # Base Stats & Resources
 @onready var body_label: Label = %BodyLabel
@@ -34,11 +40,67 @@ func _ready():
 	# Wait for player to be set by Game node
 	await get_tree().process_frame
 
+	# Build tooltip overlay
+	_build_tooltip_overlay()
+
+	# Setup hover/focus highlighting for all labels with tooltips
+	_setup_label_highlights()
+
+	# Connect to pause manager to clear focus when unpausing
+	if PauseManager:
+		PauseManager.pause_toggled.connect(_on_pause_toggled)
+
 	if player and player.stats:
 		_connect_signals()
 		_update_all_stats()
 	else:
 		Log.warn(Log.Category.SYSTEM, "StatsPanel: No player or stats found")
+
+func _build_tooltip_overlay() -> void:
+	"""Build tooltip overlay (positioned absolutely, no layout reflow)"""
+	# Get the root game Control to add overlay
+	var game_root = get_tree().root.get_node_or_null("Game")
+	if not game_root:
+		return
+
+	# Create tooltip panel positioned at bottom-center
+	tooltip_panel = PanelContainer.new()
+	tooltip_panel.name = "StatsTooltipOverlay"
+	tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tooltip_panel.visible = false
+
+	# Position at bottom-center
+	tooltip_panel.anchor_left = 0.5
+	tooltip_panel.anchor_right = 0.5
+	tooltip_panel.anchor_top = 1.0
+	tooltip_panel.anchor_bottom = 1.0
+	tooltip_panel.offset_left = -200  # 400px wide centered
+	tooltip_panel.offset_right = 200
+	tooltip_panel.offset_bottom = -80  # 80px from bottom
+	tooltip_panel.offset_top = -130    # 50px tall
+	tooltip_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+
+	# Style (matching ActionPreviewUI)
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.9)
+	style.border_color = Color(1, 1, 1, 1)
+	style.set_border_width_all(2)
+	style.content_margin_left = 12
+	style.content_margin_right = 12
+	style.content_margin_top = 8
+	style.content_margin_bottom = 8
+	tooltip_panel.add_theme_stylebox_override("panel", style)
+
+	# Tooltip text label
+	tooltip_label = Label.new()
+	tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tooltip_label.add_theme_font_size_override("font_size", 14)
+	tooltip_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	tooltip_panel.add_child(tooltip_label)
+
+	# Add to game root (not to StatsPanel to avoid layout issues)
+	game_root.add_child(tooltip_panel)
 
 func set_player(p: Player3D) -> void:
 	"""Called by Game node to set player reference"""
@@ -151,3 +213,92 @@ func _on_clearance_increased(_old_level: int, new_level: int) -> void:
 	"""Update Clearance display"""
 	if clearance_label:
 		clearance_label.text = "Clearance: %d" % new_level
+
+# ============================================================================
+# HOVER/FOCUS HIGHLIGHTING
+# ============================================================================
+
+func _setup_label_highlights() -> void:
+	"""Setup unified hover/focus system for all labels with tooltips"""
+	tooltip_labels = [
+		body_label, mind_label, null_label,
+		hp_label, sanity_label, mana_label,
+		strength_label, perception_label, anomaly_label,
+		level_label, exp_label, clearance_label
+	]
+
+	for label in tooltip_labels:
+		if label and not label.tooltip_text.is_empty():
+			# Store tooltip text and clear from label (disables native tooltips)
+			tooltip_texts[label] = label.tooltip_text
+			label.tooltip_text = ""
+
+			# Connect hover signals (always active)
+			label.mouse_entered.connect(_on_label_hovered.bind(label))
+			label.mouse_exited.connect(_on_label_unhovered.bind(label))
+
+			# Connect focus signals (controller - only when paused)
+			label.focus_entered.connect(_on_label_focused.bind(label))
+			label.focus_exited.connect(_on_label_unfocused.bind(label))
+
+			# Start with labels NOT focusable (will enable when paused)
+			label.focus_mode = Control.FOCUS_NONE
+
+func _on_label_hovered(label: Label) -> void:
+	"""Highlight label on mouse hover"""
+	_highlight_label(label)
+
+func _on_label_unhovered(label: Label) -> void:
+	"""Remove highlight when mouse leaves"""
+	_unhighlight_label(label)
+
+func _on_label_focused(label: Label) -> void:
+	"""Highlight label when focused (controller)"""
+	_highlight_label(label)
+
+func _on_label_unfocused(label: Label) -> void:
+	"""Remove highlight when focus lost"""
+	_unhighlight_label(label)
+
+func _highlight_label(label: Label) -> void:
+	"""Apply visual highlight and show tooltip (unified for mouse and controller)"""
+	# Create a StyleBoxFlat for the background
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(1.0, 1.0, 0.5, 0.3)  # Yellow transparent
+	style.border_color = Color(1.0, 1.0, 0.5, 0.8)  # Yellow border
+	style.set_border_width_all(2)
+	style.content_margin_left = 4
+	style.content_margin_right = 4
+	style.content_margin_top = 2
+	style.content_margin_bottom = 2
+
+	label.add_theme_stylebox_override("normal", style)
+
+	# Show tooltip in overlay
+	if tooltip_panel and tooltip_label and label in tooltip_texts:
+		tooltip_label.text = tooltip_texts[label]
+		tooltip_panel.visible = true
+
+func _unhighlight_label(label: Label) -> void:
+	"""Remove visual highlight and hide tooltip"""
+	label.remove_theme_stylebox_override("normal")
+
+	# Hide tooltip overlay
+	if tooltip_panel:
+		tooltip_panel.visible = false
+
+func _on_pause_toggled(is_paused: bool) -> void:
+	"""Enable/disable controller navigation based on pause state"""
+	if is_paused:
+		# Enable controller navigation
+		for label in tooltip_labels:
+			if label:
+				label.focus_mode = Control.FOCUS_ALL
+	else:
+		# Disable controller navigation and clear any highlights
+		for label in tooltip_labels:
+			if label:
+				label.focus_mode = Control.FOCUS_NONE
+				if label.has_focus():
+					label.release_focus()
+				_unhighlight_label(label)
