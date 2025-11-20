@@ -26,8 +26,9 @@ var player: Player3D = null
 @onready var anomaly_label: Label = %AnomalyLabel
 
 # Progression
-@onready var clearance_label: Label = %ClearanceLabel
+@onready var level_label: Label = %LevelLabel
 @onready var exp_label: Label = %EXPLabel
+@onready var clearance_label: Label = %ClearanceLabel
 
 func _ready():
 	# Wait for player to be set by Game node
@@ -63,6 +64,7 @@ func _connect_signals() -> void:
 
 	# Progression
 	player.stats.exp_gained.connect(_on_exp_gained)
+	player.stats.level_increased.connect(_on_level_increased)
 	player.stats.clearance_increased.connect(_on_clearance_increased)
 
 func _update_all_stats() -> void:
@@ -100,11 +102,13 @@ func _update_all_stats() -> void:
 		anomaly_label.text = "ANOMALY: %.0f" % s.anomaly
 
 	# Progression
-	if clearance_label:
-		clearance_label.text = "Clearance: Level %d" % s.clearance_level
+	if level_label:
+		level_label.text = "Level: %d" % s.level
 	if exp_label:
-		var next_exp = s.exp_to_next_clearance()
+		var next_exp = s.exp_to_next_level()
 		exp_label.text = "EXP: %d / %d" % [s.exp, s.exp + next_exp]
+	if clearance_label:
+		clearance_label.text = "Clearance: %d" % s.clearance_level
 
 # ============================================================================
 # SIGNAL HANDLERS
@@ -131,14 +135,19 @@ func _on_resource_changed(resource_name: String, current: float, maximum: float)
 func _on_exp_gained(_amount: int, new_total: int) -> void:
 	"""Update EXP display"""
 	if exp_label and player and player.stats:
-		var next_exp = player.stats.exp_to_next_clearance()
+		var next_exp = player.stats.exp_to_next_level()
 		exp_label.text = "EXP: %d / %d" % [new_total, new_total + next_exp]
+
+func _on_level_increased(_old_level: int, new_level: int) -> void:
+	"""Update Level display"""
+	if level_label:
+		level_label.text = "Level: %d" % new_level
+
+	# Refresh EXP display (threshold changed)
+	if player and player.stats:
+		_on_exp_gained(0, player.stats.exp)
 
 func _on_clearance_increased(_old_level: int, new_level: int) -> void:
 	"""Update Clearance display"""
 	if clearance_label:
-		clearance_label.text = "Clearance: Level %d" % new_level
-
-	# Also refresh EXP display (threshold changed)
-	if player and player.stats:
-		_on_exp_gained(0, player.stats.exp)
+		clearance_label.text = "Clearance: %d" % new_level

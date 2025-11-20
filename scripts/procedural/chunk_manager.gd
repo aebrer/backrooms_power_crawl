@@ -12,6 +12,9 @@ extends Node
 @warning_ignore("unused_signal")
 signal chunk_updates_completed()
 
+## Emitted when player enters a new chunk (for EXP rewards)
+signal new_chunk_entered(chunk_position: Vector3i)
+
 # Constants
 const CHUNK_SIZE := 128
 const ACTIVE_RADIUS := 3  # Chunks to keep loaded around player
@@ -197,6 +200,9 @@ func _check_player_chunk_change() -> void:
 		# Check if this is a NEW chunk (never visited before)
 		if chunk_key not in visited_chunks:
 			visited_chunks[chunk_key] = true
+
+			# Emit signal for EXP reward
+			emit_signal("new_chunk_entered", chunk_key)
 
 			# Increase corruption when entering new chunk
 			# Get corruption amount from level generator

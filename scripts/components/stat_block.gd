@@ -25,7 +25,8 @@ signal resource_changed(resource_name: String, current: float, maximum: float)
 signal modifier_added(modifier: StatModifier)
 signal modifier_removed(modifier: StatModifier)
 signal exp_gained(amount: int, new_total: int)
-signal clearance_increased(old_level: int, new_level: int)
+signal level_increased(old_level: int, new_level: int)  # Auto-increases, triggers perk selection
+signal clearance_increased(old_level: int, new_level: int)  # Manual only, unlocks knowledge
 signal entity_died(cause: String)
 
 # ============================================================================
@@ -90,9 +91,25 @@ var current_mana: float = 0.0:
 # ============================================================================
 # PROGRESSION (Player only)
 # ============================================================================
+# Two separate progression systems:
+#
+# LEVEL (auto-progression):
+#   - Increases automatically when EXP threshold reached
+#   - Triggers perk selection popup
+#   - Does NOT affect EXP gain
+#
+# CLEARANCE (manual choice):
+#   - Only increases when chosen as a perk
+#   - Unlocks knowledge/entity information in KnowledgeDB
+#   - Multiplies ALL EXP gains (×1 at CL0, ×2 at CL1, ×3 at CL2, etc.)
+#   - "Glass cannon" build: faster scaling but must spend perk slots
+#
+# Example: At Clearance 2, examining floor gives 10 base → 30 EXP (10×3)
+# ============================================================================
 
 var exp: int = 0
-var clearance_level: int = 0
+var level: int = 0  # Auto-increases when EXP threshold met → triggers perk selection
+var clearance_level: int = 0  # Manual only (via perk choice) → unlocks knowledge + EXP multiplier
 
 # ============================================================================
 # MODIFIER SYSTEM
@@ -334,29 +351,40 @@ func restore_mana(amount: float) -> void:
 # ============================================================================
 
 func gain_exp(amount: int) -> void:
-	"""Add EXP with Clearance multiplier. Check for level up."""
-	var multiplied = amount * (clearance_level + 1)  # 0→×1, 1→×2, etc.
+	"""Add EXP with Clearance multiplier. Check for level up.
+
+	IMPORTANT: EXP gain scales with CLEARANCE, not Level!
+	This is intentional - Clearance is the "glass cannon" build choice.
+	Higher Clearance = faster scaling but must be chosen via perks.
+
+	Formula: EXP gained = base_amount × (clearance_level + 1)
+	  Clearance 0: ×1
+	  Clearance 1: ×2
+	  Clearance 2: ×3
+	  etc.
+	"""
+	var multiplied = amount * (clearance_level + 1)
 	exp += multiplied
 	emit_signal("exp_gained", multiplied, exp)
 	Log.system("Gained %d EXP (×%d = %d total, now %d)" % [amount, clearance_level + 1, multiplied, exp])
 
-	_check_clearance_levelup()
+	_check_level_up()
 
-func _check_clearance_levelup() -> void:
-	"""Check if player has enough EXP to increase Clearance."""
-	var required = _exp_for_clearance(clearance_level + 1)
+func _check_level_up() -> void:
+	"""Check if player has enough EXP to level up (triggers perk selection)."""
+	var required = _exp_for_level(level + 1)
 
 	while exp >= required:
-		var old_level = clearance_level
-		clearance_level += 1
-		emit_signal("clearance_increased", old_level, clearance_level)
-		Log.system("Clearance increased! %d → %d" % [old_level, clearance_level])
+		var old_level = level
+		level += 1
+		emit_signal("level_increased", old_level, level)
+		Log.system("Level Up! %d → %d (choose a perk!)" % [old_level, level])
 
 		# Check next level
-		required = _exp_for_clearance(clearance_level + 1)
+		required = _exp_for_level(level + 1)
 
-func _exp_for_clearance(level: int) -> int:
-	"""Calculate EXP required for a given Clearance level.
+func _exp_for_level(target_level: int) -> int:
+	"""Calculate EXP required for a given Level.
 
 	Formula: BASE × (level ^ EXPONENT)
 	BASE = 100
@@ -370,11 +398,18 @@ func _exp_for_clearance(level: int) -> int:
 	"""
 	const BASE = 100
 	const EXPONENT = 1.5
-	return int(BASE * pow(level, EXPONENT))
+	return int(BASE * pow(target_level, EXPONENT))
 
-func exp_to_next_clearance() -> int:
-	"""How much EXP needed for next Clearance level."""
-	return _exp_for_clearance(clearance_level + 1) - exp
+func exp_to_next_level() -> int:
+	"""How much EXP needed for next Level."""
+	return _exp_for_level(level + 1) - exp
+
+func increase_clearance() -> void:
+	"""Manually increase Clearance (called when player chooses Clearance perk)."""
+	var old_clearance = clearance_level
+	clearance_level += 1
+	emit_signal("clearance_increased", old_clearance, clearance_level)
+	Log.system("Clearance increased! %d → %d (knowledge unlocked)" % [old_clearance, clearance_level])
 
 # ============================================================================
 # UTILITY
@@ -472,12 +507,12 @@ func get_stat_breakdown(stat_name: String) -> Dictionary:
 
 func _to_string() -> String:
 	"""Debug representation."""
-	return "StatBlock(BODY:%d MIND:%d NULL:%d | HP:%.0f/%.0f SAN:%.0f/%.0f MANA:%.0f/%.0f | STR:%.0f PER:%.0f ANOM:%.0f | EXP:%d CL:%d | Mods:%d)" % [
+	return "StatBlock(BODY:%d MIND:%d NULL:%d | HP:%.0f/%.0f SAN:%.0f/%.0f MANA:%.0f/%.0f | STR:%.0f PER:%.0f ANOM:%.0f | EXP:%d Lv:%d CL:%d | Mods:%d)" % [
 		body, mind, null_stat,
 		current_hp, max_hp,
 		current_sanity, max_sanity,
 		current_mana, max_mana,
 		strength, perception, anomaly,
-		exp, clearance_level,
+		exp, level, clearance_level,
 		modifiers.size()
 	]

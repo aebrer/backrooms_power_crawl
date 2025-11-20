@@ -183,8 +183,12 @@ func _initialize_stats() -> void:
 	# Connect KnowledgeDB signals for EXP rewards
 	KnowledgeDB.discovery_made.connect(_on_discovery_made)
 
-	# Connect StatBlock signals for Clearance syncing
-	stats.clearance_increased.connect(_on_clearance_increased)
+	# Connect ChunkManager signals for exploration EXP
+	ChunkManager.new_chunk_entered.connect(_on_new_chunk_entered)
+
+	# Connect StatBlock signals
+	stats.level_increased.connect(_on_level_increased)  # Triggers perk selection (TODO)
+	stats.clearance_increased.connect(_on_clearance_increased)  # Syncs KnowledgeDB
 
 	# Log for debugging
 	Log.system("Player stats initialized: %s" % str(stats))
@@ -194,7 +198,23 @@ func _on_discovery_made(_subject_type: String, _subject_id: String, exp_reward: 
 	if stats:
 		stats.gain_exp(exp_reward)
 
+func _on_new_chunk_entered(chunk_position: Vector3i) -> void:
+	"""Called when player enters a new chunk - award exploration EXP"""
+	if stats:
+		var exp_reward = 10 * (stats.level + 1)
+		stats.gain_exp(exp_reward)
+		Log.system("Entered new chunk %s - awarded %d EXP (Level %d)" % [
+			Vector2i(chunk_position.x, chunk_position.y),
+			exp_reward,
+			stats.level
+		])
+
+func _on_level_increased(old_level: int, new_level: int) -> void:
+	"""Called when Level increases - trigger perk selection"""
+	Log.system("Player Level Up! %d → %d" % [old_level, new_level])
+	# TODO: Show perk selection UI
+
 func _on_clearance_increased(old_level: int, new_level: int) -> void:
-	"""Called when Clearance level increases - sync with KnowledgeDB"""
+	"""Called when Clearance increases (via perk choice) - sync with KnowledgeDB"""
 	KnowledgeDB.set_clearance_level(new_level)
-	Log.system("Player Clearance increased: %d → %d" % [old_level, new_level])
+	Log.system("Player Clearance increased: %d → %d (knowledge unlocked)" % [old_level, new_level])
