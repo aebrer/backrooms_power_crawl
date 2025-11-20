@@ -65,13 +65,18 @@ func toggle_pause():
 
 func _enter_hud_mode():
 	"""Pause gameplay viewport, enable HUD interaction."""
-	# Pause the 3D viewport (not the entire tree)
-	var game_3d = get_tree().get_first_node_in_group("game_3d_viewport")
-	if game_3d:
-		Log.system("PauseManager: Found game_3d node '%s', disabling..." % game_3d.name)
-		game_3d.process_mode = Node.PROCESS_MODE_DISABLED
+	# Pause the 3D viewport (inside SubViewport - must search SubViewport's tree!)
+	# Note: Game3D is inside a SubViewport which has its own scene tree
+	var subviewport = get_tree().root.get_node_or_null("Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport")
+	if subviewport:
+		var game_3d = subviewport.get_node_or_null("Game3D")
+		if game_3d:
+			Log.system("PauseManager: Found game_3d node '%s', disabling..." % game_3d.name)
+			game_3d.process_mode = Node.PROCESS_MODE_DISABLED
+		else:
+			Log.warn(Log.Category.SYSTEM, "PauseManager: Game3D node not found in SubViewport!")
 	else:
-		Log.warn(Log.Category.SYSTEM, "PauseManager: game_3d_viewport node NOT FOUND!")
+		Log.warn(Log.Category.SYSTEM, "PauseManager: SubViewport not found!")
 
 	# Show mouse cursor
 	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
@@ -96,13 +101,17 @@ func _enter_hud_mode():
 
 func _exit_hud_mode():
 	"""Resume gameplay viewport, disable HUD interaction."""
-	# Resume the 3D viewport
-	var game_3d = get_tree().get_first_node_in_group("game_3d_viewport")
-	if game_3d:
-		Log.system("PauseManager: Found game_3d node '%s' for resume, enabling..." % game_3d.name)
-		game_3d.process_mode = Node.PROCESS_MODE_INHERIT
+	# Resume the 3D viewport (inside SubViewport)
+	var subviewport = get_tree().root.get_node_or_null("Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport")
+	if subviewport:
+		var game_3d = subviewport.get_node_or_null("Game3D")
+		if game_3d:
+			Log.system("PauseManager: Found game_3d node '%s' for resume, enabling..." % game_3d.name)
+			game_3d.process_mode = Node.PROCESS_MODE_INHERIT
+		else:
+			Log.warn(Log.Category.SYSTEM, "PauseManager: Game3D node not found in SubViewport on resume!")
 	else:
-		Log.warn(Log.Category.SYSTEM, "PauseManager: game_3d_viewport node NOT FOUND on resume!")
+		Log.warn(Log.Category.SYSTEM, "PauseManager: SubViewport not found on resume!")
 
 	# Capture mouse for camera control
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
