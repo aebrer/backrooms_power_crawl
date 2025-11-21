@@ -415,10 +415,6 @@ func _process(_delta: float) -> void:
 	for material in ceiling_materials:
 		material.set_shader_parameter("player_position", player_pos)
 
-	# Debug: Log occasionally
-	if _frame_count % 120 == 0:  # Every 2 seconds
-		print("[Grid3D] Updated %d wall + %d ceiling materials with player pos: %s" % [wall_materials.size(), ceiling_materials.size(), player_pos])
-
 func set_player(player: Node3D) -> void:
 	"""Set player reference for line-of-sight proximity fade"""
 	player_node = player
@@ -453,15 +449,7 @@ func is_walkable(pos: Vector2i) -> bool:
 	# For procedural generation: infinite world, no bounds checking
 	if use_procedural_generation:
 		var cell_item = grid_map.get_cell_item(Vector3i(pos.x, 0, pos.y))
-		var is_walkable_result = cell_item == TileType.FLOOR
-
-		# Debug: Log when walkability check fails
-		if not is_walkable_result:
-			Log.warn(Log.Category.GRID, "Walkability FAILED at (%d, %d): cell_item=%d (expected FLOOR=%d)" % [
-				pos.x, pos.y, cell_item, TileType.FLOOR
-			])
-
-		return is_walkable_result
+		return cell_item == TileType.FLOOR
 
 	# For static levels: check bounds first
 	if not is_in_bounds(pos):

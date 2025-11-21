@@ -33,6 +33,8 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - ✅ **Chunk System**: Infinite world with threaded chunk generation + streaming
 - ✅ **Performance Optimizations**: Threaded generation (0ms main thread), optimized grid application (3.6x faster)
 - ✅ **Level Management**: Multi-level config system with LRU cache
+- ✅ **Stats & Resources**: Modifier-based stat system with EXP and Clearance progression (2025-11-19)
+- ✅ **Pause System**: HUD interaction mode with viewport pausing (2025-11-19)
 - ⚠️ **2D Legacy Code**: Completely unused, safe to delete
 - ⚠️ **Documentation**: Some outdated references to old systems
 
@@ -1077,6 +1079,250 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 
 ---
 
+### 📊 Stats & Resources System
+
+**Purpose**: Player stat management with modifiers, EXP, and Clearance progression
+**Status**: ACTIVE (created 2025-11-19)
+
+#### `scripts/components/stat_modifier.gd`
+- **Class**: `class_name StatModifier extends RefCounted`
+- **Purpose**: Modifier for adding/multiplying stats (equipment, buffs, debuffs)
+- **Enums**:
+  - `ModifierType`: ADD (flat bonus), MULTIPLY (percentage)
+- **Instance Vars**:
+  - `var stat_name: String` (which stat to modify)
+  - `var value: float` (modifier amount)
+  - `var type: ModifierType` (ADD or MULTIPLY)
+  - `var source: String` (origin: "equipment", "buff", etc.)
+  - `var duration: int = -1` (turns remaining, -1 = permanent)
+  - `var unique_id: String` (for tracking/removal)
+- **Methods**:
+  - `_to_string() → String`: Format for tooltips ("+5 STR from Gloves")
+- **Dependencies**: None
+- **Used By**: StatBlock (modifier collection)
+- **Status**: Active - stat modifier system
+
+#### `scripts/resources/stat_template.gd`
+- **Class**: `@tool class_name StatTemplate extends Resource`
+- **Purpose**: Inspector-editable stat configurations for entities/classes
+- **Exports**:
+  - Base Stats: `base_body`, `base_mind`, `base_null` (all default 5)
+  - Direct Bonuses: `bonus_hp`, `bonus_sanity`, `bonus_mana` (flat additions)
+- **Methods**: None (data class)
+- **Dependencies**: None
+- **Used By**: StatBlock (initialization template)
+- **Future**: Create .tres files for different entity types (player_start.tres, etc.)
+- **Status**: Active - stat template resource
+
+#### `scripts/components/stat_block.gd`
+- **Class**: `class_name StatBlock extends RefCounted`
+- **Purpose**: Runtime stat management with modifier system and caching
+- **Signals**:
+  - `stat_changed(stat_name, old_value, new_value)` - When base stat changes
+  - `resource_changed(resource_name, current, maximum)` - When HP/Sanity/Mana changes
+  - `exp_gained(amount, new_total)` - When EXP awarded
+  - `clearance_increased(old_level, new_level)` - When Clearance levels up
+  - `entity_died(cause: String)` - When HP reaches 0
+- **Instance Vars**:
+  - Base Stats: `body`, `mind`, `null_stat` (default 5)
+  - Resources: `current_hp`, `current_sanity`, `current_mana`
+  - Progression: `exp`, `clearance_level` (0-5)
+  - Modifiers: `modifiers: Array[StatModifier]`
+  - Cache: `_cache: Dictionary`, `_cache_dirty: Dictionary`
+- **Computed Properties** (with caching):
+  - `max_hp`, `max_sanity`, `max_mana` (resource caps)
+  - `strength`, `perception`, `anomaly` (combat stats)
+  - `exp_to_next_level`, `exp_progress` (progression)
+- **Methods**:
+  - **Stat Calculation**: `_calculate_stat(stat_name, base_stat, multiplier, direct_bonus)`
+    - Step 1: Base + ADD modifiers
+    - Step 2: Percentage scaling `effective = base × (1 + stat/100)`
+    - Step 3: Apply MULTIPLY modifiers
+  - **Resource Management**: `take_damage(amount)`, `heal(amount)`, `lose_sanity(amount)`, `restore_sanity(amount)`
+  - **Modifier System**: `add_modifier(modifier)`, `remove_modifier(unique_id)`, `remove_modifiers_from_source(source)`, `get_modifiers_for_stat(stat_name)`
+  - **Progression**: `gain_exp(amount)`, `_check_level_up()`, `_calculate_exp_for_level(level)`
+  - **Turn System**: `on_turn_end()` (tick temporary modifiers)
+  - **Debug**: `_to_string()` (readable stat dump)
+- **Formulas**:
+  - EXP Curve: `100 × (level ^ 1.5)` (pseudo-exponential scaling)
+  - Percentage Scaling: `effective = base × (1 + stat/100)` (exponential stat growth)
+  - HP: `(BODY × 10) × (1 + BODY/100)`
+  - Sanity: `(MIND × 10) × (1 + MIND/100)`
+  - Mana: `(NULL × 10) × (1 + NULL/100)` (locked until NULL > 0)
+  - Strength: `(BODY × 5) × (1 + BODY/100)`
+  - Perception: `(MIND × 5) × (1 + MIND/100)`
+  - Anomaly: `(NULL × 10) × (1 + NULL/100)` (locked)
+- **Dependencies**: StatModifier, Log
+- **Used By**: Player3D (player.stats)
+- **Status**: Active - core stat management
+
+#### `scripts/autoload/pause_manager.gd`
+- **Class**: `extends Node` (Autoload singleton as "PauseManager")
+- **Purpose**: Pause system for HUD interaction (pause 3D viewport, not entire tree)
+- **Signals**:
+  - `pause_toggled(is_paused: bool)`
+  - `hud_focus_changed(focused_element: Control)`
+- **Instance Vars**:
+  - `var is_paused: bool = false`
+  - `var current_hud_focus: Control = null`
+- **Methods**:
+  - `_unhandled_input(event)`: Handle ESC/Start for pause toggle
+  - `toggle_pause()`: Switch between game and HUD mode
+  - `_enter_hud_mode()`:
+    - Pause game_3d_viewport (set PROCESS_MODE_DISABLED)
+    - Show mouse cursor (MOUSE_MODE_VISIBLE)
+    - Clear input state
+  - `_exit_hud_mode()`:
+    - Resume game_3d_viewport (set PROCESS_MODE_INHERIT)
+    - Capture mouse (MOUSE_MODE_CAPTURED)
+    - Clear HUD focus
+  - `set_hud_focus(element)`: Set keyboard/controller focus for HUD navigation
+  - `get_hud_focus() → Control`: Get currently focused element
+- **Dependencies**: None
+- **Used By**: HUDElement (pause state checks)
+- **Status**: Active - pause system for HUD
+
+#### `scripts/ui/hud_element.gd`
+- **Class**: `class_name HUDElement extends Control`
+- **Purpose**: Base class for interactive HUD elements (stats panel, inventory, etc.)
+- **Signals**:
+  - `element_activated()` - When clicked or A button pressed
+  - `element_hovered()` - When mouse enters (paused only)
+- **Instance Vars**:
+  - `var is_hovered: bool = false`
+  - `var is_focused: bool = false`
+- **Methods**:
+  - `_ready()`: Setup focus mode, connect signals, add to "hud_focusable" group
+  - `_on_mouse_entered()`: Handle mouse hover (paused only), set HUD focus
+  - `_on_mouse_exited()`: Clear hover state
+  - `_on_focus_entered()`: Handle controller/keyboard focus
+  - `_on_focus_exited()`: Clear focus state
+  - `_gui_input(event)`: Handle activation (click or ui_accept)
+  - `activate()`: Override in subclasses for custom behavior
+  - `_update_visual_state()`: Override to show focus/hover (default: modulate)
+- **Visual States**:
+  - Normal: `modulate = Color(1, 1, 1, 1)`
+  - Focused/Hovered: `modulate = Color(1.2, 1.2, 1.2, 1)`
+- **Dependencies**: PauseManager (pause state checks)
+- **Used By**: StatsPanel (future HUDElement subclass)
+- **Status**: Active - HUD interaction base class
+
+#### `scripts/ui/stats_panel.gd`
+- **Class**: `extends VBoxContainer`
+- **Purpose**: Display player stats with real-time updates via signals
+- **Instance Vars**:
+  - `var player: Player3D = null` (set by game.gd)
+  - Label references (via unique names):
+    - Base Stats: `%BodyLabel`, `%MindLabel`, `%NullLabel`
+    - Resources: `%HPLabel`, `%SanityLabel`, `%ManaLabel`
+    - Combat: `%StrengthLabel`, `%PerceptionLabel`, `%AnomalyLabel`
+    - Progression: `%ClearanceLabel`, `%EXPLabel`
+- **Methods**:
+  - `set_player(player_ref)`: Wire up player and connect signals
+  - `_connect_signals()`: Connect to player.stats signals
+  - `_update_all_stats()`: Refresh all labels from StatBlock
+  - `_on_stat_changed(stat_name, old_value, new_value)`: Handle stat changes
+  - `_on_resource_changed(resource_name, current, maximum)`: Handle HP/Sanity changes
+  - `_on_exp_gained(amount, new_total)`: Handle EXP changes
+  - `_on_clearance_increased(old_level, new_level)`: Handle Clearance level up
+- **Label Formats**:
+  - Base: `"BODY: 5"`, `"MIND: 5"`, `"NULL: 0"`
+  - Resources: `"HP: 50 / 50"`, `"Sanity: 50 / 50"`, `"Mana: [LOCKED]"`
+  - Combat: `"STRENGTH: 5"`, `"PERCEPTION: 5"`, `"ANOMALY: 0"`
+  - Progression: `"Clearance: Level 0"`, `"EXP: 0 / 100"`
+- **Dependencies**:
+  - Player3D (player.stats)
+  - StatBlock (signals, computed properties)
+  - Log (system messages)
+- **Used By**: game.gd (wired up in _ready())
+- **Status**: Active - stats display UI
+
+#### `scenes/ui/stats_panel.tscn`
+- **Scene Structure**: VBoxContainer → (BaseStats, Resources, CombatStats, Progression)
+- **Script**: `scripts/ui/stats_panel.gd`
+- **Unique Name Labels**: All labels use `unique_name_in_owner = true` for % syntax
+- **Layout**: Organized into 4 sections with spacers
+- **Used By**: game.tscn (CharacterSheet/StatsPanel)
+- **Status**: Active - stats panel scene
+
+#### Modified Files for Stats System
+
+##### `scripts/autoload/knowledge_db.gd` (Enhanced)
+- **Added Signals**:
+  - `discovery_made(subject_type, subject_id, exp_reward)` - Emitted on novel examination
+- **Added Instance Vars**:
+  - `examined_at_clearance: Dictionary` - Tracks which Clearance levels have examined each subject
+- **Added Methods**:
+  - `examine_entity(entity_id)`: Awards EXP on first examination at current Clearance
+  - `examine_item(item_id, rarity)`: Awards EXP based on item rarity
+  - `examine_environment(env_type)`: Awards EXP for environment examination
+  - `_is_novel(key) → bool`: Check if subject is novel at current Clearance
+  - `_mark_examined(key)`: Mark subject as examined at current Clearance
+  - `_get_item_exp(rarity) → int`: Get EXP reward (common=50, uncommon=150, rare=500, legendary=1500)
+  - `_get_entity_exp() → int`: Get EXP reward (1000 per entity)
+- **EXP Rewards**:
+  - Entity examination: 1000 EXP (first time per Clearance)
+  - Item examination: 50-1500 EXP (based on rarity, first time per Clearance)
+  - Environment examination: 10 EXP (first time per Clearance)
+- **Novelty System**: Same entity/item becomes "novel" again when Clearance increases
+- **Dependencies**: EntityRegistry (existing), StatBlock (via signal)
+- **Used By**: Player3D (connect to discovery_made signal)
+- **Status**: Active - enhanced with EXP rewards
+
+##### `scripts/player/player_3d.gd` (Enhanced)
+- **Added Instance Vars**:
+  - `var stats: StatBlock = null` (player stat management)
+- **Added Methods**:
+  - `_initialize_stats()`: Create StatBlock, connect signals
+  - `_on_discovery_made(subject_type, subject_id, exp_reward)`: Award EXP from KnowledgeDB
+  - `_on_clearance_increased(old_level, new_level)`: Sync Clearance to KnowledgeDB
+- **Signal Connections**:
+  - KnowledgeDB.discovery_made → _on_discovery_made (award EXP)
+  - stats.clearance_increased → _on_clearance_increased (sync Clearance)
+- **Lifecycle**: Stats initialized in _ready() before grid setup
+- **Dependencies**: StatBlock (stats management), KnowledgeDB (discovery signals)
+- **Used By**: StatsPanel (display stats), game.gd (wire up UI)
+- **Status**: Active - integrated with stats system
+
+##### `scenes/game.tscn` (Enhanced)
+- **Added External Resource**: StatsPanel scene (uid://stats_panel)
+- **Replaced Placeholder**: Old Stats label → StatsPanel instance
+- **Node Path**: `MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet/StatsPanel`
+- **Layout**: StatsPanel fits into existing CharacterSheet section
+- **Status**: Active - stats panel integrated
+
+##### `scripts/game.gd` (Enhanced)
+- **Changed @onready Reference**: `char_stats: Label` → `stats_panel: VBoxContainer`
+- **Added Wiring** (in _ready()):
+  ```gdscript
+  if stats_panel:
+      stats_panel.set_player(player)
+      Log.system("StatsPanel connected to player")
+  ```
+- **Removed Methods**:
+  - `_process(_delta)` (no longer needed, stats panel updates via signals)
+  - `_update_ui()` (replaced by StatsPanel signal handlers)
+- **Dependencies**: StatsPanel (stats display)
+- **Status**: Active - wired up stats panel
+
+##### `project.godot` (Enhanced)
+- **Added Autoload**: `PauseManager="*res://scripts/autoload/pause_manager.gd"`
+- **Autoload Order**:
+  1. Log (logger)
+  2. InputManager (input)
+  3. LevelManager (levels)
+  4. KnowledgeDB (knowledge)
+  5. EntityRegistry (entities)
+  6. **PauseManager** (pause) **← NEW**
+- **Status**: Active - PauseManager registered
+
+##### `scenes/game_3d.tscn` (Enhanced)
+- **Added Group**: `groups = PackedStringArray("game_3d_viewport")`
+- **Purpose**: Allows PauseManager to find and pause the 3D viewport
+- **Status**: Active - pausable viewport
+
+---
+
 ### 🎬 Action System (Command Pattern)
 
 #### `scripts/actions/action.gd`
@@ -1556,5 +1802,5 @@ Total latency: ~20 frames (~333ms @ 60fps) when generating 7 chunks
 ---
 
 **End of Architecture Audit**
-**Last Updated**: 2025-11-17 (Added threaded chunk generation system)
-**Auditor**: Claude (Haiku 4.5)
+**Last Updated**: 2025-11-19 (Added stats/resources system with modifiers, EXP, Clearance progression, and pause system)
+**Auditor**: Claude (Sonnet 4.5)

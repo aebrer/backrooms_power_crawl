@@ -11,7 +11,7 @@ extends Control
 @onready var viewport_container: SubViewportContainer = $MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer
 @onready var game_3d: Node3D = $MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D
 @onready var log_text: RichTextLabel = $MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer/LogText
-@onready var char_stats: Label = $MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet/Stats
+@onready var stats_panel: VBoxContainer = $MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet/StatsPanel
 @onready var inventory_items: Label = $MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CoreInventory/Items
 @onready var examination_panel: ExaminationPanel = $TextUIOverlay/ExaminationPanel
 @onready var action_preview_ui: ActionPreviewUI = $TextUIOverlay/ActionPreviewUI
@@ -38,31 +38,12 @@ func _ready() -> void:
 	# Connect to player signals
 	player.action_preview_changed.connect(_on_player_action_preview_changed)
 
-	_update_ui()
+	# Wire up stats panel to player
+	if stats_panel:
+		stats_panel.set_player(player)
+		Log.system("StatsPanel connected to player")
 
 	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "Game ready - 3D viewport: 640x480, UI: native resolution")
-
-func _process(_delta: float) -> void:
-	# Update UI every frame
-	_update_ui()
-
-func _update_ui() -> void:
-	"""Update character stats display"""
-	if not player:
-		return
-
-	# Update character sheet
-	char_stats.text = "[PLACEHOLDER]
-hp  100/100
-sn   80/100
-st   50/50
-
-turn %d
-pos  (%d, %d)" % [
-		player.turn_count,
-		player.grid_position.x,
-		player.grid_position.y
-	]
 
 func add_log_message(message: String, color: String = "white") -> void:
 	"""Add a message to the game log with optional color"""
@@ -76,6 +57,11 @@ func set_examine_text(description: String) -> void:
 
 func _on_log_message(category: Log.Category, level: Log.Level, message: String) -> void:
 	"""Handle log messages and display them in the UI"""
+	# Filter: Only show PLAYER level and above (player-facing messages, warnings, errors)
+	# This keeps the in-game log clean for players
+	if level < Log.Level.PLAYER:
+		return  # Skip TRACE, DEBUG, INFO
+
 	# Choose color based on level
 	var color := "gray"
 	match level:
@@ -83,6 +69,8 @@ func _on_log_message(category: Log.Category, level: Log.Level, message: String) 
 			color = "#ff6b6b"  # Red
 		Log.Level.WARN:
 			color = "#ffd93d"  # Yellow
+		Log.Level.PLAYER:
+			color = "#6bffb8"  # Bright cyan/green (player-facing messages)
 		Log.Level.INFO:
 			color = "white"
 		Log.Level.DEBUG:

@@ -25,6 +25,7 @@ KnowledgeDB="*res://scripts/autoload/knowledge_db.gd"
 EntityRegistry="*res://scripts/autoload/entity_registry.gd"
 Pathfinding="*res://scripts/autoload/pathfinding_manager.gd"
 ChunkManager="*res://scripts/procedural/chunk_manager.gd"
+PauseManager="*res://scripts/autoload/pause_manager.gd"
 
 [display]
 
@@ -32,6 +33,10 @@ window/size/viewport_width=1600
 window/size/viewport_height=900
 window/size/mode=2
 window/stretch/mode="canvas_items"
+
+[gui]
+
+timers/tooltip_delay_sec=0.2
 
 [input]
 
