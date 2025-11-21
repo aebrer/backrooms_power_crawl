@@ -1,16 +1,16 @@
 # Backrooms Power Crawl - Complete Architecture Audit
-**Generated**: 2025-11-17
-**Total GDScript LOC**: 6,943 lines
-**Total Files Analyzed**: 67 files (.gd, .tscn, .tres, .md, .py)
+**Generated**: 2025-11-17 (Updated: 2025-11-20 for PR #10)
+**Total GDScript LOC**: 6,943 lines (approximate, includes new stats/pause systems)
+**Total Files Analyzed**: 75+ files (.gd, .tscn, .tres, .md, .py)
 
 ---
 
 ## Executive Summary
 
 ### Project Status
-**Current State**: Transitioning from 2D prototype to 3D production with procedural generation
-**Active Branch**: `feature/procedural-generation`
-**Most Recent Major Change**: Threaded chunk generation for smooth gameplay (e586ec0)
+**Current State**: 3D production with stats/resources system and procedural generation
+**Active Branch**: `feature/resource-pools-hud`
+**Most Recent Major Change**: Stats & Resources System + HUD + Pause System + Bugfixes (PR #10, commit 0c3cedf)
 
 ### Architecture Overview
 The project has TWO parallel implementations:
@@ -27,10 +27,10 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - ✅ **Input System**: Fully implemented, controller-first
 - ✅ **State Machine**: Turn-based state management complete
 - ✅ **Action System**: Command pattern for moves/waits
-- ✅ **Logging System**: Comprehensive category-based logging
+- ✅ **Logging System**: Comprehensive category-based logging with PLAYER level (2025-11-20)
 - ✅ **Examination System**: On-demand tile creation with raycasting
 - ✅ **Procedural Generation**: WFC-based Level 0 maze generation
-- ✅ **Chunk System**: Infinite world with threaded chunk generation + streaming
+- ✅ **Chunk System**: Infinite world with threaded chunk generation + streaming + loading screen (2025-11-20)
 - ✅ **Performance Optimizations**: Threaded generation (0ms main thread), optimized grid application (3.6x faster)
 - ✅ **Level Management**: Multi-level config system with LRU cache
 - ✅ **Stats & Resources**: Modifier-based stat system with EXP and Clearance progression (2025-11-19)
@@ -465,6 +465,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
   - `var aim_direction: Vector2` (normalized, or ZERO)
   - `var aim_direction_grid: Vector2i` (8-way snapped)
   - `var _actions_this_frame: Dictionary` (action tracking)
+  - `var tracked_actions: Array` (actions to track: move_confirm, toggle_ability_1-4, examine_mode, pause) **[pause added in PR #10]**
   - `var left_trigger_value: float`, `right_trigger_value: float`
   - `var left_trigger_pressed: bool`, `right_trigger_pressed: bool`
   - `var _left_trigger_just_pressed: bool`, `_right_trigger_just_pressed: bool`
@@ -508,7 +509,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Purpose**: Centralized logging with category and level filtering
 - **Enums**:
   - `Level`: TRACE=0, DEBUG=1, INFO=2, WARN=3, ERROR=4, NONE=5
-  - `Category`: INPUT, STATE, MOVEMENT, ACTION, TURN, GRID, CAMERA, ENTITY, ABILITY, PHYSICS, SYSTEM
+  - `Category`: INPUT, STATE, MOVEMENT, PLAYER, ACTION, TURN, GRID, CAMERA, ENTITY, ABILITY, PHYSICS, SYSTEM **[PLAYER added in PR #10]**
 - **Signals**:
   - `message_logged(category: Category, level: Level, message: String)`
 - **Exports**:
@@ -516,6 +517,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
   - `@export var log_input: bool = false` (disabled by default - verbose)
   - `@export var log_state: bool = true`
   - `@export var log_movement: bool = true`
+  - `@export var log_player: bool = true` **[Added in PR #10]**
   - `@export var log_action: bool = true`
   - `@export var log_turn: bool = true`
   - `@export var log_grid: bool = true` (enabled for procedural debugging)
@@ -547,6 +549,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
     - `input(message)`, `input_trace(message)`
     - `state(message)`, `state_info(message)`
     - `movement(message)`, `movement_info(message)`
+    - `player(message)` **[Added in PR #10]**
     - `action(message)`
     - `turn(message)`
     - `grid(message)`
@@ -587,6 +590,9 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Purpose**: Manages chunk loading, unloading, corruption escalation
 - **Signals**:
   - `chunk_updates_completed()` (for PostTurnState to unblock input)
+  - `initial_load_completed()` (emitted when initial 7×7 chunks loaded) **[Added in PR #10]**
+  - `initial_load_progress(loaded_count: int, total_count: int)` (progress updates) **[Added in PR #10]**
+  - `new_chunk_entered(chunk_position: Vector3i)` (when player enters new chunk) **[Added in PR #10]**
 - **Constants**:
   - `CHUNK_SIZE := 128` (tiles per chunk)
   - `ACTIVE_RADIUS := 3` (chunks to keep loaded)
@@ -603,7 +609,7 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
   - `var last_player_chunk: Vector3i`
   - `var hit_chunk_limit: bool`
   - `var was_generating: bool`
-  - `var initial_load_complete: bool`
+  - `var initial_load_complete: bool` (tracks if initial 7×7 load is done) **[Added in PR #10]**
   - `var corruption_tracker: CorruptionTracker`
   - `var level_generators: Dictionary` (level_id → LevelGenerator)
   - `var grid_3d: Grid3D` (cached reference)
@@ -1245,6 +1251,36 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Used By**: game.tscn (CharacterSheet/StatsPanel)
 - **Status**: Active - stats panel scene
 
+#### `scripts/ui/loading_screen.gd`
+- **Git History**: Added in PR #10 (Stats & Resources System)
+- **Class**: `extends CanvasLayer`
+- **Purpose**: Loading screen for initial chunk generation with progress bar
+- **Instance Vars**:
+  - `@onready var loading_label: Label` (shows "Generating [Level Name]...")
+  - `@onready var progress_bar: ProgressBar` (visual progress)
+  - `@onready var progress_label: Label` (shows "N / M chunks")
+- **Methods**:
+  - `_ready()`: Connect to ChunkManager signals, set level name, show screen
+  - `_on_load_progress(loaded_count, total_count)`: Update progress bar and label
+  - `_on_load_completed()`: Hide loading screen when chunks loaded
+- **Signal Connections**:
+  - ChunkManager.initial_load_progress → _on_load_progress (update UI)
+  - ChunkManager.initial_load_completed → _on_load_completed (hide screen)
+- **Dependencies**:
+  - ChunkManager (initial_load_progress, initial_load_completed signals)
+  - LevelManager (get_current_level for display name)
+  - Log (system messages)
+- **Used By**: game.tscn (CanvasLayer overlay)
+- **Status**: Active - initial load screen
+
+#### `scenes/ui/loading_screen.tscn`
+- **Scene Structure**: CanvasLayer → CenterContainer → VBoxContainer → (LoadingLabel, ProgressBar, ProgressLabel)
+- **Script**: `scripts/ui/loading_screen.gd`
+- **Unique Names**: All UI elements use `unique_name_in_owner = true` for % syntax
+- **Visual Design**: Centered panel with level name, progress bar, and chunk counter
+- **Used By**: game.tscn (shown during initial chunk load)
+- **Status**: Active - loading screen scene
+
 #### Modified Files for Stats System
 
 ##### `scripts/autoload/knowledge_db.gd` (Enhanced)
@@ -1275,12 +1311,20 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Added Methods**:
   - `_initialize_stats()`: Create StatBlock, connect signals
   - `_on_discovery_made(subject_type, subject_id, exp_reward)`: Award EXP from KnowledgeDB
+  - `_on_new_chunk_entered(chunk_position: Vector3i)`: Award exploration EXP (10 × (level+1))
+  - `_on_level_increased(old_level, new_level)`: Handle level up (perk selection TODO)
   - `_on_clearance_increased(old_level, new_level)`: Sync Clearance to KnowledgeDB
 - **Signal Connections**:
   - KnowledgeDB.discovery_made → _on_discovery_made (award EXP)
+  - ChunkManager.new_chunk_entered → _on_new_chunk_entered (exploration EXP)
+  - stats.level_increased → _on_level_increased (trigger perk selection)
   - stats.clearance_increased → _on_clearance_increased (sync Clearance)
+- **Modified _ready()**: Now awaits ChunkManager.initial_load_completed before spawning
+  - Ensures walkable_cells is populated
+  - Validates spawn position connectivity
+  - Builds pathfinding graph for starting chunk + adjacent chunks
 - **Lifecycle**: Stats initialized in _ready() before grid setup
-- **Dependencies**: StatBlock (stats management), KnowledgeDB (discovery signals)
+- **Dependencies**: StatBlock (stats management), KnowledgeDB (discovery signals), ChunkManager (chunk signals)
 - **Used By**: StatsPanel (display stats), game.gd (wire up UI)
 - **Status**: Active - integrated with stats system
 
@@ -1299,6 +1343,10 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
       stats_panel.set_player(player)
       Log.system("StatsPanel connected to player")
   ```
+- **Modified Methods**:
+  - `_on_log_message(category, level, message)`: Now filters to PLAYER+ level only
+    - Skip TRACE, DEBUG, INFO (internal logging)
+    - Show PLAYER, WARN, ERROR (player-facing messages)
 - **Removed Methods**:
   - `_process(_delta)` (no longer needed, stats panel updates via signals)
   - `_update_ui()` (replaced by StatsPanel signal handlers)
@@ -1320,6 +1368,33 @@ The 3D system is embedded in the main HUD scene (`game.tscn`) as a SubViewport, 
 - **Added Group**: `groups = PackedStringArray("game_3d_viewport")`
 - **Purpose**: Allows PauseManager to find and pause the 3D viewport
 - **Status**: Active - pausable viewport
+
+##### `scripts/autoload/pathfinding_manager.gd` (Enhanced)
+- **Modified Methods**:
+  - `can_reach_chunk_edges(pos, chunk_pos, min_adjacent=2)`: Now checks adjacent chunk connectivity
+    - Changed from edge-based checking to adjacent chunk sampling
+    - Uses multi-point sampling (center + 4 quadrants) per chunk
+    - Ensures spawn isn't isolated in dead-end maze areas
+    - Requires connectivity to at least 2 of 4 adjacent chunks
+  - `_find_nearest_walkable_near(pos, search_radius) → Vector2i`: New helper method
+    - Searches for walkable tiles within radius of position
+    - Used for spawn validation and chunk connectivity
+- **Rationale**: Edge-based validation failed for mazes (edges often walled off)
+- **Status**: Active - improved spawn validation for procedural mazes
+
+##### `scripts/ui/start_menu.gd` (Enhanced)
+- **Added Instance Vars**:
+  - `var _starting: bool` (prevents double-trigger from multiple input methods)
+- **Modified Methods**:
+  - `_on_start_pressed()`: Now provides visual feedback before scene change
+    - Disables button and changes text to "Loading..."
+    - Waits 2 frames for UI update before scene transition
+  - `_input(event)`: Now intercepts "pause" action (START button) before PauseManager
+    - Prevents PauseManager from consuming START in main menu
+  - `_process(delta)`: Now checks InputManager for synthesized "move_confirm" action
+    - Handles RT trigger (axis-based) which doesn't emit raw events
+- **Purpose**: Input parity - START, LMB, RT all work to start game
+- **Status**: Active - multi-input start menu
 
 ---
 
