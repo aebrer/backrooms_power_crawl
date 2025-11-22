@@ -238,6 +238,7 @@ These are the ONLY controls currently implemented. Don't assume other inputs exi
 - Right stick → Camera controls (tactical + look mode)
 - Left stick → Navigate HUD when paused
 - START → Toggle pause status
+- LB + RB -> zoom level
 
 **Mouse + Keyboard:**
 - LMB → Confirm actions (move forward, wait in look mode)
@@ -245,6 +246,7 @@ These are the ONLY controls currently implemented. Don't assume other inputs exi
 - Mouse movement → Camera controls (tactical + look mode)
 - ESC → Toggle pause status
 - Mouse hover over HUD → Navigate HUD when paused
+- Mouse wheel -> zoom level
 
 **Mobile/Touch (portrait mode only):**
 - ConfirmMove button → Confirm actions
@@ -252,6 +254,7 @@ These are the ONLY controls currently implemented. Don't assume other inputs exi
 - Touchpad area → Camera controls (tactical + look mode)
 - Pause control → NOT MAPPED (mobile doesn't have pause)
 - Tap HUD item → Show tooltip
+- zoom level -> NOT IMPLEMENTED ON MOBILE 
 
 **NOT IMPLEMENTED:**
 - Any other inputs not explicitly listed above
