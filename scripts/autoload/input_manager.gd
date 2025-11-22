@@ -287,12 +287,14 @@ func _update_touch_buttons() -> void:
 	var touch_look_just_pressed = _touch_look_pressed and not _touch_look_pressed_last_frame
 	if touch_look_just_pressed:
 		_actions_this_frame["examine_mode"] = true
+		Log.system("[InputManager] Touch look action synthesized! examine_mode=true")
 		Log.input("Touch look action synthesized (current: %s, last: %s)" % [_touch_look_pressed, _touch_look_pressed_last_frame])
 
 	# Debug: Log state changes
 	if _touch_confirm_pressed != _touch_confirm_pressed_last_frame:
 		Log.input("Touch confirm state changed: last=%s, current=%s" % [_touch_confirm_pressed_last_frame, _touch_confirm_pressed])
 	if _touch_look_pressed != _touch_look_pressed_last_frame:
+		Log.system("[InputManager] Touch look state changed: last=%s, current=%s" % [_touch_look_pressed_last_frame, _touch_look_pressed])
 		Log.input("Touch look state changed: last=%s, current=%s" % [_touch_look_pressed_last_frame, _touch_look_pressed])
 
 	# Update last frame state for next frame
@@ -487,4 +489,5 @@ func set_look_button_pressed(pressed: bool) -> void:
 	"""Set look button hold state (called by TouchControls on press/release)"""
 	# Update touch button state - transition detection happens in _update_touch_buttons()
 	_touch_look_pressed = pressed
+	Log.system("[InputManager] Touch look button: %s (state now: %s)" % ("pressed" if pressed else "released", _touch_look_pressed))
 	Log.input("Touch look button: %s" % ("pressed" if pressed else "released"))

@@ -38,8 +38,24 @@ func _ready() -> void:
 func _input(event: InputEvent) -> void:
 	"""Handle touch input globally (allows mouse to pass through to viewport)"""
 	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		# Debug: Log ALL touch events
+		Log.system("[TouchControls] Touch event received: %s at position %v" % [
+			"ScreenTouch" if event is InputEventScreenTouch else "ScreenDrag",
+			event.position
+		])
+
+		# Get touchpad bounds for debugging
+		if touchpad:
+			var touchpad_rect = touchpad.get_global_rect()
+			Log.system("[TouchControls] Touchpad bounds: pos=%v, size=%v" % [
+				touchpad_rect.position, touchpad_rect.size
+			])
+
 		# Check if touch is within touchpad bounds
-		if _is_touch_in_touchpad(event.position):
+		var in_touchpad = _is_touch_in_touchpad(event.position)
+		Log.system("[TouchControls] Touch in touchpad? %s" % in_touchpad)
+
+		if in_touchpad:
 			_on_touchpad_input(event)
 
 func _on_touchpad_input(event: InputEvent) -> void:
