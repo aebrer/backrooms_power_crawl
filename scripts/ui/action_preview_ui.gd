@@ -182,3 +182,27 @@ func _on_input_device_changed(device: InputManager.InputDevice) -> void:
 	"""Handle input device switching"""
 	current_input_device = device
 	_update_header()
+
+# ============================================================================
+# LAYOUT MANAGEMENT (Portrait/Landscape)
+# ============================================================================
+
+func set_portrait_mode(is_portrait: bool) -> void:
+	"""Reposition action preview for portrait mode (avoid overlapping touch controls)"""
+	if not panel:
+		return
+
+	if is_portrait:
+		# Move to top-right corner in portrait mode
+		panel.anchor_top = 0.0    # Top edge
+		panel.anchor_bottom = 0.0
+		panel.offset_top = 16     # 16px margin from top
+		panel.offset_bottom = 0   # No bottom offset
+		panel.grow_vertical = Control.GROW_DIRECTION_END  # Grow downward from top
+	else:
+		# Restore to bottom-right corner in landscape mode
+		panel.anchor_top = 1.0    # Bottom edge
+		panel.anchor_bottom = 1.0
+		panel.offset_top = 0      # No top offset
+		panel.offset_bottom = -16 # 16px margin from bottom
+		panel.grow_vertical = Control.GROW_DIRECTION_BEGIN  # Grow upward from bottom

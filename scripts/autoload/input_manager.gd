@@ -427,3 +427,23 @@ func trigger_look_mode() -> void:
 	"""Trigger look mode from touch button (called by TouchControls)"""
 	_actions_this_frame["examine_mode"] = true
 	Log.input("Touch look mode triggered")
+
+## Set confirm button state (hold) from touch controls
+## Mimics RT (right trigger) behavior
+func set_confirm_button_pressed(pressed: bool) -> void:
+	"""Set confirm button hold state (called by TouchControls on press/release)"""
+	if pressed and not right_trigger_pressed:
+		# Button just pressed - synthesize action
+		_actions_this_frame["move_confirm"] = true
+	right_trigger_pressed = pressed
+	Log.input("Touch confirm button: %s" % ("pressed" if pressed else "released"))
+
+## Set look button state (hold) from touch controls
+## Mimics LT (left trigger) behavior for examine mode
+func set_look_button_pressed(pressed: bool) -> void:
+	"""Set look button hold state (called by TouchControls on press/release)"""
+	if pressed and not left_trigger_pressed:
+		# Button just pressed - synthesize action
+		_actions_this_frame["examine_mode"] = true
+	left_trigger_pressed = pressed
+	Log.input("Touch look button: %s" % ("pressed" if pressed else "released"))

@@ -6,12 +6,25 @@ Shows:
 - Combat stats (STRENGTH, PERCEPTION, ANOMALY)
 - Progression (EXP, Clearance Level)
 
+Supports two layout modes:
+- VERTICAL: Subsections stacked vertically (landscape mode)
+- HORIZONTAL: Subsections arranged side-by-side (portrait mode)
+
 Updates in real-time as stats change.
 """
+
+enum LayoutMode { VERTICAL, HORIZONTAL }
+var current_layout: LayoutMode = LayoutMode.VERTICAL
 
 var player: Player3D = null
 var tooltip_labels: Array[Label] = []
 var tooltip_texts: Dictionary = {}  # label -> tooltip_text (stored separately to disable native tooltips)
+
+# Subsection containers (references to the VBoxContainers)
+@onready var base_stats_section: VBoxContainer = $BaseStats
+@onready var resources_section: VBoxContainer = $Resources
+@onready var combat_stats_section: VBoxContainer = $CombatStats
+@onready var progression_section: VBoxContainer = $Progression
 
 # Tooltip overlay (created programmatically, positioned absolutely)
 var tooltip_panel: PanelContainer = null
@@ -302,3 +315,105 @@ func _on_pause_toggled(is_paused: bool) -> void:
 				if label.has_focus():
 					label.release_focus()
 				_unhighlight_label(label)
+
+# ============================================================================
+# LAYOUT MANAGEMENT
+# ============================================================================
+
+func set_layout_mode(mode: LayoutMode) -> void:
+	"""Switch between vertical (landscape) and horizontal (portrait) layouts"""
+	if current_layout == mode:
+		return  # Already in this mode
+
+	current_layout = mode
+
+	match mode:
+		LayoutMode.VERTICAL:
+			_apply_vertical_layout()
+		LayoutMode.HORIZONTAL:
+			_apply_horizontal_layout()
+
+func _apply_vertical_layout() -> void:
+	"""Arrange subsections vertically (landscape mode)"""
+	# This is the default scene structure, so we just need to ensure
+	# subsections are children of this VBoxContainer in the correct order
+
+	# Get spacer nodes
+	var spacer1 = get_node_or_null("Spacer1")
+	var spacer2 = get_node_or_null("Spacer2")
+	var spacer3 = get_node_or_null("Spacer3")
+
+	# Ensure subsections are direct children of this VBoxContainer
+	_ensure_child(base_stats_section, 0)
+	_ensure_child(spacer1, 1) if spacer1 else null
+	_ensure_child(resources_section, 2)
+	_ensure_child(spacer2, 3) if spacer2 else null
+	_ensure_child(combat_stats_section, 4)
+	_ensure_child(spacer3, 5) if spacer3 else null
+	_ensure_child(progression_section, 6)
+
+	# Show spacers in vertical mode
+	if spacer1: spacer1.visible = true
+	if spacer2: spacer2.visible = true
+	if spacer3: spacer3.visible = true
+
+func _apply_horizontal_layout() -> void:
+	"""Arrange subsections horizontally (portrait mode)"""
+	# Remove spacers (don't make sense horizontally)
+	var spacer1 = get_node_or_null("Spacer1")
+	var spacer2 = get_node_or_null("Spacer2")
+	var spacer3 = get_node_or_null("Spacer3")
+
+	if spacer1: spacer1.visible = false
+	if spacer2: spacer2.visible = false
+	if spacer3: spacer3.visible = false
+
+	# Create HBoxContainer if it doesn't exist
+	var hbox = get_node_or_null("HorizontalContainer")
+	if not hbox:
+		hbox = HBoxContainer.new()
+		hbox.name = "HorizontalContainer"
+		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		hbox.add_theme_constant_override("separation", 10)
+		add_child(hbox)
+
+	# Move subsections to HBoxContainer
+	_ensure_child_of(base_stats_section, hbox, 0)
+	_ensure_child_of(resources_section, hbox, 1)
+	_ensure_child_of(combat_stats_section, hbox, 2)
+	_ensure_child_of(progression_section, hbox, 3)
+
+	# Make subsections expand to fill available width
+	base_stats_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	resources_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	combat_stats_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	progression_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+func _ensure_child(node: Node, index: int) -> void:
+	"""Ensure node is a child of this container at the specified index"""
+	if not node:
+		return
+
+	# Remove from current parent if different
+	if node.get_parent() != self:
+		if node.get_parent():
+			node.get_parent().remove_child(node)
+		add_child(node)
+
+	# Move to correct position
+	move_child(node, index)
+
+func _ensure_child_of(node: Node, parent: Node, index: int) -> void:
+	"""Ensure node is a child of the specified parent at the specified index"""
+	if not node or not parent:
+		return
+
+	# Remove from current parent if different
+	if node.get_parent() != parent:
+		if node.get_parent():
+			node.get_parent().remove_child(node)
+		parent.add_child(node)
+
+	# Move to correct position
+	parent.move_child(node, index)

@@ -217,74 +217,89 @@ func _switch_to_portrait() -> void:
 	Log.system("Switching to portrait layout")
 	current_layout = LayoutMode.PORTRAIT
 
+	# Hide landscape container
+	main_container.visible = false
+
 	# Create portrait container if it doesn't exist
 	if not portrait_container:
 		portrait_container = VBoxContainer.new()
 		portrait_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		portrait_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		portrait_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		portrait_container.add_theme_constant_override("separation", 5)
-
-	# Hide landscape container
-	main_container.visible = false
-
-	# Add portrait container to margin container
-	if portrait_container.get_parent() != margin_container:
+		portrait_container.add_theme_constant_override("separation", 3)
 		margin_container.add_child(portrait_container)
 
-	# Reparent UI elements in portrait order
-	# 1. Game viewport (largest, 60% height)
-	if viewport_panel.get_parent() != portrait_container:
-		viewport_panel.get_parent().remove_child(viewport_panel)
-		portrait_container.add_child(viewport_panel)
-		viewport_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		viewport_panel.size_flags_stretch_ratio = 3.0  # Takes 60% of space
+	# Clear portrait container and rebuild layout
+	for child in portrait_container.get_children():
+		portrait_container.remove_child(child)
 
-	# 2. Minimap (compact)
-	if minimap_node.get_parent() != portrait_container:
-		minimap_node.get_parent().remove_child(minimap_node)
-		portrait_container.add_child(minimap_node)
-		minimap_node.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	# Show portrait container
+	portrait_container.visible = true
 
-	# 3. Log (compact)
-	if log_container.get_parent() != portrait_container:
-		# Create a wrapper panel for log
-		var log_wrapper = PanelContainer.new()
-		var log_margin = MarginContainer.new()
-		log_margin.add_theme_constant_override("margin_left", 10)
-		log_margin.add_theme_constant_override("margin_top", 10)
-		log_margin.add_theme_constant_override("margin_right", 10)
-		log_margin.add_theme_constant_override("margin_bottom", 10)
-		log_wrapper.add_child(log_margin)
+	# 1. Game viewport (takes most vertical space)
+	viewport_panel.get_parent().remove_child(viewport_panel)
+	portrait_container.add_child(viewport_panel)
+	viewport_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	viewport_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	viewport_panel.size_flags_stretch_ratio = 3.0
 
-		log_container.get_parent().remove_child(log_container)
-		log_margin.add_child(log_container)
-		portrait_container.add_child(log_wrapper)
-		log_wrapper.size_flags_vertical = Control.SIZE_EXPAND_FILL
-		log_wrapper.size_flags_stretch_ratio = 1.0
+	# Ensure viewport container receives input (critical for mouse control)
+	viewport_container.mouse_filter = Control.MOUSE_FILTER_STOP
+	Log.system("Portrait mode: Viewport container mouse_filter set to STOP")
 
-	# 4. Character sheet (compact)
-	if character_sheet.get_parent() != portrait_container:
-		character_sheet.get_parent().remove_child(character_sheet)
-		portrait_container.add_child(character_sheet)
-		character_sheet.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	# 2. Stats panel (compact - subsections horizontal)
+	character_sheet.get_parent().remove_child(character_sheet)
+	portrait_container.add_child(character_sheet)
+	character_sheet.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	character_sheet.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	character_sheet.visible = true
 
-	# 5. Core inventory (compact)
-	if core_inventory.get_parent() != portrait_container:
-		core_inventory.get_parent().remove_child(core_inventory)
-		portrait_container.add_child(core_inventory)
-		core_inventory.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	# Switch stats panel to horizontal layout
+	if stats_panel and stats_panel.has_method("set_layout_mode"):
+		stats_panel.set_layout_mode(1)  # 1 = HORIZONTAL (can't reference enum from here)
 
-	# 6. Touch controls at bottom
+	# Reposition action preview to top-right (avoid overlapping touch controls)
+	if action_preview_ui and action_preview_ui.has_method("set_portrait_mode"):
+		action_preview_ui.set_portrait_mode(true)
+
+	# 3. Build panel (compact - subsections horizontal)
+	core_inventory.get_parent().remove_child(core_inventory)
+	portrait_container.add_child(core_inventory)
+	core_inventory.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	core_inventory.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	core_inventory.visible = true
+
+	# 4. Minimap + Log row (compact info strip)
+	var info_row = HBoxContainer.new()
+	info_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	info_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	info_row.add_theme_constant_override("separation", 5)
+	portrait_container.add_child(info_row)
+
+	minimap_node.get_parent().remove_child(minimap_node)
+	info_row.add_child(minimap_node)
+	minimap_node.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	minimap_node.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand vertically
+	minimap_node.custom_minimum_size = Vector2(100, 100)
+
+	log_container.get_parent().remove_child(log_container)
+	info_row.add_child(log_container)
+	log_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	log_container.size_flags_vertical = Control.SIZE_EXPAND_FILL  # Expand vertically
+	log_container.custom_minimum_size = Vector2(0, 0)  # Remove min size constraint
+
+	# 4. Touch controls at bottom
 	if not touch_controls:
 		touch_controls = TOUCH_CONTROLS_SCENE.instantiate()
 
-	if touch_controls.get_parent() != portrait_container:
-		portrait_container.add_child(touch_controls)
-		touch_controls.size_flags_vertical = Control.SIZE_SHRINK_END
-		touch_controls.custom_minimum_size = Vector2(0, 150)  # Fixed height for touch controls
-
+	if touch_controls.get_parent():
+		touch_controls.get_parent().remove_child(touch_controls)
+	portrait_container.add_child(touch_controls)
+	touch_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	touch_controls.size_flags_vertical = Control.SIZE_SHRINK_END
+	touch_controls.custom_minimum_size = Vector2(0, 120)
 	touch_controls.visible = true
+
 	Log.system("Portrait layout active with touch controls")
 
 func _switch_to_landscape() -> void:
@@ -334,23 +349,32 @@ func _switch_to_landscape() -> void:
 		log_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		log_panel.size_flags_stretch_ratio = 0.25
 
-	# Restore character sheet and inventory to right side
+	# Restore character sheet and inventory to right side (and make visible again)
 	var right_side_vbox = right_side.get_node("MarginContainer/VBoxContainer")
-	if character_sheet.get_parent() != right_side_vbox:
-		character_sheet.get_parent().remove_child(character_sheet)
-		right_side_vbox.add_child(character_sheet)
-		right_side_vbox.move_child(character_sheet, 0)  # First child
-		character_sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
 
-	if core_inventory.get_parent() != right_side_vbox:
+	if character_sheet.get_parent():
+		character_sheet.get_parent().remove_child(character_sheet)
+	right_side_vbox.add_child(character_sheet)
+	right_side_vbox.move_child(character_sheet, 0)  # First child
+	character_sheet.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	character_sheet.visible = true
+
+	# Switch stats panel back to vertical layout
+	if stats_panel and stats_panel.has_method("set_layout_mode"):
+		stats_panel.set_layout_mode(0)  # 0 = VERTICAL
+
+	# Restore action preview to bottom-right
+	if action_preview_ui and action_preview_ui.has_method("set_portrait_mode"):
+		action_preview_ui.set_portrait_mode(false)
+
+	if core_inventory.get_parent():
 		core_inventory.get_parent().remove_child(core_inventory)
-		right_side_vbox.add_child(core_inventory)
-		# Add spacer before inventory
-		var spacer = Control.new()
-		spacer.custom_minimum_size = Vector2(0, 20)
-		right_side_vbox.add_child(spacer)
-		right_side_vbox.move_child(spacer, 1)
-		right_side_vbox.move_child(core_inventory, 2)
-		core_inventory.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	# Add spacer before inventory
+	var spacer = Control.new()
+	spacer.custom_minimum_size = Vector2(0, 20)
+	right_side_vbox.add_child(spacer)
+	right_side_vbox.add_child(core_inventory)
+	core_inventory.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	core_inventory.visible = true
 
 	Log.system("Landscape layout restored")

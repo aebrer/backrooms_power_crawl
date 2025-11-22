@@ -65,9 +65,9 @@ func toggle_pause():
 
 func _enter_hud_mode():
 	"""Pause gameplay viewport, enable HUD interaction."""
-	# Pause the 3D viewport (inside SubViewport - must search SubViewport's tree!)
-	# Note: Game3D is inside a SubViewport which has its own scene tree
-	var subviewport = get_tree().root.get_node_or_null("Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport")
+	# Pause the 3D viewport (inside SubViewport)
+	# Search for SubViewport dynamically (works in both portrait and landscape layouts)
+	var subviewport = _find_subviewport()
 	if subviewport:
 		var game_3d = subviewport.get_node_or_null("Game3D")
 		if game_3d:
@@ -102,7 +102,7 @@ func _enter_hud_mode():
 func _exit_hud_mode():
 	"""Resume gameplay viewport, disable HUD interaction."""
 	# Resume the 3D viewport (inside SubViewport)
-	var subviewport = get_tree().root.get_node_or_null("Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport")
+	var subviewport = _find_subviewport()
 	if subviewport:
 		var game_3d = subviewport.get_node_or_null("Game3D")
 		if game_3d:
@@ -122,6 +122,31 @@ func _exit_hud_mode():
 	current_focus = null
 
 	Log.system("Resumed gameplay (unpaused)")
+
+func _find_subviewport() -> SubViewport:
+	"""Find the game SubViewport dynamically (works in portrait and landscape layouts)"""
+	# Search for SubViewportContainer anywhere in the tree
+	var root = get_tree().root
+	var containers = _find_nodes_by_type(root, "SubViewportContainer")
+
+	for container in containers:
+		for child in container.get_children():
+			if child is SubViewport:
+				return child
+
+	return null
+
+func _find_nodes_by_type(node: Node, type_name: String) -> Array:
+	"""Recursively find all nodes of a specific type"""
+	var result = []
+
+	if node.get_class() == type_name:
+		result.append(node)
+
+	for child in node.get_children():
+		result.append_array(_find_nodes_by_type(child, type_name))
+
+	return result
 
 func _refresh_focusable_elements():
 	"""Find all HUD elements that can be focused."""

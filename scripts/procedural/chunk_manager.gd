@@ -113,14 +113,13 @@ func _process(_delta: float) -> void:
 
 func _connect_to_player_signal() -> void:
 	"""Connect to player's turn_completed signal"""
-	var player_path := "/root/Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D/Player3D"
-	if has_node(player_path):
-		var player = get_node(player_path)
+	var player = _find_player()
+	if player:
 		if not player.turn_completed.is_connected(on_turn_completed):
 			player.turn_completed.connect(on_turn_completed)
 			Log.system("[ChunkManager] Connected to player turn_completed signal")
 	else:
-		Log.warn(Log.Category.SYSTEM, "Player not found at %s for turn signal connection" % player_path)
+		Log.warn(Log.Category.SYSTEM, "Player not found for turn signal connection")
 
 func on_turn_completed() -> void:
 	"""Called when a turn completes (triggered by player's turn_completed signal)"""
@@ -502,6 +501,28 @@ func _search_for_grid_3d(node: Node) -> Grid3D:
 
 	return null
 
+func _find_player() -> Node:
+	"""Find Player3D node dynamically (works in both portrait and landscape layouts)
+
+	Searches the entire scene tree for a node named "Player3D".
+	"""
+	var root = get_tree().root
+	return _search_for_player(root)
+
+func _search_for_player(node: Node) -> Node:
+	"""Recursively search for Player3D node"""
+	# Check if this node is named Player3D
+	if node.name == "Player3D":
+		return node
+
+	# Search children
+	for child in node.get_children():
+		var result = _search_for_player(child)
+		if result:
+			return result
+
+	return null
+
 # ============================================================================
 # PLAYER QUERIES
 # ============================================================================
@@ -511,16 +532,11 @@ func _get_player_position() -> Vector2i:
 
 	Returns default (64, 64) if player not found.
 	"""
-	# Try to get player from game scene
-	# Player is at: /root/Game/.../SubViewport/Game3D/Player3D
-	var player_path := "/root/Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D/Player3D"
-
-	if has_node(player_path):
-		var player = get_node(player_path)
-		# Player3D script has grid_position property
+	var player = _find_player()
+	if player:
 		return player.grid_position
 	else:
-		Log.warn(Log.Category.GRID, "Player node not found at %s" % player_path)
+		Log.warn(Log.Category.GRID, "Player node not found (using default spawn position)")
 
 	# Fallback to default spawn position
 	return Vector2i(64, 64)

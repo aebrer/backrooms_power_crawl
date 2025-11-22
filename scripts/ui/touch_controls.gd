@@ -23,14 +23,20 @@ var touchpad_start_pos: Vector2 = Vector2.ZERO
 var touchpad_current_pos: Vector2 = Vector2.ZERO
 
 func _ready() -> void:
-	# Connect button signals
-	confirm_button.pressed.connect(_on_confirm_pressed)
-	look_button.pressed.connect(_on_look_pressed)
-
-	# Setup touchpad for touch input detection
-	touchpad.gui_input.connect(_on_touchpad_input)
+	# Connect button signals (use button_down/button_up for hold tracking)
+	confirm_button.button_down.connect(_on_confirm_button_down)
+	confirm_button.button_up.connect(_on_confirm_button_up)
+	look_button.button_down.connect(_on_look_button_down)
+	look_button.button_up.connect(_on_look_button_up)
 
 	Log.system("TouchControls ready")
+
+func _input(event: InputEvent) -> void:
+	"""Handle touch input globally (allows mouse to pass through to viewport)"""
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		# Check if touch is within touchpad bounds
+		if _is_touch_in_touchpad(event.position):
+			_on_touchpad_input(event)
 
 func _on_touchpad_input(event: InputEvent) -> void:
 	"""Handle touch input on the invisible touchpad"""
@@ -102,14 +108,31 @@ func _angle_to_direction(angle: float) -> Vector2i:
 		_:
 			return Vector2i.ZERO
 
-func _on_confirm_pressed() -> void:
-	"""Handle confirm button press (space/RT equivalent)"""
-	Log.input("Touch: Confirm button pressed")
-	# Trigger confirm action through InputManager
-	InputManager.trigger_confirm_action()
+func _on_confirm_button_down() -> void:
+	"""Handle confirm button down (RT pressed)"""
+	Log.system("[TouchControls] Confirm button DOWN - calling InputManager")
+	InputManager.set_confirm_button_pressed(true)
 
-func _on_look_pressed() -> void:
-	"""Handle look mode button press (right-click/LT equivalent)"""
-	Log.input("Touch: Look mode button pressed")
-	# Trigger look mode through InputManager
-	InputManager.trigger_look_mode()
+func _on_confirm_button_up() -> void:
+	"""Handle confirm button up (RT released)"""
+	Log.system("[TouchControls] Confirm button UP - calling InputManager")
+	InputManager.set_confirm_button_pressed(false)
+
+func _on_look_button_down() -> void:
+	"""Handle look button down (LT pressed)"""
+	Log.system("[TouchControls] Look button DOWN - calling InputManager")
+	InputManager.set_look_button_pressed(true)
+
+func _on_look_button_up() -> void:
+	"""Handle look button up (LT released)"""
+	Log.system("[TouchControls] Look button UP - calling InputManager")
+	InputManager.set_look_button_pressed(false)
+
+func _is_touch_in_touchpad(touch_pos: Vector2) -> bool:
+	"""Check if touch position is within touchpad area"""
+	if not touchpad:
+		return false
+
+	# Get touchpad global rect
+	var touchpad_rect = touchpad.get_global_rect()
+	return touchpad_rect.has_point(touch_pos)
