@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://bqm3n2v8xk7yx"]
+[gd_scene load_steps=8 format=3 uid="uid://bqm3n2v8xk7yx"]
 
 [ext_resource type="PackedScene" uid="uid://cy7w8qn1yf3d" path="res://scenes/game_3d.tscn" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/game.gd" id="2_game"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://scripts/ui/examination_panel.gd" id="4_exam_panel"]
 [ext_resource type="Script" path="res://scripts/ui/action_preview_ui.gd" id="5_action_preview"]
 [ext_resource type="PackedScene" uid="uid://stats_panel" path="res://scenes/ui/stats_panel.tscn" id="6_stats_panel"]
+[ext_resource type="PackedScene" uid="uid://cqk3y5v8x7m8p" path="res://scenes/ui/minimap.tscn" id="7_minimap"]
 
 [node name="Game" type="Control"]
 layout_mode = 3
@@ -16,6 +17,17 @@ grow_horizontal = 2
 grow_vertical = 2
 theme = ExtResource("3_theme")
 script = ExtResource("2_game")
+
+[node name="FPSCounter" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -100.0
+offset_bottom = 30.0
+grow_horizontal = 0
+text = "FPS: 60"
+horizontal_alignment = 2
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
@@ -57,7 +69,6 @@ size_flags_horizontal = 3
 size_flags_vertical = 3
 mouse_filter = 0
 stretch = true
-stretch_shrink = 1
 
 [node name="SubViewport" type="SubViewport" parent="MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer"]
 handle_input_locally = false
@@ -90,8 +101,9 @@ mouse_filter = 2
 script = ExtResource("5_action_preview")
 
 [node name="LogPanel" type="PanelContainer" parent="MarginContainer/HBoxContainer/LeftSide"]
-custom_minimum_size = Vector2(0, 200)
 layout_mode = 2
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.25
 
 [node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel"]
 layout_mode = 2
@@ -100,14 +112,25 @@ theme_override_constants/margin_top = 10
 theme_override_constants/margin_right = 10
 theme_override_constants/margin_bottom = 10
 
-[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer"]
+[node name="HBoxContainer" type="HBoxContainer" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer"]
 layout_mode = 2
+theme_override_constants/separation = 10
 
-[node name="LogTitle" type="Label" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer"]
+[node name="Minimap" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/HBoxContainer" instance=ExtResource("7_minimap")]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+size_flags_stretch_ratio = 0.3
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/HBoxContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LogTitle" type="Label" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/HBoxContainer/VBoxContainer"]
 layout_mode = 2
 text = "log"
 
-[node name="LogText" type="RichTextLabel" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/VBoxContainer"]
+[node name="LogText" type="RichTextLabel" parent="MarginContainer/HBoxContainer/LeftSide/LogPanel/MarginContainer/HBoxContainer/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
 bbcode_enabled = true
@@ -116,8 +139,9 @@ scroll_following = true
 fit_content = false
 
 [node name="RightSide" type="PanelContainer" parent="MarginContainer/HBoxContainer"]
-custom_minimum_size = Vector2(350, 0)
 layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 0.2
 
 [node name="MarginContainer" type="MarginContainer" parent="MarginContainer/HBoxContainer/RightSide"]
 layout_mode = 2
