@@ -2,11 +2,16 @@ extends Control
 ## Minimap - Top-down view of explored areas
 ##
 ## Features:
-## - 512x512 pixel map (1 pixel = 1 tile)
+## - 256×256 pixel internal resolution, displayed at 2x (512×512)
 ## - Rotates to match camera direction (forward = north)
-## - Shows walkable/walls, player position, player trail
-## - Chunk boundaries visible
+## - Shows walkable/walls, player position, 10k-step movement trail
 ## - Colorblind-safe palette
+##
+## Performance Optimizations:
+## - Direct GridMap queries: Bypasses is_walkable() abstraction (major speedup)
+## - Spatial culling: Trail rendering skips off-screen positions
+## - Transform rotation: Rotates TextureRect node, not pixels
+## - Full renders every turn: ~65k tile queries, but direct GridMap access is fast
 
 # ============================================================================
 # CONSTANTS
@@ -19,8 +24,8 @@ const TRAIL_LENGTH := 10000  # Steps to remember
 const COLOR_WALKABLE := Color("#8a8a8a")  # Light gray
 const COLOR_WALL := Color("#1a3a52")  # Dark blue-gray
 const COLOR_PLAYER := Color("#00d9ff")  # Bright cyan
-const COLOR_TRAIL_START := Color(0.0, 0.85, 1.0, 0.3)  # Faint cyan
-const COLOR_TRAIL_END := Color(0.0, 0.85, 1.0, 1.0)  # Bright cyan
+const COLOR_TRAIL_START := Color(0.9, 0.0, 1.0, 0.3)  # Faint purple
+const COLOR_TRAIL_END := Color(0.9, 0.0, 1.0, 1.0)  # Bright purple
 const COLOR_CHUNK_BOUNDARY := Color("#404040")  # Subtle gray
 const COLOR_UNLOADED := Color("#000000")  # Black
 
@@ -43,6 +48,7 @@ var map_texture: ImageTexture
 ## Player position trail (ring buffer)
 var player_trail: Array[Vector2i] = []
 var trail_index: int = 0
+var trail_valid_count: int = 0  # Track how many valid positions in buffer
 
 ## Reference to grid for tile data
 var grid: Node = null
@@ -57,8 +63,8 @@ var last_camera_rotation: float = 0.0
 ## Dirty flag - needs content redraw
 var content_dirty: bool = true
 
-## Walkability cache for performance (cleared when chunks change)
-var walkability_cache: Dictionary = {}  # Vector2i -> bool
+## Last player position for incremental rendering
+var last_player_pos: Vector2i = Vector2i(-99999, -99999)
 
 # ============================================================================
 # LIFECYCLE
@@ -116,50 +122,58 @@ func set_player(player_ref: Node) -> void:
 func on_player_moved(new_position: Vector2i) -> void:
 	"""Called when player moves - update trail and mark dirty"""
 	# Add to trail (ring buffer)
+	if player_trail[trail_index].x == -99999:
+		trail_valid_count += 1  # Adding new position to previously empty slot
+
 	player_trail[trail_index] = new_position
 	trail_index = (trail_index + 1) % TRAIL_LENGTH
 
 	content_dirty = true
 
 func on_chunk_loaded(_chunk_pos: Vector2i) -> void:
-	"""Called when chunk loads - mark dirty and clear cache"""
-	walkability_cache.clear()
+	"""Called when chunk loads - mark dirty for full redraw"""
 	content_dirty = true
 
 func on_chunk_unloaded(_chunk_pos: Vector2i) -> void:
-	"""Called when chunk unloads - mark dirty and clear cache"""
-	walkability_cache.clear()
+	"""Called when chunk unloads - mark dirty for full redraw"""
 	content_dirty = true
 
 func _on_initial_load_completed() -> void:
 	"""Called when ChunkManager finishes initial chunk loading"""
-	# Clear cache to remove any placeholder/empty chunk data
-	walkability_cache.clear()
 	content_dirty = true
-	Log.system("Minimap cache cleared after initial chunk load")
+	Log.system("Minimap ready after initial chunk load")
 
 # ============================================================================
 # RENDERING
 # ============================================================================
 
 func _render_map() -> void:
-	"""Render entire minimap (called on turn)"""
+	"""Render minimap (always full render for correctness)"""
 	if not grid or not player:
 		return
 
+	var player_pos: Vector2i = player.grid_position
+
+	# Always do full render - direct GridMap queries are fast enough
+	# Incremental rendering would require image scrolling (complex)
+	_render_full_map(player_pos)
+
+func _render_full_map(player_pos: Vector2i) -> void:
+	"""Full render of 256×256 tile area (used for first render or teleports)"""
 	# Clear to unloaded color
 	map_image.fill(COLOR_UNLOADED)
 
-	# Get player position for centering
-	var player_pos: Vector2i = player.grid_position
+	# Get GridMap reference for direct tile queries
+	var grid_map: GridMap = grid.grid_map
+	if not grid_map:
+		Log.warn(Log.Category.SYSTEM, "Minimap: No GridMap found on grid node")
+		return
 
-	# Calculate visible area (centered on player) - full 256×256 tile area
 	var half_size := MAP_SIZE / 2
 	var min_tile := player_pos - Vector2i(half_size, half_size)
 	var max_tile := player_pos + Vector2i(half_size, half_size)
 
-	# Render tiles
-	var tiles_rendered := 0
+	# Render all tiles in visible area
 	for y in range(min_tile.y, max_tile.y):
 		for x in range(min_tile.x, max_tile.x):
 			var tile_pos := Vector2i(x, y)
@@ -168,33 +182,89 @@ func _render_map() -> void:
 			if not _is_valid_screen_pos(screen_pos):
 				continue
 
-			# Check if tile is loaded
-			if not grid.has_method("is_walkable"):
+			# Query GridMap directly (WALL = 1, FLOOR = 0, INVALID = -1)
+			var cell_item := grid_map.get_cell_item(Vector3i(x, 0, y))
+
+			var color: Color
+			if cell_item == -1:
+				color = COLOR_UNLOADED  # Unloaded/empty cell
+			elif cell_item == 1:
+				color = COLOR_WALL  # Wall
+			else:
+				color = COLOR_WALKABLE  # Floor or other walkable
+
+			map_image.set_pixelv(screen_pos, color)
+
+	# Draw dynamic elements (trail + player)
+	_update_dynamic_elements(player_pos)
+
+	# Update texture
+	map_texture.update(map_image)
+
+func _render_incremental(delta: Vector2i, player_pos: Vector2i) -> void:
+	"""Incremental render - only new tile strips that scrolled in"""
+	var grid_map: GridMap = grid.grid_map
+	if not grid_map:
+		return
+
+	var half_size := MAP_SIZE / 2
+
+	# Render horizontal strip if moved vertically
+	if delta.y != 0:
+		var strip_y := player_pos.y + (half_size if delta.y > 0 else -half_size)
+		for x in range(player_pos.x - half_size, player_pos.x + half_size):
+			var tile_pos := Vector2i(x, strip_y)
+			var screen_pos := _world_to_screen(tile_pos, player_pos)
+
+			if not _is_valid_screen_pos(screen_pos):
 				continue
 
-			# Get tile type (walkable vs wall) - use cache for performance
-			var is_walkable: bool
-			if walkability_cache.has(tile_pos):
-				is_walkable = walkability_cache[tile_pos]
+			var cell_item := grid_map.get_cell_item(Vector3i(x, 0, strip_y))
+
+			var color: Color
+			if cell_item == -1:
+				color = COLOR_UNLOADED
+			elif cell_item == 1:
+				color = COLOR_WALL
 			else:
-				is_walkable = grid.is_walkable(tile_pos)
-				walkability_cache[tile_pos] = is_walkable
+				color = COLOR_WALKABLE
 
-			var color := COLOR_WALL if not is_walkable else COLOR_WALKABLE
+			map_image.set_pixelv(screen_pos, color)
 
-			# Draw directly without rotation (TextureRect handles rotation now)
-			if _is_valid_screen_pos(screen_pos):
-				map_image.set_pixelv(screen_pos, color)
-				tiles_rendered += 1
+	# Render vertical strip if moved horizontally
+	if delta.x != 0:
+		var strip_x := player_pos.x + (half_size if delta.x > 0 else -half_size)
+		for y in range(player_pos.y - half_size, player_pos.y + half_size):
+			var tile_pos := Vector2i(strip_x, y)
+			var screen_pos := _world_to_screen(tile_pos, player_pos)
 
-	# Log if no tiles were rendered (indicates a problem)
-	if tiles_rendered == 0:
-		Log.warn(Log.Category.SYSTEM, "Minimap rendered 0 tiles! Player at %s, visible area: %s to %s" % [player_pos, min_tile, max_tile])
+			if not _is_valid_screen_pos(screen_pos):
+				continue
 
+			var cell_item := grid_map.get_cell_item(Vector3i(strip_x, 0, y))
+
+			var color: Color
+			if cell_item == -1:
+				color = COLOR_UNLOADED
+			elif cell_item == 1:
+				color = COLOR_WALL
+			else:
+				color = COLOR_WALKABLE
+
+			map_image.set_pixelv(screen_pos, color)
+
+	# Redraw dynamic elements
+	_update_dynamic_elements(player_pos)
+
+	# Update texture
+	map_texture.update(map_image)
+
+func _update_dynamic_elements(player_pos: Vector2i) -> void:
+	"""Redraw only trail and player marker (tiles unchanged)"""
 	# Draw player trail
 	_draw_trail(player_pos)
 
-	# Draw player position (centered - no rotation needed, TextureRect rotates)
+	# Draw player position (centered)
 	var player_screen := _world_to_screen(player_pos, player_pos)
 	if _is_valid_screen_pos(player_screen):
 		# Draw 3x3 player marker
@@ -203,9 +273,6 @@ func _render_map() -> void:
 				var pixel := player_screen + Vector2i(dx, dy)
 				if _is_valid_screen_pos(pixel):
 					map_image.set_pixelv(pixel, COLOR_PLAYER)
-
-	# Update texture
-	map_texture.update(map_image)
 
 func _draw_chunk_boundaries(player_pos: Vector2i) -> void:
 	"""Draw chunk boundary lines (every 128 tiles)"""
@@ -239,32 +306,39 @@ func _draw_chunk_boundaries(player_pos: Vector2i) -> void:
 				map_image.set_pixelv(screen_pos, COLOR_CHUNK_BOUNDARY)
 
 func _draw_trail(player_pos: Vector2i) -> void:
-	"""Draw player movement trail with fading"""
-	var valid_trail_count := 0
+	"""Draw player movement trail with fading (optimized with spatial culling)"""
+	# Pre-calculate visible bounds for spatial culling
+	var half_size := MAP_SIZE / 2
+	var min_visible := player_pos - Vector2i(half_size, half_size)
+	var max_visible := player_pos + Vector2i(half_size, half_size)
 
-	# Count valid trail positions
-	for pos in player_trail:
-		if pos.x != -99999:
-			valid_trail_count += 1
-
-	if valid_trail_count == 0:
+	# Early exit if no trail positions yet
+	if trail_valid_count == 0:
 		return
 
-	# Draw trail with gradient (oldest = faint, newest = bright)
+	# Draw trail with gradient and spatial culling (single pass!)
 	for i in range(TRAIL_LENGTH):
 		var trail_pos: Vector2i = player_trail[i]
 
+		# Skip invalid positions
 		if trail_pos.x == -99999:
-			continue  # Invalid position
+			continue
 
-		# Calculate age (0.0 = oldest, 1.0 = newest)
-		var age := float(i) / float(valid_trail_count)
+		# SPATIAL CULLING - skip positions outside visible area (major optimization!)
+		if trail_pos.x < min_visible.x or trail_pos.x >= max_visible.x:
+			continue
+		if trail_pos.y < min_visible.y or trail_pos.y >= max_visible.y:
+			continue
+
+		# Calculate age for gradient (0.0 = oldest, 1.0 = newest)
+		var age := float(i) / float(trail_valid_count)
 		var color := COLOR_TRAIL_START.lerp(COLOR_TRAIL_END, age)
 
+		# Convert to screen position (already know it's in bounds)
 		var screen_pos := _world_to_screen(trail_pos, player_pos)
 
-		if _is_valid_screen_pos(screen_pos):
-			map_image.set_pixelv(screen_pos, color)
+		# Draw trail pixel
+		map_image.set_pixelv(screen_pos, color)
 
 # ============================================================================
 # HELPERS
