@@ -3,13 +3,11 @@ extends Control
 ## Touch control overlay for mobile/portrait mode
 ##
 ## Features:
-## - Left side: Touchpad for camera rotation (swipe to aim)
+## - Left side: Touchpad for camera rotation (drag like mouse/controller stick)
 ## - Right side: Action buttons (Confirm Move, Look Mode)
 ## - Only visible in portrait mode
-## - Camera rotation handled directly, confirm/look buttons via InputManager
-
-## Minimum swipe distance to register a direction (pixels)
-@export var swipe_threshold: float = 30.0
+## - Camera rotation: continuous drag (no snapping)
+## - Confirm/Look buttons: via InputManager
 
 ## Touch areas
 @onready var touchpad: Control = $HBoxContainer/Touchpad
@@ -19,8 +17,7 @@ extends Control
 
 ## Touchpad state
 var touchpad_touch_index: int = -1
-var touchpad_start_pos: Vector2 = Vector2.ZERO
-var touchpad_current_pos: Vector2 = Vector2.ZERO
+var touchpad_last_pos: Vector2 = Vector2.ZERO  # Track last position for delta calculation
 
 ## Player reference (for camera control)
 var player: Node3D = null
@@ -78,88 +75,58 @@ func _input(event: InputEvent) -> void:
 			_on_touchpad_input(event)
 
 func _on_touchpad_input(event: InputEvent) -> void:
-	"""Handle touch input on the invisible touchpad"""
+	"""Handle touch input on touchpad - works like mouse drag for camera rotation"""
 	if event is InputEventScreenTouch:
 		if event.pressed:
-			# Touch started
+			# Touch started - record initial position
 			touchpad_touch_index = event.index
-			touchpad_start_pos = event.position
-			touchpad_current_pos = event.position
-			Log.system("[TouchControls] Touchpad touch STARTED - index=%d, pos=%v" % [event.index, touchpad_start_pos])
+			touchpad_last_pos = event.position
+			Log.system("[TouchControls] Touchpad touch STARTED - index=%d, pos=%v" % [event.index, touchpad_last_pos])
 		else:
-			# Touch ended - detect swipe direction
-			Log.system("[TouchControls] Touchpad touch ENDED - index=%d, tracking_index=%d" % [event.index, touchpad_touch_index])
+			# Touch ended - stop tracking
+			Log.system("[TouchControls] Touchpad touch ENDED - index=%d" % event.index)
 			if touchpad_touch_index == event.index:
-				Log.system("[TouchControls] Index match! Calling _detect_swipe_direction()")
-				_detect_swipe_direction()
 				touchpad_touch_index = -1
-			else:
-				Log.system("[TouchControls] Index mismatch - ignoring touch end")
 
 	elif event is InputEventScreenDrag:
-		Log.system("[TouchControls] Touchpad DRAG - index=%d, tracking_index=%d, pos=%v" % [event.index, touchpad_touch_index, event.position])
 		if touchpad_touch_index == event.index:
-			touchpad_current_pos = event.position
-			Log.system("[TouchControls] Updated current_pos=%v" % [touchpad_current_pos])
+			# Calculate drag delta (like mouse motion)
+			var drag_delta: Vector2 = event.position - touchpad_last_pos
+			touchpad_last_pos = event.position
 
-func _detect_swipe_direction() -> void:
-	"""Detect 8-directional swipe from start to end position"""
-	var swipe_vector := touchpad_current_pos - touchpad_start_pos
-	var swipe_distance := swipe_vector.length()
+			Log.system("[TouchControls] Touchpad DRAG - delta=%v" % [drag_delta])
 
-	Log.system("[TouchControls] _detect_swipe_direction() called - start=%v, end=%v, vector=%v, distance=%.1f" % [
-		touchpad_start_pos, touchpad_current_pos, swipe_vector, swipe_distance
-	])
+			# Apply delta to camera rotation (like mouse movement)
+			_rotate_camera(drag_delta)
 
-	# Ignore short swipes
-	if swipe_distance < swipe_threshold:
-		Log.system("[TouchControls] Swipe too short: %.1f < %.1f threshold" % [swipe_distance, swipe_threshold])
+func _rotate_camera(drag_delta: Vector2) -> void:
+	"""Rotate camera based on touch drag (like mouse movement)"""
+	if not tactical_camera:
+		Log.warn(Log.Category.SYSTEM, "TouchControls: Cannot rotate camera - tactical_camera not available")
 		return
 
-	# Convert swipe to 8-direction
-	var angle := swipe_vector.angle()  # Radians, 0 = right, increases counterclockwise
-	var direction := _angle_to_direction(angle)
+	# Touch sensitivity (similar to mouse sensitivity in tactical_camera)
+	const TOUCH_SENSITIVITY: float = 0.3
 
-	Log.system("[TouchControls] Swipe DETECTED! vector=%v, angle=%.2f rad, direction=%v" % [swipe_vector, angle, direction])
+	# Access camera pivots directly (same as mouse rotation in tactical_camera)
+	var h_pivot = tactical_camera.get_node_or_null("HorizontalPivot")
+	var v_pivot = tactical_camera.get_node_or_null("HorizontalPivot/VerticalPivot")
 
-	# Rotate camera to face the swiped direction (like right stick on gamepad)
-	if tactical_camera and tactical_camera.has_method("snap_to_grid_direction"):
-		Log.system("[TouchControls] Rotating camera to direction %v" % [direction])
-		tactical_camera.snap_to_grid_direction(direction)
-	else:
-		Log.warn(Log.Category.SYSTEM, "TouchControls: Cannot rotate camera - tactical_camera not available")
+	if not h_pivot or not v_pivot:
+		Log.warn(Log.Category.SYSTEM, "TouchControls: Camera pivots not found")
+		return
 
-func _angle_to_direction(angle: float) -> Vector2i:
-	"""Convert angle (radians) to 8-directional grid vector"""
-	# Normalize angle to 0-2π
-	while angle < 0:
-		angle += TAU
-	while angle >= TAU:
-		angle -= TAU
+	# Horizontal rotation (yaw) - drag X axis
+	h_pivot.rotation_degrees.y -= drag_delta.x * TOUCH_SENSITIVITY
+	h_pivot.rotation_degrees.y = fmod(h_pivot.rotation_degrees.y, 360.0)
 
-	# Map to 8 directions (45° segments)
-	# 0° = right, 90° = up, 180° = left, 270° = down
-	var segment := int(round(angle / (TAU / 8.0))) % 8
+	# Vertical rotation (pitch) - drag Y axis
+	v_pivot.rotation_degrees.x -= drag_delta.y * TOUCH_SENSITIVITY
+	v_pivot.rotation_degrees.x = clamp(v_pivot.rotation_degrees.x, tactical_camera.pitch_min, tactical_camera.pitch_max)
 
-	match segment:
-		0:  # Right (0°)
-			return Vector2i(1, 0)
-		1:  # Up-Right (45°)
-			return Vector2i(1, -1)
-		2:  # Up (90°)
-			return Vector2i(0, -1)
-		3:  # Up-Left (135°)
-			return Vector2i(-1, -1)
-		4:  # Left (180°)
-			return Vector2i(-1, 0)
-		5:  # Down-Left (225°)
-			return Vector2i(-1, 1)
-		6:  # Down (270°)
-			return Vector2i(0, 1)
-		7:  # Down-Right (315°)
-			return Vector2i(1, 1)
-		_:
-			return Vector2i.ZERO
+	Log.camera("Touch camera rotation - yaw: %.1f°, pitch: %.1f°" % [
+		h_pivot.rotation_degrees.y, v_pivot.rotation_degrees.x
+	])
 
 func _on_confirm_button_down() -> void:
 	"""Handle confirm button down (RT pressed)"""

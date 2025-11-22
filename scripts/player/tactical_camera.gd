@@ -139,14 +139,6 @@ func zoom(delta: float) -> void:
 		var target_pitch = lerp(pitch_near, pitch_far, zoom_ratio)
 		v_pivot.rotation_degrees.x = target_pitch
 
-func snap_rotate(direction: int) -> void:
-	"""Rotate camera to next 45° snap position (for keyboard Q/E)"""
-	# Snap to nearest 45° and rotate by 45°
-	var current_rotation = h_pivot.rotation_degrees.y
-	var snapped_angle = round(current_rotation / 45.0) * 45.0
-	h_pivot.rotation_degrees.y = snapped_angle + (direction * 45.0)
-	h_pivot.rotation_degrees.y = fmod(h_pivot.rotation_degrees.y, 360.0)
-
 # ============================================================================
 # UTILITY
 # ============================================================================

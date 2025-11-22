@@ -44,7 +44,7 @@ offset_right = 50.0
 offset_bottom = 14.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "swipe to aim"
+text = "drag to aim"
 horizontal_alignment = 1
 vertical_alignment = 1
 
