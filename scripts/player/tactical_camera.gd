@@ -23,8 +23,8 @@ extends Node3D
 @export var zoom_max: float = 25.0
 
 # Zoom-based pitch adjustment
-@export var pitch_min: float = -80.0    # Look down limit
-@export var pitch_max: float = -10.0    # Look up limit (negative = looking down)
+@export var pitch_min: float = -90.0    # Look down limit
+@export var pitch_max: float = -1.0     # Look up limit (negative = looking down)
 @export var pitch_near: float = -30.0   # Default when zoomed in
 @export var pitch_far: float = -60.0    # Default when zoomed out
 

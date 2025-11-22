@@ -116,8 +116,8 @@ rotation_deadzone = 0.3
 zoom_speed = 2.0
 zoom_min = 8.0
 zoom_max = 25.0
-pitch_min = -80.0
-pitch_max = -10.0
+pitch_min = -90.0
+pitch_max = -1.0
 pitch_near = -30.0
 pitch_far = -60.0
 
