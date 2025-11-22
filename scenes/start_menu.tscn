@@ -58,9 +58,8 @@ text = "CLICK TO START"
 [node name="ControlsLabel" type="Label" parent="CenterContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_font_sizes/font_size = 14
-text = "Controller: RT/A to move, LT to look
-Mouse+Keyboard: Click to move, RMB to look
-ESC to release cursor"
+text = "Controller: RS aim camera, RT to move, LT to look, START to pause
+Mouse+Keyboard: Click to move, RMB to look, ESC to pause"
 horizontal_alignment = 1
 
 [node name="WebNotice" type="Label" parent="CenterContainer"]
