@@ -307,13 +307,19 @@ func _unhighlight_label(label: Label) -> void:
 		tooltip_panel.visible = false
 
 func _on_pause_toggled(is_paused: bool) -> void:
-	"""Clear highlights when unpausing"""
-	if not is_paused:
-		# Clear any highlights and focus when returning to gameplay
+	"""Enable/disable focus and clear highlights based on pause state"""
+	if is_paused:
+		# Enable focus for gamepad navigation when paused
+		for label in tooltip_labels:
+			if label:
+				label.focus_mode = Control.FOCUS_ALL
+	else:
+		# Disable focus and clear highlights when unpausing
 		for label in tooltip_labels:
 			if label:
 				if label.has_focus():
 					label.release_focus()
+				label.focus_mode = Control.FOCUS_NONE
 				_unhighlight_label(label)
 
 # ============================================================================

@@ -281,13 +281,19 @@ func _update_touch_buttons() -> void:
 	var touch_confirm_just_pressed = _touch_confirm_pressed and not _touch_confirm_pressed_last_frame
 	if touch_confirm_just_pressed:
 		_actions_this_frame["move_confirm"] = true
-		Log.input("Touch confirm action synthesized")
+		Log.input("Touch confirm action synthesized (current: %s, last: %s)" % [_touch_confirm_pressed, _touch_confirm_pressed_last_frame])
 
 	# Look button (LT equivalent for examine mode) - detect "just pressed" transition
 	var touch_look_just_pressed = _touch_look_pressed and not _touch_look_pressed_last_frame
 	if touch_look_just_pressed:
 		_actions_this_frame["examine_mode"] = true
-		Log.input("Touch look action synthesized")
+		Log.input("Touch look action synthesized (current: %s, last: %s)" % [_touch_look_pressed, _touch_look_pressed_last_frame])
+
+	# Debug: Log state changes
+	if _touch_confirm_pressed != _touch_confirm_pressed_last_frame:
+		Log.input("Touch confirm state changed: last=%s, current=%s" % [_touch_confirm_pressed_last_frame, _touch_confirm_pressed])
+	if _touch_look_pressed != _touch_look_pressed_last_frame:
+		Log.input("Touch look state changed: last=%s, current=%s" % [_touch_look_pressed_last_frame, _touch_look_pressed])
 
 	# Update last frame state for next frame
 	_touch_confirm_pressed_last_frame = _touch_confirm_pressed
