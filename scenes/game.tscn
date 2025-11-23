@@ -157,7 +157,7 @@ theme_override_constants/separation = 15
 
 [node name="CharacterSheet" type="VBoxContainer" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer"]
 layout_mode = 2
-size_flags_vertical = 3
+size_flags_vertical = 0
 
 [node name="Title" type="Label" parent="MarginContainer/HBoxContainer/RightSide/MarginContainer/VBoxContainer/CharacterSheet"]
 layout_mode = 2

@@ -266,6 +266,10 @@ func _switch_to_portrait() -> void:
 	if stats_panel and stats_panel.has_method("set_layout_mode"):
 		stats_panel.set_layout_mode(1)  # 1 = HORIZONTAL (can't reference enum from here)
 
+	# Switch core inventory to horizontal layout
+	if core_inventory and core_inventory.has_method("set_layout_mode"):
+		core_inventory.set_layout_mode(1)  # 1 = HORIZONTAL
+
 	# Reposition action preview to top-right
 	if action_preview_ui and action_preview_ui.has_method("set_portrait_mode"):
 		action_preview_ui.set_portrait_mode(true)
@@ -361,6 +365,10 @@ func _switch_to_landscape() -> void:
 	# Switch stats panel back to vertical layout
 	if stats_panel and stats_panel.has_method("set_layout_mode"):
 		stats_panel.set_layout_mode(0)  # 0 = VERTICAL
+
+	# Switch core inventory back to vertical layout
+	if core_inventory and core_inventory.has_method("set_layout_mode"):
+		core_inventory.set_layout_mode(0)  # 0 = VERTICAL
 
 	# Restore action preview to bottom-right
 	if action_preview_ui and action_preview_ui.has_method("set_portrait_mode"):

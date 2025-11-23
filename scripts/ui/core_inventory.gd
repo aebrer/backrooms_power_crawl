@@ -11,13 +11,26 @@ Each slot displays:
 - [EMPTY] if no item
 - Item Name (Lvl X) [ON/OFF] if item equipped
 
+Supports two layout modes:
+- VERTICAL: Pools stacked vertically (landscape mode)
+- HORIZONTAL: Pools arranged side-by-side (portrait mode)
+
 Tooltips show full clearance-based item descriptions.
 Updates in real-time as items change.
 """
 
+enum LayoutMode { VERTICAL, HORIZONTAL }
+var current_layout: LayoutMode = LayoutMode.VERTICAL
+
 var player: Player3D = null
 var tooltip_slots: Array[Control] = []
 var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
+
+# Pool container references (VBoxContainer)
+@onready var body_pool_section: VBoxContainer = $BodyPool
+@onready var mind_pool_section: VBoxContainer = $MindPool
+@onready var null_pool_section: VBoxContainer = $NullPool
+@onready var light_pool_section: VBoxContainer = $LightPool
 
 # Slot container references (HBoxContainer)
 @onready var body_slot_0: HBoxContainer = %BodySlot0
@@ -42,9 +55,6 @@ func _ready():
 	# Wait for player to be set by Game node
 	await get_tree().process_frame
 
-	# Get tooltip overlay from game root (shared with StatsPanel)
-	_get_tooltip_overlay()
-
 	# Setup hover/focus highlighting for all labels
 	_setup_label_highlights()
 
@@ -59,7 +69,10 @@ func _ready():
 		Log.warn(Log.Category.SYSTEM, "CoreInventory: No player found")
 
 func _get_tooltip_overlay() -> void:
-	"""Get the shared tooltip overlay (created by StatsPanel)"""
+	"""Get the shared tooltip overlay (created by StatsPanel) - called on-demand"""
+	if tooltip_panel:
+		return  # Already found
+
 	var game_root = get_tree().root.get_node_or_null("Game")
 	if not game_root:
 		return
@@ -291,17 +304,26 @@ func _highlight_slot(slot: Control) -> void:
 	style.content_margin_top = 2
 	style.content_margin_bottom = 2
 
+	# Apply to the Label (HBoxContainer doesn't draw backgrounds)
 	# Override BOTH normal and focus to disable Godot's built-in focus indicator
-	slot.add_theme_stylebox_override("panel", style)
+	label.add_theme_stylebox_override("normal", style)
+	label.add_theme_stylebox_override("focus", style)
 
-	# Show tooltip in overlay
+	# Get tooltip overlay on-demand (handles timing issues with StatsPanel)
+	_get_tooltip_overlay()
+
+	# Show tooltip in overlay (shared with StatsPanel)
 	if tooltip_panel and tooltip_label and slot in tooltip_texts:
 		tooltip_label.text = tooltip_texts[slot]
 		tooltip_panel.visible = true
 
 func _unhighlight_slot(slot: Control) -> void:
 	"""Remove visual highlight and hide tooltip"""
-	slot.remove_theme_stylebox_override("panel")
+	# Remove styleboxes from the Label child
+	var label = slot.get_node_or_null("Label")
+	if label:
+		label.remove_theme_stylebox_override("normal")
+		label.remove_theme_stylebox_override("focus")
 
 	# Hide tooltip overlay
 	if tooltip_panel:
@@ -324,3 +346,109 @@ func _on_pause_toggled(is_paused: bool) -> void:
 				slot.focus_mode = Control.FOCUS_NONE
 				slot.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let mouse pass through!
 				_unhighlight_slot(slot)
+
+# ============================================================================
+# LAYOUT MANAGEMENT
+# ============================================================================
+
+func set_layout_mode(mode: LayoutMode) -> void:
+	"""Switch between vertical (landscape) and horizontal (portrait) layouts"""
+	if current_layout == mode:
+		return  # Already in this mode
+
+	current_layout = mode
+
+	match mode:
+		LayoutMode.VERTICAL:
+			_apply_vertical_layout()
+		LayoutMode.HORIZONTAL:
+			_apply_horizontal_layout()
+
+func _apply_vertical_layout() -> void:
+	"""Arrange pool sections vertically (landscape mode)"""
+	# This is the default scene structure, so we just need to ensure
+	# pool sections are children of this VBoxContainer in the correct order
+
+	# Get spacer nodes
+	var spacer1 = get_node_or_null("Spacer1")
+	var spacer2 = get_node_or_null("Spacer2")
+	var spacer3 = get_node_or_null("Spacer3")
+	var spacer4 = get_node_or_null("Spacer4")
+
+	# Ensure pool sections are direct children of this VBoxContainer
+	_ensure_child(body_pool_section, 2)   # After title + spacer1
+	_ensure_child(spacer2, 3) if spacer2 else null
+	_ensure_child(mind_pool_section, 4)
+	_ensure_child(spacer3, 5) if spacer3 else null
+	_ensure_child(null_pool_section, 6)
+	_ensure_child(spacer4, 7) if spacer4 else null
+	_ensure_child(light_pool_section, 8)
+
+	# Show spacers in vertical mode
+	if spacer1: spacer1.visible = true
+	if spacer2: spacer2.visible = true
+	if spacer3: spacer3.visible = true
+	if spacer4: spacer4.visible = true
+
+func _apply_horizontal_layout() -> void:
+	"""Arrange pool sections horizontally (portrait mode)"""
+	# Hide spacers (don't make sense horizontally)
+	var spacer1 = get_node_or_null("Spacer1")
+	var spacer2 = get_node_or_null("Spacer2")
+	var spacer3 = get_node_or_null("Spacer3")
+	var spacer4 = get_node_or_null("Spacer4")
+
+	if spacer1: spacer1.visible = false
+	if spacer2: spacer2.visible = false
+	if spacer3: spacer3.visible = false
+	if spacer4: spacer4.visible = false
+
+	# Create HBoxContainer if it doesn't exist
+	var hbox = get_node_or_null("HorizontalContainer")
+	if not hbox:
+		hbox = HBoxContainer.new()
+		hbox.name = "HorizontalContainer"
+		hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		hbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		hbox.add_theme_constant_override("separation", 10)
+		add_child(hbox)
+
+	# Move pool sections to HBoxContainer
+	_ensure_child_of(body_pool_section, hbox, 0)
+	_ensure_child_of(mind_pool_section, hbox, 1)
+	_ensure_child_of(null_pool_section, hbox, 2)
+	_ensure_child_of(light_pool_section, hbox, 3)
+
+	# Make pool sections expand to fill available width
+	body_pool_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mind_pool_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	null_pool_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	light_pool_section.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+func _ensure_child(node: Node, index: int) -> void:
+	"""Ensure node is a child of this container at the specified index"""
+	if not node:
+		return
+
+	# Remove from current parent if different
+	if node.get_parent() != self:
+		if node.get_parent():
+			node.get_parent().remove_child(node)
+		add_child(node)
+
+	# Move to correct position
+	move_child(node, index)
+
+func _ensure_child_of(node: Node, parent: Node, index: int) -> void:
+	"""Ensure node is a child of the specified parent at the specified index"""
+	if not node or not parent:
+		return
+
+	# Remove from current parent if different
+	if node.get_parent() != parent:
+		if node.get_parent():
+			node.get_parent().remove_child(node)
+		parent.add_child(node)
+
+	# Move to correct position
+	parent.move_child(node, index)
