@@ -246,8 +246,6 @@ func _update_triggers() -> void:
 		_actions_this_frame["move_confirm"] = true
 		# Input event logging handled by _log_input_event()
 
-	# LT (left trigger) currently unmapped
-	# Future: Could map to examine_mode or other actions
 
 func _update_mouse_buttons() -> void:
 	"""Track mouse button state for input parity (left click = RT)"""
