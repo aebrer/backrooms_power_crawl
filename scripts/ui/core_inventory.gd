@@ -336,45 +336,53 @@ func _on_slot_input(event: InputEvent, slot: Control) -> void:
 		return
 
 	var item = pool.items[slot_index]
-	if not item:
-		return  # Empty slot, nothing to do
+
+	# Allow interaction with empty slots only when reordering (for dropping)
+	if not item and not reordering_slot:
+		return  # Empty slot and not reordering, nothing to do
 
 	# Handle mouse input
 	if event is InputEventMouseButton and event.pressed:
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			# LMB = toggle (if not reordering)
-			if not reordering_slot:
+			# LMB = drop if reordering, otherwise toggle
+			if reordering_slot:
+				if reordering_slot == slot:
+					_cancel_reorder()  # Click same slot = cancel
+				else:
+					_drop_reorder(slot, pool_type, slot_index)
+			elif item:  # Only toggle if slot has an item
 				pool.toggle_item(slot_index)
 				Log.system("Toggled item in slot %d" % slot_index)
 			get_viewport().set_input_as_handled()
 
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
-			# RMB = pick up for reorder / drop
-			if not reordering_slot:
+			# RMB = pick up for reorder (or cancel if already reordering)
+			if not reordering_slot and item:  # Only start reorder if slot has an item
 				_start_reorder(slot, pool_type, slot_index)
-			elif reordering_slot == slot:
-				_cancel_reorder()
-			else:
-				_drop_reorder(slot, pool_type, slot_index)
+			elif reordering_slot:
+				_cancel_reorder()  # RMB while reordering = cancel
 			get_viewport().set_input_as_handled()
 
 	# Handle gamepad input
 	elif event is InputEventJoypadButton and event.pressed:
 		if event.button_index == JOY_BUTTON_A:
-			# A button = toggle (if not reordering)
-			if not reordering_slot:
+			# A button = drop if reordering, otherwise toggle
+			if reordering_slot:
+				if reordering_slot == slot:
+					_cancel_reorder()  # Click same slot = cancel
+				else:
+					_drop_reorder(slot, pool_type, slot_index)
+			elif item:  # Only toggle if slot has an item
 				pool.toggle_item(slot_index)
 				Log.system("Toggled item in slot %d" % slot_index)
 			get_viewport().set_input_as_handled()
 
 		elif event.button_index == JOY_BUTTON_X:
-			# X button = pick up for reorder / drop
-			if not reordering_slot:
+			# X button = pick up for reorder (or cancel if already reordering)
+			if not reordering_slot and item:  # Only start reorder if slot has an item
 				_start_reorder(slot, pool_type, slot_index)
-			elif reordering_slot == slot:
-				_cancel_reorder()
-			else:
-				_drop_reorder(slot, pool_type, slot_index)
+			elif reordering_slot:
+				_cancel_reorder()  # X while reordering = cancel
 			get_viewport().set_input_as_handled()
 
 func _highlight_slot(slot: Control) -> void:
@@ -383,10 +391,22 @@ func _highlight_slot(slot: Control) -> void:
 	if not label:
 		return
 
+	# Don't change highlight if this is the reordering slot (preserve cyan)
+	if slot == reordering_slot:
+		return
+
 	# Create a StyleBoxFlat for the background
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(1.0, 1.0, 0.5, 0.3)  # Yellow transparent
-	style.border_color = Color(1.0, 1.0, 0.5, 0.8)  # Yellow border
+
+	# Use green highlight if we're in reorder mode (valid drop target)
+	# Use yellow highlight otherwise (normal hover)
+	if reordering_slot:
+		style.bg_color = Color(0.5, 1.0, 0.5, 0.3)  # Green transparent
+		style.border_color = Color(0.5, 1.0, 0.5, 0.8)  # Green border
+	else:
+		style.bg_color = Color(1.0, 1.0, 0.5, 0.3)  # Yellow transparent
+		style.border_color = Color(1.0, 1.0, 0.5, 0.8)  # Yellow border
+
 	style.set_border_width_all(2)
 	style.content_margin_left = 4
 	style.content_margin_right = 4
@@ -411,6 +431,10 @@ func _highlight_slot(slot: Control) -> void:
 
 func _unhighlight_slot(slot: Control) -> void:
 	"""Remove visual highlight and hide examination panel"""
+	# Don't remove highlight if this slot is currently being reordered
+	if slot == reordering_slot:
+		return
+
 	# Remove styleboxes from the Label child
 	var label = slot.get_node_or_null("Label")
 	if label:
@@ -460,7 +484,7 @@ func _drop_reorder(target_slot: Control, target_pool_type: Item.PoolType, target
 		return
 
 	# Reorder items in pool
-	pool.reorder_items(reordering_slot_index, target_slot_index)
+	pool.reorder(reordering_slot_index, target_slot_index)
 	Log.system("Reordered item from slot %d to slot %d in %s pool" % [
 		reordering_slot_index,
 		target_slot_index,
