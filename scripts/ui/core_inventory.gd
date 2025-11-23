@@ -26,6 +26,11 @@ var player: Player3D = null
 var tooltip_slots: Array[Control] = []
 var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
 
+# Reorder state (persistent across focus changes)
+var reordering_slot: Control = null
+var reordering_pool_type: Item.PoolType
+var reordering_slot_index: int = -1
+
 # Pool container references (VBoxContainer)
 @onready var body_pool_section: VBoxContainer = $BodyPool
 @onready var mind_pool_section: VBoxContainer = $MindPool
@@ -66,6 +71,17 @@ func _ready():
 		_update_all_slots()
 	else:
 		Log.warn(Log.Category.SYSTEM, "CoreInventory: No player found")
+
+func _unhandled_input(event: InputEvent) -> void:
+	"""Handle B button to cancel reordering"""
+	if not PauseManager or not PauseManager.is_paused():
+		return
+
+	# B button or ESC = cancel reorder
+	if event.is_action_pressed("ui_cancel"):  # B button or ESC
+		if reordering_slot:
+			_cancel_reorder()
+			get_viewport().set_input_as_handled()
 
 func _get_examination_panel() -> void:
 	"""Get the examination panel reference - called on-demand"""
@@ -290,7 +306,7 @@ func _on_slot_unfocused(slot: Control) -> void:
 	_unhighlight_slot(slot)
 
 func _on_slot_input(event: InputEvent, slot: Control) -> void:
-	"""Handle input events for slot (LMB/RMB/A/X to toggle)"""
+	"""Handle input events for slot (A/LMB=toggle, X/RMB=reorder)"""
 	# Only handle input when paused
 	if not PauseManager or not PauseManager.is_paused():
 		return
@@ -325,18 +341,40 @@ func _on_slot_input(event: InputEvent, slot: Control) -> void:
 
 	# Handle mouse input
 	if event is InputEventMouseButton and event.pressed:
-		# LMB or RMB = toggle
-		if event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT:
-			pool.toggle_item(slot_index)
-			Log.system("Toggled item in slot %d" % slot_index)
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			# LMB = toggle (if not reordering)
+			if not reordering_slot:
+				pool.toggle_item(slot_index)
+				Log.system("Toggled item in slot %d" % slot_index)
+			get_viewport().set_input_as_handled()
+
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			# RMB = pick up for reorder / drop
+			if not reordering_slot:
+				_start_reorder(slot, pool_type, slot_index)
+			elif reordering_slot == slot:
+				_cancel_reorder()
+			else:
+				_drop_reorder(slot, pool_type, slot_index)
 			get_viewport().set_input_as_handled()
 
 	# Handle gamepad input
 	elif event is InputEventJoypadButton and event.pressed:
-		# A button or X button = toggle
-		if event.button_index == JOY_BUTTON_A or event.button_index == JOY_BUTTON_X:
-			pool.toggle_item(slot_index)
-			Log.system("Toggled item in slot %d" % slot_index)
+		if event.button_index == JOY_BUTTON_A:
+			# A button = toggle (if not reordering)
+			if not reordering_slot:
+				pool.toggle_item(slot_index)
+				Log.system("Toggled item in slot %d" % slot_index)
+			get_viewport().set_input_as_handled()
+
+		elif event.button_index == JOY_BUTTON_X:
+			# X button = pick up for reorder / drop
+			if not reordering_slot:
+				_start_reorder(slot, pool_type, slot_index)
+			elif reordering_slot == slot:
+				_cancel_reorder()
+			else:
+				_drop_reorder(slot, pool_type, slot_index)
 			get_viewport().set_input_as_handled()
 
 func _highlight_slot(slot: Control) -> void:
@@ -383,6 +421,67 @@ func _unhighlight_slot(slot: Control) -> void:
 	if examination_panel:
 		examination_panel.hide_panel()
 
+func _start_reorder(slot: Control, pool_type: Item.PoolType, slot_index: int) -> void:
+	"""Pick up item for reordering"""
+	reordering_slot = slot
+	reordering_pool_type = pool_type
+	reordering_slot_index = slot_index
+
+	# Visual feedback: cyan highlight to show item is being moved
+	var label = slot.get_node_or_null("Label")
+	if label:
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.0, 1.0, 1.0, 0.3)  # Cyan transparent
+		style.border_color = Color(0.0, 1.0, 1.0, 0.8)  # Cyan border
+		style.set_border_width_all(2)
+		style.content_margin_left = 4
+		style.content_margin_right = 4
+		style.content_margin_top = 2
+		style.content_margin_bottom = 2
+		label.add_theme_stylebox_override("normal", style)
+		label.add_theme_stylebox_override("focus", style)
+
+	Log.system("Picked up item from slot %d in %s pool (press X/RMB to drop, B to cancel)" % [slot_index, Item.PoolType.keys()[pool_type]])
+
+func _drop_reorder(target_slot: Control, target_pool_type: Item.PoolType, target_slot_index: int) -> void:
+	"""Drop item at new position (reorder within same pool)"""
+	if not reordering_slot:
+		return
+
+	# Only allow reordering within the same pool
+	if reordering_pool_type != target_pool_type:
+		Log.warn(Log.Category.SYSTEM, "Cannot reorder items between different pools")
+		_cancel_reorder()
+		return
+
+	var pool = _get_pool(reordering_pool_type)
+	if not pool:
+		_cancel_reorder()
+		return
+
+	# Reorder items in pool
+	pool.reorder_items(reordering_slot_index, target_slot_index)
+	Log.system("Reordered item from slot %d to slot %d in %s pool" % [
+		reordering_slot_index,
+		target_slot_index,
+		Item.PoolType.keys()[reordering_pool_type]
+	])
+
+	_cancel_reorder()
+
+func _cancel_reorder() -> void:
+	"""Cancel current reorder operation"""
+	if reordering_slot:
+		# Remove reorder highlight
+		var label = reordering_slot.get_node_or_null("Label")
+		if label:
+			label.remove_theme_stylebox_override("normal")
+			label.remove_theme_stylebox_override("focus")
+		Log.system("Cancelled reorder operation")
+
+	reordering_slot = null
+	reordering_slot_index = -1
+
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Enable/disable focus and clear highlights based on pause state"""
 	if is_paused:
@@ -392,6 +491,10 @@ func _on_pause_toggled(is_paused: bool) -> void:
 				slot.focus_mode = Control.FOCUS_ALL
 				slot.mouse_filter = Control.MOUSE_FILTER_STOP  # Allow mouse hover
 	else:
+		# Cancel any ongoing reorder when unpausing
+		if reordering_slot:
+			_cancel_reorder()
+
 		# Disable focus and mouse interaction when unpausing
 		for slot in tooltip_slots:
 			if slot:
