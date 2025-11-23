@@ -26,11 +26,6 @@ var player: Player3D = null
 var tooltip_slots: Array[Control] = []
 var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
 
-# Drag-and-drop state
-var dragging_slot: Control = null
-var dragging_pool_type: Item.PoolType
-var dragging_slot_index: int = -1
-
 # Pool container references (VBoxContainer)
 @onready var body_pool_section: VBoxContainer = $BodyPool
 @onready var mind_pool_section: VBoxContainer = $MindPool
@@ -283,10 +278,7 @@ func _on_slot_hovered(slot: Control) -> void:
 	_highlight_slot(slot)
 
 func _on_slot_unhovered(slot: Control) -> void:
-	"""Remove highlight when mouse leaves (unless dragging)"""
-	# Don't unhighlight if this is the slot being dragged
-	if dragging_slot == slot:
-		return
+	"""Remove highlight when mouse leaves"""
 	_unhighlight_slot(slot)
 
 func _on_slot_focused(slot: Control) -> void:
@@ -298,7 +290,11 @@ func _on_slot_unfocused(slot: Control) -> void:
 	_unhighlight_slot(slot)
 
 func _on_slot_input(event: InputEvent, slot: Control) -> void:
-	"""Handle input events for slot (click to toggle/drag, X to pick up, A to toggle/drop)"""
+	"""Handle input events for slot (LMB/RMB/A/X to toggle)"""
+	# Only handle input when paused
+	if not PauseManager or not PauseManager.is_paused():
+		return
+
 	# Get slot index and pool type
 	var slot_index = -1
 	var pool_type: Item.PoolType
@@ -324,51 +320,24 @@ func _on_slot_input(event: InputEvent, slot: Control) -> void:
 		return
 
 	var item = pool.items[slot_index]
+	if not item:
+		return  # Empty slot, nothing to do
 
 	# Handle mouse input
-	if event is InputEventMouseButton:
-		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
-			if not item:
-				return  # Empty slot, nothing to do
-
-			# If not dragging, start drag
-			if not dragging_slot:
-				_start_drag(slot, pool_type, slot_index)
-			# If dragging, drop here
-			elif dragging_slot != slot:
-				_drop_drag(slot, pool_type, slot_index)
-			# If clicking same slot, cancel drag
-			else:
-				_cancel_drag()
-
+	if event is InputEventMouseButton and event.pressed:
+		# LMB or RMB = toggle
+		if event.button_index == MOUSE_BUTTON_LEFT or event.button_index == MOUSE_BUTTON_RIGHT:
+			pool.toggle_item(slot_index)
+			Log.system("Toggled item in slot %d" % slot_index)
 			get_viewport().set_input_as_handled()
 
 	# Handle gamepad input
-	elif event is InputEventJoypadButton:
-		if event.pressed:
-			# X button (button 2) - pick up / cancel drag
-			if event.button_index == JOY_BUTTON_X:
-				if not item:
-					return  # Empty slot, nothing to pick up
-
-				if not dragging_slot:
-					_start_drag(slot, pool_type, slot_index)
-				else:
-					_cancel_drag()
-				get_viewport().set_input_as_handled()
-
-			# A button (button 0) - toggle or drop
-			elif event.button_index == JOY_BUTTON_A:
-				if not item:
-					return  # Empty slot, nothing to do
-
-				# If dragging, drop here
-				if dragging_slot and dragging_slot != slot:
-					_drop_drag(slot, pool_type, slot_index)
-				# If not dragging, toggle
-				elif not dragging_slot:
-					pool.toggle_item(slot_index)
-				get_viewport().set_input_as_handled()
+	elif event is InputEventJoypadButton and event.pressed:
+		# A button or X button = toggle
+		if event.button_index == JOY_BUTTON_A or event.button_index == JOY_BUTTON_X:
+			pool.toggle_item(slot_index)
+			Log.system("Toggled item in slot %d" % slot_index)
+			get_viewport().set_input_as_handled()
 
 func _highlight_slot(slot: Control) -> void:
 	"""Apply visual highlight and show examination panel with item info"""
@@ -390,10 +359,6 @@ func _highlight_slot(slot: Control) -> void:
 	# Override BOTH normal and focus to disable Godot's built-in focus indicator
 	label.add_theme_stylebox_override("normal", style)
 	label.add_theme_stylebox_override("focus", style)
-
-	# Don't show examination panel while dragging (distracting)
-	if dragging_slot:
-		return
 
 	# Get examination panel and show item description if slot has item
 	_get_examination_panel()
@@ -417,64 +382,6 @@ func _unhighlight_slot(slot: Control) -> void:
 	# Hide examination panel
 	if examination_panel:
 		examination_panel.hide_panel()
-
-func _start_drag(slot: Control, pool_type: Item.PoolType, slot_index: int) -> void:
-	"""Start dragging an item"""
-	dragging_slot = slot
-	dragging_pool_type = pool_type
-	dragging_slot_index = slot_index
-
-	# Visual feedback: add cyan highlight to show dragging
-	var label = slot.get_node_or_null("Label")
-	if label:
-		var style = StyleBoxFlat.new()
-		style.bg_color = Color(0.0, 1.0, 1.0, 0.3)  # Cyan transparent
-		style.border_color = Color(0.0, 1.0, 1.0, 0.8)  # Cyan border
-		style.set_border_width_all(2)
-		style.content_margin_left = 4
-		style.content_margin_right = 4
-		style.content_margin_top = 2
-		style.content_margin_bottom = 2
-		label.add_theme_stylebox_override("normal", style)
-		label.add_theme_stylebox_override("focus", style)
-
-	Log.system("Started dragging item from slot %d in %s pool" % [slot_index, Item.PoolType.keys()[pool_type]])
-
-func _drop_drag(target_slot: Control, target_pool_type: Item.PoolType, target_slot_index: int) -> void:
-	"""Drop dragged item onto target slot (reorder within same pool)"""
-	if not dragging_slot:
-		return
-
-	# Only allow reordering within the same pool
-	if dragging_pool_type != target_pool_type:
-		Log.warn(Log.Category.SYSTEM, "Cannot reorder items between different pools")
-		_cancel_drag()
-		return
-
-	var pool = _get_pool(dragging_pool_type)
-	if not pool:
-		_cancel_drag()
-		return
-
-	# Reorder items in pool
-	pool.reorder_items(dragging_slot_index, target_slot_index)
-	Log.system("Reordered item from slot %d to slot %d in %s pool" % [
-		dragging_slot_index,
-		target_slot_index,
-		Item.PoolType.keys()[dragging_pool_type]
-	])
-
-	_cancel_drag()
-
-func _cancel_drag() -> void:
-	"""Cancel current drag operation"""
-	if dragging_slot:
-		# Remove drag highlight
-		_unhighlight_slot(dragging_slot)
-		Log.system("Cancelled drag operation")
-
-	dragging_slot = null
-	dragging_slot_index = -1
 
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Enable/disable focus and clear highlights based on pause state"""

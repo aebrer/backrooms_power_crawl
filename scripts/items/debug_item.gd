@@ -2,20 +2,20 @@ class_name DebugItem extends Item
 """DEBUG_ITEM - Experimental NULL item for testing.
 
 Properties (scale with level N):
-- Every turn: Deal N damage to EITHER HP or Sanity (random 50/50)
+- Every turn: Consume N mana, deal N damage to EITHER HP or Sanity (random 50/50)
 - Even turns: Also heal N×2 to EITHER HP or Sanity (random 50/50, independent)
 - Passive: +5×N max Mana (applied via modifier)
 
 Example Scaling:
-- Level 1: Every turn -1 HP or -1 SAN, Even +2 HP or +2 SAN, +5 Mana
-- Level 2: Every turn -2 HP or -2 SAN, Even +4 HP or +4 SAN, +10 Mana
-- Level 3: Every turn -3 HP or -3 SAN, Even +6 HP or +6 SAN, +15 Mana
+- Level 1: -1 Mana, -1 HP or -1 SAN, Even +2 HP or +2 SAN, +5 Mana
+- Level 2: -2 Mana, -2 HP or -2 SAN, Even +4 HP or +4 SAN, +10 Mana
+- Level 3: -3 Mana, -3 HP or -3 SAN, Even +6 HP or +6 SAN, +15 Mana
 
 Design Intent:
 - High-risk, high-reward NULL item
 - Unlocks Mana pool for early testing
 - Unpredictable damage/healing (RNG test)
-- Tests self-damage and healing mechanics
+- Tests mana cost, self-damage, and healing mechanics
 """
 
 # ============================================================================
@@ -79,9 +79,15 @@ func on_unequip(player: Player3D) -> void:
 func on_turn(player: Player3D, turn_number: int) -> void:
 	"""Execute cyclic damage/healing pattern.
 
-	Every turn: Damage HP or Sanity (random)
+	Every turn: Consume N mana, damage HP or Sanity (random)
 	Even turns: Also heal HP or Sanity (random)
 	"""
+	# Check if we have enough mana
+	var mana_cost = float(level)
+	if not player.stats.consume_mana(mana_cost):
+		Log.player("DEBUG_ITEM: Not enough mana (need %.0f)" % mana_cost)
+		return  # Skip effects if no mana
+
 	# EVERY turn - randomly damage HP or Sanity
 	var damage = float(level)
 	var damage_hp = randf() < 0.5
@@ -133,6 +139,7 @@ func get_description(clearance_level: int) -> String:
 	# Clearance 3+: Add specific mechanics
 	if clearance_level >= 3:
 		desc += "\n\nMechanics:"
+		desc += "\n- Every turn: Consume %d Mana" % level
 		desc += "\n- Every turn: -%d HP or -%d Sanity (random)" % [level, level]
 		desc += "\n- Even turns: Also +%d HP or +%d Sanity (random)" % [level * 2, level * 2]
 		desc += "\n- Passive: +%d max Mana" % [MANA_PER_LEVEL * level]
