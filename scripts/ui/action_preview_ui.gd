@@ -114,11 +114,6 @@ func show_preview(actions: Array[Action], player) -> void:
 		hide_preview()
 		return
 
-	# If paused, show pause message instead of actions
-	if is_paused:
-		_show_pause_message()
-		return
-
 	# Clear previous action list
 	for child in action_list.get_children():
 		child.queue_free()

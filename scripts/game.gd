@@ -70,6 +70,7 @@ func _ready() -> void:
 	# Wire up core inventory to player
 	if core_inventory_panel:
 		core_inventory_panel.set_player(player)
+		core_inventory_panel.reorder_state_changed.connect(_on_inventory_reorder_state_changed)
 		Log.system("CoreInventory connected to player")
 
 	# Wire up minimap to grid and player
@@ -86,6 +87,11 @@ func _ready() -> void:
 				Log.system("Minimap connected to ChunkManager")
 		else:
 			Log.error(Log.Category.SYSTEM, "Failed to find Grid3D for minimap")
+
+	# Connect to PauseManager to handle action preview on pause/unpause
+	if PauseManager:
+		PauseManager.pause_toggled.connect(_on_pause_toggled)
+		Log.system("Game connected to PauseManager")
 
 	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "Game ready - 3D viewport: 640x480, UI: native resolution")
 
@@ -177,6 +183,41 @@ func _on_player_turn_completed() -> void:
 	"""Update minimap when player completes a turn"""
 	if minimap and player:
 		minimap.on_player_moved(player.grid_position)
+
+func _on_inventory_reorder_state_changed(is_reordering: bool) -> void:
+	"""Update action preview when entering/exiting reorder mode or when pausing"""
+	if not action_preview_ui or not PauseManager:
+		return
+
+	# Only show hints when paused
+	if not PauseManager.is_paused:
+		return
+
+	var hints: Array[Action] = []
+
+	if is_reordering:
+		# Reorder mode hints
+		hints.append(ControlHintAction.new("✋", "Hover over slot", "to select target"))
+		hints.append(ControlHintAction.new("🖱️", "LMB / A", "drop item"))
+		hints.append(ControlHintAction.new("🖱️", "RMB / X / B", "cancel"))
+	else:
+		# Normal pause mode hints
+		hints.append(ControlHintAction.new("🖱️", "Hover / Stick", "navigate inventory"))
+		hints.append(ControlHintAction.new("🖱️", "LMB / A", "toggle item ON/OFF"))
+		hints.append(ControlHintAction.new("🖱️", "RMB / X", "reorder item"))
+		hints.append(ControlHintAction.new("⏸️", "START / ESC", "unpause"))
+
+	action_preview_ui.show_preview(hints, player)
+
+func _on_pause_toggled(is_paused: bool) -> void:
+	"""Handle pause state changes - hide action preview when unpausing"""
+	if not action_preview_ui:
+		return
+
+	if not is_paused:
+		# When unpausing, hide the action preview
+		# The player state will re-emit action_preview_changed when appropriate
+		action_preview_ui.hide_preview()
 
 func _on_chunk_updates_completed() -> void:
 	"""Mark minimap dirty when chunks load/unload"""

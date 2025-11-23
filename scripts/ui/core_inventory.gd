@@ -19,6 +19,9 @@ Tooltips show full clearance-based item descriptions.
 Updates in real-time as items change.
 """
 
+## Emitted when reorder state changes (for updating action preview UI)
+signal reorder_state_changed(is_reordering: bool)
+
 enum LayoutMode { VERTICAL, HORIZONTAL }
 var current_layout: LayoutMode = LayoutMode.VERTICAL
 
@@ -377,6 +380,12 @@ func _on_slot_input(event: InputEvent, slot: Control) -> void:
 				Log.system("Toggled item in slot %d" % slot_index)
 			get_viewport().set_input_as_handled()
 
+		elif event.button_index == JOY_BUTTON_B:
+			# B button = always cancel reorder if active
+			if reordering_slot:
+				_cancel_reorder()
+				get_viewport().set_input_as_handled()
+
 		elif event.button_index == JOY_BUTTON_X:
 			# X button = pick up for reorder (or cancel if already reordering)
 			if not reordering_slot and item:  # Only start reorder if slot has an item
@@ -467,6 +476,9 @@ func _start_reorder(slot: Control, pool_type: Item.PoolType, slot_index: int) ->
 
 	Log.system("Picked up item from slot %d in %s pool (press X/RMB to drop, B to cancel)" % [slot_index, Item.PoolType.keys()[pool_type]])
 
+	# Emit signal to update action preview
+	reorder_state_changed.emit(true)
+
 func _drop_reorder(target_slot: Control, target_pool_type: Item.PoolType, target_slot_index: int) -> void:
 	"""Drop item at new position (reorder within same pool)"""
 	if not reordering_slot:
@@ -506,6 +518,9 @@ func _cancel_reorder() -> void:
 	reordering_slot = null
 	reordering_slot_index = -1
 
+	# Emit signal to update action preview
+	reorder_state_changed.emit(false)
+
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Enable/disable focus and clear highlights based on pause state"""
 	if is_paused:
@@ -514,6 +529,9 @@ func _on_pause_toggled(is_paused: bool) -> void:
 			if slot:
 				slot.focus_mode = Control.FOCUS_ALL
 				slot.mouse_filter = Control.MOUSE_FILTER_STOP  # Allow mouse hover
+
+		# Emit signal to show pause controls in action preview
+		reorder_state_changed.emit(false)
 	else:
 		# Cancel any ongoing reorder when unpausing
 		if reordering_slot:
