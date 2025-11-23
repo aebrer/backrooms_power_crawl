@@ -654,22 +654,14 @@ func reset_all_novelty():
 
 func examine_entity(entity_id: String):
     # Check if novel at current Clearance
-    var is_novel = not examined_this_clearance.has(entity_id)
-    examined_this_clearance[entity_id] = true
-
-    # Update discovery level (existing logic)
-    if not discovered_entities.has(entity_id):
-        discovered_entities[entity_id] = 0
-
-    var current_level = discovered_entities[entity_id]
-    if current_level < 3:
-        discovered_entities[entity_id] = current_level + 1
-        researcher_classification += 1
+    var key = "entity:%s" % entity_id
+    var is_novel = _is_novel(key)
 
     # Award EXP for novel examinations
     if is_novel:
+        _mark_examined(key)
         var base_exp = _get_examination_exp(entity_id)
-        emit_signal("entity_discovered", entity_id, base_exp)
+        emit_signal("discovery_made", "entity", entity_id, base_exp)
 
 func _get_examination_exp(entity_id: String) -> int:
     """Determine EXP based on entity type."""

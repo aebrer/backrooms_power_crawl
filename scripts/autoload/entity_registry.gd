@@ -7,7 +7,7 @@ extends Node
 ## - Registry of all entities in the game
 ##
 ## Usage:
-##   var info = EntityRegistry.get_info("skin_stealer", discovery_level, clearance)
+##   var info = EntityRegistry.get_info("skin_stealer", clearance)
 
 # ============================================================================
 # ENTITY REGISTRY
@@ -131,14 +131,14 @@ func _load_entities() -> void:
 # PUBLIC API
 # ============================================================================
 
-func get_info(entity_id: String, discovery_level: int, clearance: int) -> Dictionary:
-	"""Get entity information with progressive revelation"""
+func get_info(entity_id: String, clearance: int) -> Dictionary:
+	"""Get entity information with progressive revelation based on clearance"""
 	if not _entities.has(entity_id):
 		push_warning("[EntityRegistry] Entity not found: %s" % entity_id)
 		return _get_unknown_entity_info()
 
 	var entity: EntityInfo = _entities[entity_id]
-	return entity.get_info(discovery_level, clearance)
+	return entity.get_info(clearance)
 
 func has_entity(entity_id: String) -> bool:
 	"""Check if entity is registered"""

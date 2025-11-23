@@ -11,7 +11,6 @@ extends Area3D
 
 @export_group("Requirements")
 @export var requires_clearance: int = 0  ## Min clearance to examine (0 = no requirement)
-@export var requires_discovery: int = 0  ## Min discovery level to show info
 
 enum EntityType {
 	UNKNOWN,

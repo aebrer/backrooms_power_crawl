@@ -2,10 +2,8 @@ extends Node
 ## KnowledgeDB - Singleton for tracking player knowledge and discoveries
 ##
 ## This autoload handles:
-## - Discovery level tracking for entities (0-3 scale)
 ## - Novelty tracking per Clearance level (for EXP rewards)
 ## - Clearance level tracking (now managed by Player's StatBlock)
-## - Researcher classification (total research score)
 ## - Entity information retrieval with progressive revelation
 ##
 ## Usage:
@@ -31,22 +29,11 @@ signal discovery_made(subject_type: String, subject_id: String, exp_reward: int)
 # PLAYER KNOWLEDGE STATE
 # ============================================================================
 
-## Entity discovery levels: {entity_id: discovery_level}
-## Discovery 0 = Unknown (never seen)
-## Discovery 1 = Detected (first examination)
-## Discovery 2 = Identified (multiple examinations or combat)
-## Discovery 3 = Fully Known (complete understanding)
-var discovered_entities: Dictionary = {}
-
 ## Player clearance level (0-5)
 ## 0 = No clearance
 ## 1-4 = Progressive access
 ## 5 = Maximum clearance (Omega)
 var clearance_level: int = 0
-
-## Total research score (meta-progression tracking)
-## Increases with each discovery, examination, and objective completion
-var researcher_classification: int = 0
 
 ## Novelty tracking: {subject_key: [clearance_levels_examined_at]}
 ## Example: {"entity:skin_stealer": [0, 1], "item:flashlight": [0], "environment:wall": [0, 1, 2]}
@@ -65,24 +52,10 @@ func _ready() -> void:
 # ============================================================================
 
 func examine_entity(entity_id: String) -> void:
-	"""Called when player examines an entity - increases discovery level and awards EXP if novel"""
+	"""Called when player examines an entity - awards EXP if novel at current Clearance"""
 	if entity_id.is_empty():
 		push_warning("[KnowledgeDB] Cannot examine entity with empty ID")
 		return
-
-	var current_level = discovered_entities.get(entity_id, 0)
-
-	# Max discovery level is 3
-	if current_level < 3:
-		discovered_entities[entity_id] = current_level + 1
-		researcher_classification += 1
-		Log.system("Entity examined: %s (discovery level: %d -> %d)" % [
-			entity_id,
-			current_level,
-			current_level + 1
-		])
-	else:
-		Log.trace(Log.Category.SYSTEM, "Entity already fully known: %s (level 3)" % entity_id)
 
 	# Check for EXP reward (first time at current Clearance)
 	var key = "entity:%s" % entity_id
@@ -90,18 +63,14 @@ func examine_entity(entity_id: String) -> void:
 		_mark_examined(key)
 		var exp = _get_entity_exp()
 		emit_signal("discovery_made", "entity", entity_id, exp)
-		Log.system("Novel entity discovery! +%d EXP (Clearance %d)" % [exp, clearance_level])
-
-func get_discovery_level(entity_id: String) -> int:
-	"""Get current discovery level for entity (0-3)"""
-	return discovered_entities.get(entity_id, 0)
+		Log.system("Novel entity examined! %s +%d EXP (Clearance %d)" % [entity_id, exp, clearance_level])
+	else:
+		Log.trace(Log.Category.SYSTEM, "Entity already examined at Clearance %d: %s" % [clearance_level, entity_id])
 
 func get_entity_info(entity_id: String) -> Dictionary:
-	"""Get display information for entity based on discovery and clearance"""
-	var discovery = get_discovery_level(entity_id)
-
-	# Query EntityRegistry for entity info
-	return EntityRegistry.get_info(entity_id, discovery, clearance_level)
+	"""Get display information for entity based on clearance"""
+	# Query EntityRegistry for entity info (only clearance matters)
+	return EntityRegistry.get_info(entity_id, clearance_level)
 
 func examine_item(item_id: String, item_rarity: String = "common") -> void:
 	"""Called when player examines an item - awards EXP if novel"""
@@ -115,7 +84,7 @@ func examine_item(item_id: String, item_rarity: String = "common") -> void:
 		_mark_examined(key)
 		var exp = _get_item_exp(item_rarity)
 		emit_signal("discovery_made", "item", item_id, exp)
-		Log.system("Novel item discovery! %s (%s) +%d EXP (Clearance %d)" % [item_id, item_rarity, exp, clearance_level])
+		Log.system("Novel item examined! %s (%s) +%d EXP (Clearance %d)" % [item_id, item_rarity, exp, clearance_level])
 	else:
 		Log.trace(Log.Category.SYSTEM, "Item already examined at Clearance %d: %s" % [clearance_level, item_id])
 
@@ -131,7 +100,7 @@ func examine_environment(env_type: String) -> void:
 		_mark_examined(key)
 		var exp = 10  # Fixed 10 EXP for environment examination
 		emit_signal("discovery_made", "environment", env_type, exp)
-		Log.system("Novel environment discovery! %s +%d EXP (Clearance %d)" % [env_type, exp, clearance_level])
+		Log.system("Novel environment examined! %s +%d EXP (Clearance %d)" % [env_type, exp, clearance_level])
 	else:
 		Log.trace(Log.Category.SYSTEM, "Environment already examined at Clearance %d: %s" % [clearance_level, env_type])
 
@@ -190,26 +159,23 @@ func _get_entity_exp() -> int:
 
 func reset_knowledge() -> void:
 	"""Reset all knowledge (for debugging)"""
-	discovered_entities.clear()
+	examined_at_clearance.clear()
 	clearance_level = 0
-	researcher_classification = 0
 	Log.system("Knowledge database reset")
 
 func get_stats() -> Dictionary:
 	"""Get knowledge statistics for debugging"""
 	return {
-		"discovered_entities": discovered_entities.size(),
+		"examined_subjects": examined_at_clearance.size(),
 		"clearance_level": clearance_level,
-		"researcher_classification": researcher_classification,
-		"entities": discovered_entities.keys()
+		"subjects": examined_at_clearance.keys()
 	}
 
 func print_stats() -> void:
 	"""Print knowledge stats to console"""
 	var stats = get_stats()
 	print("\n=== KnowledgeDB Stats ===")
-	print("Discovered entities: %d" % stats.discovered_entities)
+	print("Examined subjects: %d" % stats.examined_subjects)
 	print("Clearance level: %d" % stats.clearance_level)
-	print("Research score: %d" % stats.researcher_classification)
-	print("Entities: %s" % str(stats.entities))
+	print("Subjects: %s" % str(stats.subjects))
 	print("========================\n")
