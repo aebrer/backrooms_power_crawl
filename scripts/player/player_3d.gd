@@ -246,7 +246,7 @@ func _initialize_stats() -> void:
 
 	# DEBUG: Add DEBUG_ITEM to NULL pool for testing
 	var debug_item = DebugItem.new()
-	null_pool.add_item(debug_item, 0)  # Add to slot 0, enabled by default
+	null_pool.add_item(debug_item, 0, self)  # Add to slot 0, enabled by default
 
 	# Connect KnowledgeDB signals for EXP rewards
 	KnowledgeDB.discovery_made.connect(_on_discovery_made)

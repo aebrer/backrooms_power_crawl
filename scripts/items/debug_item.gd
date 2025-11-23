@@ -2,19 +2,19 @@ class_name DebugItem extends Item
 """DEBUG_ITEM - Experimental NULL item for testing.
 
 Properties (scale with level N):
-- Odd turns: Deal N HP damage (to self) AND N Sanity damage (to self)
-- Even turns: Heal N×2 HP (to self) AND restore N×2 Sanity (to self)
+- Every turn: Deal N damage to EITHER HP or Sanity (random 50/50)
+- Even turns: Also heal N×2 to EITHER HP or Sanity (random 50/50, independent)
 - Passive: +5×N max Mana (applied via modifier)
 
 Example Scaling:
-- Level 1: Odd -1 HP/-1 SAN, Even +2 HP/+2 SAN, +5 Mana
-- Level 2: Odd -2 HP/-2 SAN, Even +4 HP/+4 SAN, +10 Mana
-- Level 3: Odd -3 HP/-3 SAN, Even +6 HP/+6 SAN, +15 Mana
+- Level 1: Every turn -1 HP or -1 SAN, Even +2 HP or +2 SAN, +5 Mana
+- Level 2: Every turn -2 HP or -2 SAN, Even +4 HP or +4 SAN, +10 Mana
+- Level 3: Every turn -3 HP or -3 SAN, Even +6 HP or +6 SAN, +15 Mana
 
 Design Intent:
 - High-risk, high-reward NULL item
 - Unlocks Mana pool for early testing
-- Cyclic gameplay (odd/even turn pattern)
+- Unpredictable damage/healing (RNG test)
 - Tests self-damage and healing mechanics
 """
 
@@ -79,21 +79,31 @@ func on_unequip(player: Player3D) -> void:
 func on_turn(player: Player3D, turn_number: int) -> void:
 	"""Execute cyclic damage/healing pattern.
 
-	Odd turns: Damage self
-	Even turns: Heal self
+	Every turn: Damage HP or Sanity (random)
+	Even turns: Also heal HP or Sanity (random)
 	"""
-	if turn_number % 2 == 1:
-		# Odd turn - DAMAGE
-		var damage = float(level)
+	# EVERY turn - randomly damage HP or Sanity
+	var damage = float(level)
+	var damage_hp = randf() < 0.5
+
+	if damage_hp:
 		player.stats.take_damage(damage)
-		player.stats.drain_sanity(damage)
-		Log.player("DEBUG_ITEM: Took %.0f HP and %.0f Sanity damage" % [damage, damage])
+		Log.player("DEBUG_ITEM: Took %.0f HP damage" % damage)
 	else:
-		# Even turn - HEAL
+		player.stats.drain_sanity(damage)
+		Log.player("DEBUG_ITEM: Took %.0f Sanity damage" % damage)
+
+	# Even turns ALSO heal HP or Sanity (independent random choice)
+	if turn_number % 2 == 0:
 		var heal = float(level * 2)
-		player.stats.heal(heal)
-		player.stats.restore_sanity(heal)
-		Log.player("DEBUG_ITEM: Healed %.0f HP and %.0f Sanity" % [heal, heal])
+		var heal_hp = randf() < 0.5
+
+		if heal_hp:
+			player.stats.heal(heal)
+			Log.player("DEBUG_ITEM: Healed %.0f HP" % heal)
+		else:
+			player.stats.restore_sanity(heal)
+			Log.player("DEBUG_ITEM: Restored %.0f Sanity" % heal)
 
 func level_up() -> void:
 	"""Level up item and update mana bonus."""
@@ -123,8 +133,8 @@ func get_description(clearance_level: int) -> String:
 	# Clearance 3+: Add specific mechanics
 	if clearance_level >= 3:
 		desc += "\n\nMechanics:"
-		desc += "\n- Odd turns: -%d HP, -%d Sanity" % [level, level]
-		desc += "\n- Even turns: +%d HP, +%d Sanity" % [level * 2, level * 2]
+		desc += "\n- Every turn: -%d HP or -%d Sanity (random)" % [level, level]
+		desc += "\n- Even turns: Also +%d HP or +%d Sanity (random)" % [level * 2, level * 2]
 		desc += "\n- Passive: +%d max Mana" % [MANA_PER_LEVEL * level]
 
 	# Clearance 4+: Add code revelation
@@ -133,12 +143,18 @@ func get_description(clearance_level: int) -> String:
 		desc += "\nclass_name: DebugItem extends Item"
 		desc += "\npool: NULL"
 		desc += "\n\non_turn(turn_number):"
-		desc += "\n  if turn_number %% 2 == 1:  # Odd turns"
+		desc += "\n  # Every turn: random damage"
+		desc += "\n  if randf() < 0.5:"
 		desc += "\n    player.take_damage(level)"
+		desc += "\n  else:"
 		desc += "\n    player.drain_sanity(level)"
-		desc += "\n  else:  # Even turns"
-		desc += "\n    player.heal(level * 2)"
-		desc += "\n    player.restore_sanity(level * 2)"
+		desc += "\n  "
+		desc += "\n  # Even turns: also random heal"
+		desc += "\n  if turn_number %% 2 == 0:"
+		desc += "\n    if randf() < 0.5:"
+		desc += "\n      player.heal(level * 2)"
+		desc += "\n    else:"
+		desc += "\n      player.restore_sanity(level * 2)"
 		desc += "\n\non_equip():"
 		desc += "\n  player.stats.add_modifier("
 		desc += "\n    StatModifier.new(\"mana\", 5 * level, ADD, \"DEBUG_ITEM\")"

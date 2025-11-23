@@ -26,9 +26,8 @@ var tooltip_texts: Dictionary = {}  # label -> tooltip_text (stored separately t
 @onready var combat_stats_section: VBoxContainer = $CombatStats
 @onready var progression_section: VBoxContainer = $Progression
 
-# Tooltip overlay (created programmatically, positioned absolutely)
-var tooltip_panel: PanelContainer = null
-var tooltip_label: Label = null
+# Examination panel reference (unified system)
+var examination_panel: ExaminationPanel = null
 
 # Base Stats & Resources
 @onready var body_label: Label = %BodyLabel
@@ -53,9 +52,6 @@ func _ready():
 	# Wait for player to be set by Game node
 	await get_tree().process_frame
 
-	# Build tooltip overlay
-	_build_tooltip_overlay()
-
 	# Setup hover/focus highlighting for all labels with tooltips
 	_setup_label_highlights()
 
@@ -69,51 +65,18 @@ func _ready():
 	else:
 		Log.warn(Log.Category.SYSTEM, "StatsPanel: No player or stats found")
 
-func _build_tooltip_overlay() -> void:
-	"""Build tooltip overlay (positioned absolutely, no layout reflow)"""
-	# Get the root game Control to add overlay
+func _get_examination_panel() -> void:
+	"""Get the examination panel reference - called on-demand"""
+	if examination_panel:
+		return  # Already found
+
 	var game_root = get_tree().root.get_node_or_null("Game")
 	if not game_root:
 		return
 
-	# Create tooltip panel positioned at bottom-center
-	tooltip_panel = PanelContainer.new()
-	tooltip_panel.name = "StatsTooltipOverlay"
-	tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	tooltip_panel.visible = false
-
-	# Position at bottom-center
-	tooltip_panel.anchor_left = 0.5
-	tooltip_panel.anchor_right = 0.5
-	tooltip_panel.anchor_top = 1.0
-	tooltip_panel.anchor_bottom = 1.0
-	tooltip_panel.offset_left = -200  # 400px wide centered
-	tooltip_panel.offset_right = 200
-	tooltip_panel.offset_bottom = -80  # 80px from bottom
-	tooltip_panel.offset_top = -130    # 50px tall
-	tooltip_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
-
-	# Style (matching ActionPreviewUI)
-	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.9)
-	style.border_color = Color(1, 1, 1, 1)
-	style.set_border_width_all(2)
-	style.content_margin_left = 12
-	style.content_margin_right = 12
-	style.content_margin_top = 8
-	style.content_margin_bottom = 8
-	tooltip_panel.add_theme_stylebox_override("panel", style)
-
-	# Tooltip text label
-	tooltip_label = Label.new()
-	tooltip_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	tooltip_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tooltip_label.add_theme_font_size_override("font_size", 14)
-	tooltip_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
-	tooltip_panel.add_child(tooltip_label)
-
-	# Add to game root (not to StatsPanel to avoid layout issues)
-	game_root.add_child(tooltip_panel)
+	var text_ui_overlay = game_root.get_node_or_null("TextUIOverlay")
+	if text_ui_overlay:
+		examination_panel = text_ui_overlay.get_node_or_null("ExaminationPanel")
 
 func set_player(p: Player3D) -> void:
 	"""Called by Game node to set player reference"""
@@ -277,7 +240,7 @@ func _on_label_unfocused(label: Label) -> void:
 	_unhighlight_label(label)
 
 func _highlight_label(label: Label) -> void:
-	"""Apply visual highlight and show tooltip (unified for mouse and controller)"""
+	"""Apply visual highlight and show examination panel with stat info"""
 	# Create a StyleBoxFlat for the background
 	var style = StyleBoxFlat.new()
 	style.bg_color = Color(1.0, 1.0, 0.5, 0.3)  # Yellow transparent
@@ -292,19 +255,25 @@ func _highlight_label(label: Label) -> void:
 	label.add_theme_stylebox_override("normal", style)
 	label.add_theme_stylebox_override("focus", style)  # Same style for focus = no dual highlights
 
-	# Show tooltip in overlay
-	if tooltip_panel and tooltip_label and label in tooltip_texts:
-		tooltip_label.text = tooltip_texts[label]
-		tooltip_panel.visible = true
+	# Get examination panel and show stat description
+	_get_examination_panel()
+	if examination_panel and label in tooltip_texts:
+		# Extract stat name from label text
+		var stat_name = label.text.split(":")[0]  # Get the part before the colon
+		examination_panel.entity_name_label.text = stat_name
+		examination_panel.object_class_label.visible = false  # Hide class for stats
+		examination_panel.threat_level_label.visible = false  # Hide threat for stats
+		examination_panel.description_label.text = tooltip_texts[label]
+		examination_panel.panel.visible = true
 
 func _unhighlight_label(label: Label) -> void:
-	"""Remove visual highlight and hide tooltip"""
+	"""Remove visual highlight and hide examination panel"""
 	label.remove_theme_stylebox_override("normal")
 	label.remove_theme_stylebox_override("focus")  # Remove both overrides
 
-	# Hide tooltip overlay
-	if tooltip_panel:
-		tooltip_panel.visible = false
+	# Hide examination panel
+	if examination_panel:
+		examination_panel.hide_panel()
 
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Enable/disable focus and clear highlights based on pause state"""

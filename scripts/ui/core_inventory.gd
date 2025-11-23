@@ -26,6 +26,11 @@ var player: Player3D = null
 var tooltip_slots: Array[Control] = []
 var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
 
+# Drag-and-drop state
+var dragging_slot: Control = null
+var dragging_pool_type: Item.PoolType
+var dragging_slot_index: int = -1
+
 # Pool container references (VBoxContainer)
 @onready var body_pool_section: VBoxContainer = $BodyPool
 @onready var mind_pool_section: VBoxContainer = $MindPool
@@ -47,9 +52,8 @@ var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
 
 @onready var light_slot_0: HBoxContainer = %LightSlot0
 
-# Tooltip overlay (shared with StatsPanel)
-var tooltip_panel: PanelContainer = null
-var tooltip_label: Label = null
+# Examination panel reference (unified system)
+var examination_panel: ExaminationPanel = null
 
 func _ready():
 	# Wait for player to be set by Game node
@@ -68,18 +72,18 @@ func _ready():
 	else:
 		Log.warn(Log.Category.SYSTEM, "CoreInventory: No player found")
 
-func _get_tooltip_overlay() -> void:
-	"""Get the shared tooltip overlay (created by StatsPanel) - called on-demand"""
-	if tooltip_panel:
+func _get_examination_panel() -> void:
+	"""Get the examination panel reference - called on-demand"""
+	if examination_panel:
 		return  # Already found
 
 	var game_root = get_tree().root.get_node_or_null("Game")
 	if not game_root:
 		return
 
-	tooltip_panel = game_root.get_node_or_null("StatsTooltipOverlay")
-	if tooltip_panel:
-		tooltip_label = tooltip_panel.get_child(0) if tooltip_panel.get_child_count() > 0 else null
+	var text_ui_overlay = game_root.get_node_or_null("TextUIOverlay")
+	if text_ui_overlay:
+		examination_panel = text_ui_overlay.get_node_or_null("ExaminationPanel")
 
 func set_player(p: Player3D) -> void:
 	"""Called by Game node to set player reference"""
@@ -268,6 +272,9 @@ func _setup_label_highlights() -> void:
 			slot.focus_entered.connect(_on_slot_focused.bind(slot))
 			slot.focus_exited.connect(_on_slot_unfocused.bind(slot))
 
+			# Connect input signals for toggling items
+			slot.gui_input.connect(_on_slot_input.bind(slot))
+
 			# Make focusable immediately (controller navigation only works when paused)
 			slot.focus_mode = Control.FOCUS_ALL
 
@@ -276,7 +283,10 @@ func _on_slot_hovered(slot: Control) -> void:
 	_highlight_slot(slot)
 
 func _on_slot_unhovered(slot: Control) -> void:
-	"""Remove highlight when mouse leaves"""
+	"""Remove highlight when mouse leaves (unless dragging)"""
+	# Don't unhighlight if this is the slot being dragged
+	if dragging_slot == slot:
+		return
 	_unhighlight_slot(slot)
 
 func _on_slot_focused(slot: Control) -> void:
@@ -287,11 +297,83 @@ func _on_slot_unfocused(slot: Control) -> void:
 	"""Remove highlight when focus lost"""
 	_unhighlight_slot(slot)
 
+func _on_slot_input(event: InputEvent, slot: Control) -> void:
+	"""Handle input events for slot (click to toggle/drag, X to pick up, A to toggle/drop)"""
+	# Get slot index and pool type
+	var slot_index = -1
+	var pool_type: Item.PoolType
+
+	# Find which slot this is
+	if slot in [body_slot_0, body_slot_1, body_slot_2]:
+		pool_type = Item.PoolType.BODY
+		slot_index = [body_slot_0, body_slot_1, body_slot_2].find(slot)
+	elif slot in [mind_slot_0, mind_slot_1, mind_slot_2]:
+		pool_type = Item.PoolType.MIND
+		slot_index = [mind_slot_0, mind_slot_1, mind_slot_2].find(slot)
+	elif slot in [null_slot_0, null_slot_1, null_slot_2]:
+		pool_type = Item.PoolType.NULL
+		slot_index = [null_slot_0, null_slot_1, null_slot_2].find(slot)
+	elif slot == light_slot_0:
+		pool_type = Item.PoolType.LIGHT
+		slot_index = 0
+	else:
+		return  # Unknown slot
+
+	var pool = _get_pool(pool_type)
+	if not pool or slot_index >= pool.items.size():
+		return
+
+	var item = pool.items[slot_index]
+
+	# Handle mouse input
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT and event.pressed:
+			if not item:
+				return  # Empty slot, nothing to do
+
+			# If not dragging, start drag
+			if not dragging_slot:
+				_start_drag(slot, pool_type, slot_index)
+			# If dragging, drop here
+			elif dragging_slot != slot:
+				_drop_drag(slot, pool_type, slot_index)
+			# If clicking same slot, cancel drag
+			else:
+				_cancel_drag()
+
+			get_viewport().set_input_as_handled()
+
+	# Handle gamepad input
+	elif event is InputEventJoypadButton:
+		if event.pressed:
+			# X button (button 2) - pick up / cancel drag
+			if event.button_index == JOY_BUTTON_X:
+				if not item:
+					return  # Empty slot, nothing to pick up
+
+				if not dragging_slot:
+					_start_drag(slot, pool_type, slot_index)
+				else:
+					_cancel_drag()
+				get_viewport().set_input_as_handled()
+
+			# A button (button 0) - toggle or drop
+			elif event.button_index == JOY_BUTTON_A:
+				if not item:
+					return  # Empty slot, nothing to do
+
+				# If dragging, drop here
+				if dragging_slot and dragging_slot != slot:
+					_drop_drag(slot, pool_type, slot_index)
+				# If not dragging, toggle
+				elif not dragging_slot:
+					pool.toggle_item(slot_index)
+				get_viewport().set_input_as_handled()
+
 func _highlight_slot(slot: Control) -> void:
-	"""Apply visual highlight and show tooltip (unified for mouse and controller)"""
-	# Only highlight if slot has an item
+	"""Apply visual highlight and show examination panel with item info"""
 	var label = slot.get_node_or_null("Label")
-	if not label or label.text == "<empty>":
+	if not label:
 		return
 
 	# Create a StyleBoxFlat for the background
@@ -309,25 +391,90 @@ func _highlight_slot(slot: Control) -> void:
 	label.add_theme_stylebox_override("normal", style)
 	label.add_theme_stylebox_override("focus", style)
 
-	# Get tooltip overlay on-demand (handles timing issues with StatsPanel)
-	_get_tooltip_overlay()
+	# Don't show examination panel while dragging (distracting)
+	if dragging_slot:
+		return
 
-	# Show tooltip in overlay (shared with StatsPanel)
-	if tooltip_panel and tooltip_label and slot in tooltip_texts:
-		tooltip_label.text = tooltip_texts[slot]
-		tooltip_panel.visible = true
+	# Get examination panel and show item description if slot has item
+	_get_examination_panel()
+	if examination_panel and slot in tooltip_texts:
+		# Directly set examination panel content with item info
+		var item_name = label.text.split(" (")[0]  # Extract just the item name
+		examination_panel.entity_name_label.text = item_name
+		examination_panel.object_class_label.visible = false  # Hide class for items
+		examination_panel.threat_level_label.visible = false  # Hide threat for items
+		examination_panel.description_label.text = tooltip_texts[slot]
+		examination_panel.panel.visible = true
 
 func _unhighlight_slot(slot: Control) -> void:
-	"""Remove visual highlight and hide tooltip"""
+	"""Remove visual highlight and hide examination panel"""
 	# Remove styleboxes from the Label child
 	var label = slot.get_node_or_null("Label")
 	if label:
 		label.remove_theme_stylebox_override("normal")
 		label.remove_theme_stylebox_override("focus")
 
-	# Hide tooltip overlay
-	if tooltip_panel:
-		tooltip_panel.visible = false
+	# Hide examination panel
+	if examination_panel:
+		examination_panel.hide_panel()
+
+func _start_drag(slot: Control, pool_type: Item.PoolType, slot_index: int) -> void:
+	"""Start dragging an item"""
+	dragging_slot = slot
+	dragging_pool_type = pool_type
+	dragging_slot_index = slot_index
+
+	# Visual feedback: add cyan highlight to show dragging
+	var label = slot.get_node_or_null("Label")
+	if label:
+		var style = StyleBoxFlat.new()
+		style.bg_color = Color(0.0, 1.0, 1.0, 0.3)  # Cyan transparent
+		style.border_color = Color(0.0, 1.0, 1.0, 0.8)  # Cyan border
+		style.set_border_width_all(2)
+		style.content_margin_left = 4
+		style.content_margin_right = 4
+		style.content_margin_top = 2
+		style.content_margin_bottom = 2
+		label.add_theme_stylebox_override("normal", style)
+		label.add_theme_stylebox_override("focus", style)
+
+	Log.system("Started dragging item from slot %d in %s pool" % [slot_index, Item.PoolType.keys()[pool_type]])
+
+func _drop_drag(target_slot: Control, target_pool_type: Item.PoolType, target_slot_index: int) -> void:
+	"""Drop dragged item onto target slot (reorder within same pool)"""
+	if not dragging_slot:
+		return
+
+	# Only allow reordering within the same pool
+	if dragging_pool_type != target_pool_type:
+		Log.warn(Log.Category.SYSTEM, "Cannot reorder items between different pools")
+		_cancel_drag()
+		return
+
+	var pool = _get_pool(dragging_pool_type)
+	if not pool:
+		_cancel_drag()
+		return
+
+	# Reorder items in pool
+	pool.reorder_items(dragging_slot_index, target_slot_index)
+	Log.system("Reordered item from slot %d to slot %d in %s pool" % [
+		dragging_slot_index,
+		target_slot_index,
+		Item.PoolType.keys()[dragging_pool_type]
+	])
+
+	_cancel_drag()
+
+func _cancel_drag() -> void:
+	"""Cancel current drag operation"""
+	if dragging_slot:
+		# Remove drag highlight
+		_unhighlight_slot(dragging_slot)
+		Log.system("Cancelled drag operation")
+
+	dragging_slot = null
+	dragging_slot_index = -1
 
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Enable/disable focus and clear highlights based on pause state"""
