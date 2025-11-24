@@ -90,39 +90,14 @@ func _show_pickup_ui(player: Player3D) -> void:
 		Log.warn(Log.Category.ACTION, "No pool found for item type")
 		return
 
-	# Check if player already has this item (for level-up)
-	var existing_slot = _find_item_in_pool(item.item_id, pool)
+	# Get or create slot selection UI
+	var slot_ui = _get_slot_selection_ui(player)
+	if not slot_ui:
+		Log.warn(Log.Category.ACTION, "Failed to get slot selection UI")
+		return
 
-	if existing_slot != -1:
-		# Player already has this item - level it up automatically
-		var existing_item = pool.get_item(existing_slot)
-		if existing_item:
-			existing_item.level_up()
-			pool.emit_signal("item_leveled_up", existing_item, existing_slot, existing_item.level)
-
-			# Re-apply stat bonus
-			existing_item._remove_stat_bonus(player)
-			existing_item._apply_stat_bonus(player)
-
-			Log.player("Picked up %s - leveled up to Level %d!" % [item.item_name, existing_item.level])
-
-			# Remove item from world
-			_remove_item_from_world(player)
-			return
-
-	# Player doesn't have this item - need to choose a slot
-	# For now, auto-equip to first empty slot (TODO: show UI)
-	var empty_slot = pool.get_first_empty_slot()
-
-	if empty_slot != -1:
-		# Empty slot available - equip there
-		pool.add_item(item, empty_slot, player)
-		Log.player("Picked up %s and equipped to slot %d" % [item.item_name, empty_slot])
-		_remove_item_from_world(player)
-	else:
-		# No empty slots - need to show UI to choose which to overwrite
-		# TODO: Implement slot selection UI
-		Log.player("Inventory full! Drop an item first (UI TODO)")
+	# Show UI - it will handle the pickup internally
+	slot_ui.show_slot_selection(item, pool, player, target_position)
 
 func _get_item_by_id(item_id: String, player: Player3D) -> Item:
 	"""Look up Item resource by item_id from current level
@@ -216,6 +191,38 @@ func _mark_item_picked_up_in_chunk(chunk: Chunk, world_pos: Vector2i) -> void:
 				item_data_ref["picked_up"] = true
 				Log.grid("Marked item at %s as picked up in chunk data" % world_pos)
 				return
+
+func _get_slot_selection_ui(player: Player3D) -> ItemSlotSelectionPanel:
+	"""Get or create the slot selection UI
+
+	Args:
+		player: Player reference (to access scene tree)
+
+	Returns:
+		ItemSlotSelectionPanel instance or null if failed
+	"""
+	if not player:
+		return null
+
+	# Try to find existing UI in the scene tree
+	var ui = player.get_node_or_null("/root/Game/ItemSlotSelectionPanel")
+
+	if ui:
+		return ui
+
+	# UI doesn't exist - create it
+	var game_node = player.get_node_or_null("/root/Game")
+	if not game_node:
+		Log.warn(Log.Category.ACTION, "Cannot find Game node to attach slot UI")
+		return null
+
+	# Create and add UI
+	ui = ItemSlotSelectionPanel.new()
+	ui.name = "ItemSlotSelectionPanel"
+	game_node.add_child(ui)
+
+	Log.system("Created ItemSlotSelectionPanel UI")
+	return ui
 
 func get_description() -> String:
 	"""Human-readable description for UI

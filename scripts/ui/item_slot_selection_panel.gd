@@ -1,0 +1,303 @@
+class_name ItemSlotSelectionPanel
+extends Control
+## Item slot selection UI for pickup interactions
+##
+## Shows all slots in the appropriate pool and allows player to:
+## - Equip to empty slot
+## - Combine with same item (level up)
+## - Overwrite different item
+## - Cancel (leave on ground)
+##
+## Uses PauseManager pattern for consistent pause/unpause behavior
+
+enum ActionType {
+	EQUIP_EMPTY,      ## Equip to empty slot
+	COMBINE_LEVEL_UP, ## Combine with existing item (level up)
+	OVERWRITE         ## Replace existing item
+}
+
+# Node references
+var panel: PanelContainer
+var scroll_container: ScrollContainer
+var slot_buttons: Array[Button] = []
+var cancel_button: Button = null
+
+# State
+var current_item: Item = null
+var current_pool: ItemPool = null
+var current_pool_type: Item.PoolType = Item.PoolType.BODY
+var player_ref: Player3D = null
+var item_position: Vector2i = Vector2i.ZERO  ## World position of item being picked up
+
+func _ready() -> void:
+	# Fill screen for centering
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	mouse_filter = Control.MOUSE_FILTER_IGNORE  # Don't block input when hidden
+
+	_build_panel()
+
+	# Hide by default
+	visible = false
+
+	# Connect to PauseManager for focus control
+	if PauseManager:
+		PauseManager.pause_toggled.connect(_on_pause_toggled)
+
+func _build_panel() -> void:
+	"""Build centered slot selection panel"""
+	panel = PanelContainer.new()
+	panel.name = "SlotSelectionPanel"
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS  # Process when paused
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP  # Capture mouse events
+	add_child(panel)
+
+	# Center panel using preset, then adjust for fixed size
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	panel.custom_minimum_size = Vector2(600, 500)
+	panel.position = Vector2(-300, -250)  # Offset from center
+	panel.size = Vector2(600, 500)
+
+	# Style panel (SCP aesthetic)
+	var style = StyleBoxFlat.new()
+	style.bg_color = Color(0, 0, 0, 0.95)
+	style.border_color = Color(1, 1, 1, 1)
+	style.border_width_left = 3
+	style.border_width_right = 3
+	style.border_width_top = 3
+	style.border_width_bottom = 3
+	style.content_margin_left = 20
+	style.content_margin_right = 20
+	style.content_margin_top = 16
+	style.content_margin_bottom = 16
+	panel.add_theme_stylebox_override("panel", style)
+
+	# ScrollContainer for overflow
+	scroll_container = ScrollContainer.new()
+	scroll_container.name = "ScrollContainer"
+	scroll_container.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll_container.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_container.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll_container.mouse_filter = Control.MOUSE_FILTER_PASS  # Allow mouse to reach buttons
+	panel.add_child(scroll_container)
+
+	# Content container (rebuilt each time we show)
+	var vbox = VBoxContainer.new()
+	vbox.name = "ContentVBox"
+	vbox.add_theme_constant_override("separation", 12)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll_container.add_child(vbox)
+
+func show_slot_selection(item: Item, pool: ItemPool, player: Player3D, position: Vector2i) -> void:
+	"""Display slot selection UI for picked up item
+
+	Args:
+		item: Item being picked up
+		pool: Player's ItemPool for this item type
+		player: Player reference
+		position: World position of item (for removal after pickup)
+	"""
+	current_item = item
+	current_pool = pool
+	current_pool_type = pool.pool_type
+	player_ref = player
+	item_position = position
+
+	# Rebuild content
+	_rebuild_content()
+
+	# Update panel position to ensure it's centered
+	_update_panel_position()
+
+	# Show panel and pause game via PauseManager
+	visible = true
+	if PauseManager:
+		PauseManager.toggle_pause()
+
+func _update_panel_position() -> void:
+	"""Update panel position to center it on screen"""
+	if not panel:
+		return
+
+	# Get viewport size
+	var viewport_size = get_viewport_rect().size
+
+	# Center the panel
+	var panel_size = Vector2(600, 500)
+	panel.position = (viewport_size - panel_size) / 2.0
+	panel.size = panel_size
+
+func _rebuild_content() -> void:
+	"""Rebuild UI content for current item/pool"""
+	# Clear old content
+	var vbox = scroll_container.get_node("ContentVBox")
+	for child in vbox.get_children():
+		child.queue_free()
+	slot_buttons.clear()
+
+	# Header
+	var header = Label.new()
+	header.text = "ITEM ACQUISITION"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 20)
+	header.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
+	vbox.add_child(header)
+
+	# Item info
+	var item_name_label = Label.new()
+	item_name_label.text = "Item: %s (Level %d)" % [current_item.item_name, current_item.level]
+	item_name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	item_name_label.add_theme_font_size_override("font_size", 16)
+	item_name_label.add_theme_color_override("font_color", ItemRarity.get_color(current_item.rarity))
+	vbox.add_child(item_name_label)
+
+	# Pool type
+	var pool_label = Label.new()
+	pool_label.text = "Pool: %s" % Item.PoolType.keys()[current_pool.pool_type]
+	pool_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	pool_label.add_theme_font_size_override("font_size", 14)
+	pool_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	vbox.add_child(pool_label)
+
+	# Separator
+	var separator1 = HSeparator.new()
+	separator1.add_theme_constant_override("separation", 12)
+	vbox.add_child(separator1)
+
+	# Instructions
+	var instructions = Label.new()
+	instructions.text = "Select a slot to equip this item:"
+	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	instructions.add_theme_font_size_override("font_size", 14)
+	instructions.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	vbox.add_child(instructions)
+
+	# Slot buttons
+	for slot_idx in range(current_pool.max_slots):
+		var slot_button = _create_slot_button(slot_idx)
+		vbox.add_child(slot_button)
+		slot_buttons.append(slot_button)
+
+	# Separator
+	var separator2 = HSeparator.new()
+	separator2.add_theme_constant_override("separation", 12)
+	vbox.add_child(separator2)
+
+	# Cancel button
+	cancel_button = Button.new()
+	cancel_button.text = "Leave on Ground (Cancel)"
+	cancel_button.add_theme_font_size_override("font_size", 14)
+	cancel_button.pressed.connect(_on_cancel_pressed)
+	cancel_button.add_to_group("hud_focusable")
+	vbox.add_child(cancel_button)
+
+	# Reset scroll
+	scroll_container.scroll_vertical = 0
+
+func _create_slot_button(slot_index: int) -> Button:
+	"""Create button for a specific slot
+
+	Args:
+		slot_index: Slot index (0-N)
+
+	Returns:
+		Configured button
+	"""
+	var existing_item = current_pool.get_item(slot_index)
+	var button = Button.new()
+
+	if not existing_item:
+		# Empty slot
+		button.text = "Slot %d: [EMPTY]" % (slot_index + 1)
+		button.add_theme_color_override("font_color", Color.GREEN)
+		button.pressed.connect(func(): _on_slot_selected(slot_index, ActionType.EQUIP_EMPTY))
+	elif existing_item.item_id == current_item.item_id:
+		# Same item - can combine to level up
+		button.text = "Slot %d: %s (Lv %d) → COMBINE (Lv %d)" % [
+			slot_index + 1,
+			existing_item.item_name,
+			existing_item.level,
+			existing_item.level + 1
+		]
+		button.add_theme_color_override("font_color", Color.CYAN)
+		button.pressed.connect(func(): _on_slot_selected(slot_index, ActionType.COMBINE_LEVEL_UP))
+	else:
+		# Different item - can overwrite
+		button.text = "Slot %d: %s (Lv %d) → OVERWRITE with %s" % [
+			slot_index + 1,
+			existing_item.item_name,
+			existing_item.level,
+			current_item.item_name
+		]
+		button.add_theme_color_override("font_color", Color.ORANGE_RED)
+		button.pressed.connect(func(): _on_slot_selected(slot_index, ActionType.OVERWRITE))
+
+	button.add_theme_font_size_override("font_size", 14)
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+	# Add to focusable group for PauseManager pattern
+	button.add_to_group("hud_focusable")
+
+	return button
+
+func _on_slot_selected(slot_index: int, action_type: ActionType) -> void:
+	"""Handle slot selection - queues PickupToSlotAction for execution
+
+	Args:
+		slot_index: Selected slot
+		action_type: What action to perform
+	"""
+	# Create action to execute the pickup
+	var action = PickupToSlotAction.new(current_item, current_pool_type, slot_index, action_type, item_position)
+
+	# Queue action for execution via state machine
+	player_ref.pending_action = action
+	player_ref.return_state = "IdleState"
+
+	# Close panel (will unpause via PauseManager)
+	_close_panel()
+
+	# Trigger state machine to execute the action
+	player_ref.state_machine.change_state("PreTurnState")
+
+func _on_cancel_pressed() -> void:
+	"""Handle cancel button press - leave item on ground"""
+	Log.player("Left item on ground")
+	_close_panel()
+
+func _close_panel() -> void:
+	"""Hide panel and unpause game via PauseManager"""
+	visible = false
+	if PauseManager:
+		PauseManager.toggle_pause()
+
+func _on_pause_toggled(is_paused: bool) -> void:
+	"""Update button focus when pause state changes"""
+	if not visible:
+		return
+
+	if is_paused:
+		# Enable focus when paused
+		for button in slot_buttons:
+			button.focus_mode = Control.FOCUS_ALL
+			button.mouse_filter = Control.MOUSE_FILTER_STOP
+
+		if cancel_button:
+			cancel_button.focus_mode = Control.FOCUS_ALL
+			cancel_button.mouse_filter = Control.MOUSE_FILTER_STOP
+
+		# Auto-focus first button for gamepad navigation
+		if not slot_buttons.is_empty():
+			slot_buttons[0].grab_focus()
+	else:
+		# Disable focus when unpausing
+		for button in slot_buttons:
+			button.focus_mode = Control.FOCUS_NONE
+			button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+		if cancel_button:
+			cancel_button.focus_mode = Control.FOCUS_NONE
+			cancel_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
