@@ -143,6 +143,21 @@ func get_description(clearance_level: int) -> String:
 	# Subclasses can add additional clearance-based info by overriding
 	return desc
 
+func get_info(clearance_level: int) -> Dictionary:
+	"""Get item info in same format as EntityInfo for examination system
+
+	Reuses existing get_description() for unified description system.
+
+	Returns:
+		Dictionary with name, description, object_class, threat_level
+	"""
+	return {
+		"name": "%s (Level %d)" % [item_name, level],
+		"description": get_description(clearance_level),
+		"object_class": "Item",
+		"threat_level": 0
+	}
+
 # ============================================================================
 # STAT BONUS SYSTEM
 # ============================================================================

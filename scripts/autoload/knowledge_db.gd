@@ -68,9 +68,26 @@ func examine_entity(entity_id: String) -> void:
 		Log.trace(Log.Category.SYSTEM, "Entity already examined at Clearance %d: %s" % [clearance_level, entity_id])
 
 func get_entity_info(entity_id: String) -> Dictionary:
-	"""Get display information for entity based on clearance"""
-	# Query EntityRegistry for entity info (only clearance matters)
-	return EntityRegistry.get_info(entity_id, clearance_level)
+	"""Get display information for entity based on clearance
+
+	Handles both entities (from EntityRegistry) and items (from current level).
+	"""
+	# First, try EntityRegistry (entities and environment)
+	if EntityRegistry.has_entity(entity_id):
+		return EntityRegistry.get_info(entity_id, clearance_level)
+
+	# Not in EntityRegistry, check if it's an item
+	var item = _get_item_by_id(entity_id)
+	if item:
+		return item.get_info(clearance_level)
+
+	# Fallback: unknown entity
+	return {
+		"name": "Unknown",
+		"description": "[ENTITY NOT REGISTERED IN DATABASE]",
+		"object_class": "Unknown",
+		"threat_level": 0
+	}
 
 func examine_item(item_id: String, item_rarity: String = "common") -> void:
 	"""Called when player examines an item - awards EXP if novel"""
@@ -152,6 +169,26 @@ func _get_item_exp(rarity: String) -> int:
 func _get_entity_exp() -> int:
 	"""Get EXP reward for examining an entity"""
 	return 1000
+
+func _get_item_by_id(item_id: String) -> Item:
+	"""Look up Item resource by item_id from current level config
+
+	Args:
+		item_id: Unique item identifier (e.g., "debug_item")
+
+	Returns:
+		Item resource or null if not found
+	"""
+	var current_level = LevelManager.get_current_level()
+	if not current_level:
+		return null
+
+	# Search through permitted items in level config
+	for item in current_level.permitted_items:
+		if item.item_id == item_id:
+			return item
+
+	return null
 
 # ============================================================================
 # DEBUG / DEVELOPMENT

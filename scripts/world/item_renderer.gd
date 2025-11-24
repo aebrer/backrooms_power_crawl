@@ -169,6 +169,26 @@ func _create_billboard(item_data: Dictionary, world_pos: Vector2i) -> Sprite3D:
 		sprite.texture = ImageTexture.create_from_image(image)
 		sprite.pixel_size = BILLBOARD_SIZE / 16.0
 
+	# Add examination support (same pattern as floor tiles)
+	var exam_body = StaticBody3D.new()
+	exam_body.name = "ExamBody"
+	exam_body.collision_layer = 8  # Layer 4 for raycast detection
+	exam_body.collision_mask = 0   # Doesn't collide with anything
+	sprite.add_child(exam_body)
+
+	# Add Examinable component as child of StaticBody3D
+	var examinable = Examinable.new()
+	examinable.entity_id = item_resource.item_id
+	examinable.entity_type = Examinable.EntityType.ITEM
+	exam_body.add_child(examinable)
+
+	# Add collision shape to StaticBody3D (not to Examinable)
+	var collision_shape = CollisionShape3D.new()
+	var box = BoxShape3D.new()
+	box.size = Vector3(BILLBOARD_SIZE, BILLBOARD_SIZE, 0.1)
+	collision_shape.shape = box
+	exam_body.add_child(collision_shape)
+
 	return sprite
 
 # ============================================================================

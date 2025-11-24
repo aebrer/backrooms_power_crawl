@@ -146,8 +146,17 @@ func process_frame(_delta: float) -> void:
 				# Extract simple type from "level_0_floor" → "floor"
 				var env_type = new_target.entity_id.replace("level_0_", "")
 				KnowledgeDB.examine_environment(env_type)
+			elif new_target.entity_type == Examinable.EntityType.ITEM:
+				# Items - need to get rarity for correct EXP reward
+				var item = KnowledgeDB._get_item_by_id(new_target.entity_id)
+				if item:
+					var rarity_name = ItemRarity.RARITY_NAMES[item.rarity].to_lower()
+					KnowledgeDB.examine_item(new_target.entity_id, rarity_name)
+				else:
+					# Fallback if item not found
+					KnowledgeDB.examine_item(new_target.entity_id, "common")
 			else:
-				# Entities, items, hazards
+				# Entities, hazards
 				KnowledgeDB.examine_entity(new_target.entity_id)
 
 			if examination_panel:
