@@ -236,6 +236,19 @@ func get_all_item_positions() -> Array[Vector2i]:
 		positions.append(pos)
 	return positions
 
+func get_discovered_item_positions() -> Array[Vector2i]:
+	"""Get world positions of discovered items (for minimap)
+
+	Returns:
+		Array of world tile positions where items have been discovered
+	"""
+	var positions: Array[Vector2i] = []
+	for pos in item_data_cache.keys():
+		var item_data = item_data_cache[pos]
+		if item_data.get("discovered", false):
+			positions.append(pos)
+	return positions
+
 # ============================================================================
 # ITEM LOOKUP
 # ============================================================================
