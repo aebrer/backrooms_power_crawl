@@ -42,7 +42,8 @@ var item_data_cache: Dictionary = {}  # Vector2i -> Dictionary
 const BILLBOARD_SIZE = 0.5
 
 ## Billboard height above floor (world units)
-const BILLBOARD_HEIGHT = 0.5
+## Matches player Y position (1.0) so items float at same height
+const BILLBOARD_HEIGHT = 1.0
 
 ## Placeholder colors by rarity (until we have sprites)
 const RARITY_COLORS = {
