@@ -20,7 +20,7 @@ func can_execute(player) -> bool:
 	if not player:
 		return false
 
-	var pool = _get_pool(player)
+	var pool = Action._get_pool_by_type(player, pool_type)
 	if not pool:
 		return false
 
@@ -41,7 +41,7 @@ func execute(player) -> void:
 	if not player:
 		return
 
-	var pool = _get_pool(player)
+	var pool = Action._get_pool_by_type(player, pool_type)
 	if not pool:
 		return
 
@@ -60,7 +60,7 @@ func execute(player) -> void:
 	])
 
 func get_preview_info(player) -> Dictionary:
-	var pool = _get_pool(player)
+	var pool = Action._get_pool_by_type(player, pool_type)
 	if not pool or from_index >= pool.items.size():
 		return {
 			"name": "Reorder Item",
@@ -84,17 +84,3 @@ func get_preview_info(player) -> Dictionary:
 		"icon": "↔️",
 		"cost": ""
 	}
-
-func _get_pool(player) -> ItemPool:
-	"""Get the pool from the player based on pool_type"""
-	match pool_type:
-		Item.PoolType.BODY:
-			return player.body_pool
-		Item.PoolType.MIND:
-			return player.mind_pool
-		Item.PoolType.NULL:
-			return player.null_pool
-		Item.PoolType.LIGHT:
-			return player.light_pool
-		_:
-			return null

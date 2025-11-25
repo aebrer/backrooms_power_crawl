@@ -35,7 +35,7 @@ func can_execute(player: Player3D) -> bool:
 	if not player:
 		return false
 
-	var pool = _get_pool(player)
+	var pool = Action._get_pool_by_type(player, pool_type)
 	if not pool:
 		return false
 
@@ -53,7 +53,7 @@ func execute(player: Player3D) -> void:
 		Log.warn(Log.Category.ACTION, "Cannot execute pickup to slot")
 		return
 
-	var pool = _get_pool(player)
+	var pool = Action._get_pool_by_type(player, pool_type)
 	if not pool:
 		return
 
@@ -80,65 +80,10 @@ func execute(player: Player3D) -> void:
 			Log.player("Equipped %s to slot %d (overwriting previous item)" % [item.item_name, slot_index + 1])
 
 	# Remove item from world
-	_remove_item_from_world(player)
+	Action._remove_item_from_world(player, world_position)
 
 	# Increment turn count (this is a turn action)
 	player.turn_count += 1
-
-func _get_pool(player: Player3D) -> ItemPool:
-	"""Get the appropriate ItemPool for this action
-
-	Args:
-		player: Player reference
-
-	Returns:
-		ItemPool or null if invalid type
-	"""
-	match pool_type:
-		Item.PoolType.BODY:
-			return player.body_pool
-		Item.PoolType.MIND:
-			return player.mind_pool
-		Item.PoolType.NULL:
-			return player.null_pool
-		Item.PoolType.LIGHT:
-			return player.light_pool
-		_:
-			return null
-
-func _remove_item_from_world(player: Player3D) -> void:
-	"""Remove item billboard from world after pickup
-
-	Args:
-		player: Player reference (to access grid/item_renderer)
-	"""
-	if not player or not player.grid or not player.grid.item_renderer:
-		return
-
-	player.grid.item_renderer.remove_item_at(world_position)
-
-	# Also mark as picked up in chunk data
-	if ChunkManager and ChunkManager.has_method("get_chunk_at_world_position"):
-		var chunk = ChunkManager.get_chunk_at_world_position(world_position)
-		if chunk:
-			_mark_item_picked_up_in_chunk(chunk, world_position)
-
-func _mark_item_picked_up_in_chunk(chunk: Chunk, world_pos: Vector2i) -> void:
-	"""Mark item as picked up in SubChunk data (for persistence)
-
-	Args:
-		chunk: Chunk containing the item
-		world_pos: World position of the item
-	"""
-	for subchunk in chunk.sub_chunks:
-		for item_data_ref in subchunk.world_items:
-			var pos_data = item_data_ref.get("world_position", {})
-			var item_world_pos = Vector2i(pos_data.get("x", 0), pos_data.get("y", 0))
-
-			if item_world_pos == world_pos:
-				item_data_ref["picked_up"] = true
-				Log.grid("Marked item at %s as picked up in chunk data" % world_pos)
-				return
 
 func get_description() -> String:
 	"""Human-readable description for UI
