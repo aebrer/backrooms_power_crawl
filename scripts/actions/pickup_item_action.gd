@@ -180,6 +180,24 @@ func _get_slot_selection_ui(player: Player3D) -> ItemSlotSelectionPanel:
 	Log.system("Created ItemSlotSelectionPanel UI")
 	return ui
 
+func get_preview_info(player) -> Dictionary:
+	"""Get preview info for UI display
+
+	Returns:
+		Dictionary with name, target, icon, cost
+	"""
+	# Look up item resource to get display name
+	var item_id = item_data.get("item_id", "")
+	var item = _get_item_by_id(item_id, player)
+	var item_name = item.item_name if item else "Unknown Item"
+
+	return {
+		"name": "Pick up",
+		"target": item_name,
+		"icon": "📦",
+		"cost": ""
+	}
+
 func get_description() -> String:
 	"""Human-readable description for UI
 
