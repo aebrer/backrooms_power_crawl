@@ -28,6 +28,7 @@ signal turn_completed()
 var grid_position: Vector2i = Vector2i(64, 64)
 var pending_action = null
 var return_state: String = "IdleState"  # State to return to after turn completes
+var suppress_input_next_frame: bool = false  # Skip input for one frame (prevents UI->movement double-trigger)
 var turn_count: int = 0
 
 # Stats (NEW)

@@ -86,6 +86,14 @@ func process_frame(delta: float) -> void:
 	if not InputManager:
 		return
 
+	# Skip input for one frame if requested (prevents UI button from triggering movement)
+	if player and player.suppress_input_next_frame:
+		player.suppress_input_next_frame = false
+		# Still update indicator and preview, just don't process input
+		player.update_move_indicator()
+		_update_action_preview()
+		return
+
 	# Update forward indicator every frame (follows camera rotation)
 	if player:
 		player.update_move_indicator()

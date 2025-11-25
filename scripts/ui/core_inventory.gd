@@ -492,6 +492,7 @@ func _toggle_item(pool_type: Item.PoolType, slot_index: int) -> void:
 	# Set as pending action (like movement)
 	player.pending_action = action
 	player.return_state = "IdleState"
+	player.suppress_input_next_frame = true  # Prevent UI button from also triggering movement
 
 	# Unpause to allow execution
 	if PauseManager:
@@ -529,6 +530,7 @@ func _drop_reorder(target_slot: Control, target_pool_type: Item.PoolType, target
 	# Set as pending action (like movement)
 	player.pending_action = action
 	player.return_state = "IdleState"
+	player.suppress_input_next_frame = true  # Prevent UI button from also triggering movement
 
 	# Cancel reorder UI state
 	_cancel_reorder()

@@ -52,7 +52,11 @@ func execute(player) -> void:
 	# Reorder the items
 	pool.reorder(from_index, to_index)
 
-	Log.turn("Reordered %s from slot %d to slot %d in %s pool" % [
+	# Advance turn counter (this action consumes a turn)
+	player.turn_count += 1
+
+	Log.turn("Turn %d: Reordered %s from slot %d to slot %d in %s pool" % [
+		player.turn_count,
 		item_name,
 		from_index,
 		to_index,

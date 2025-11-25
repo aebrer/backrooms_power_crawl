@@ -130,17 +130,7 @@ func _get_pool_for_item(item: Item, player: Player3D) -> ItemPool:
 	Returns:
 		ItemPool or null if invalid type
 	"""
-	match item.pool_type:
-		Item.PoolType.BODY:
-			return player.body_pool
-		Item.PoolType.MIND:
-			return player.mind_pool
-		Item.PoolType.NULL:
-			return player.null_pool
-		Item.PoolType.LIGHT:
-			return player.light_pool
-		_:
-			return null
+	return Action._get_pool_by_type(player, item.pool_type)
 
 func _find_item_in_pool(item_id: String, pool: ItemPool) -> int:
 	"""Find slot index of item with matching ID in pool

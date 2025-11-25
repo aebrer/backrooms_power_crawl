@@ -47,7 +47,10 @@ func execute(player) -> void:
 	var item_name = item.item_name if item else "Unknown"
 	var state = "ON" if pool.enabled[slot_index] else "OFF"
 
-	Log.turn("Toggled %s to %s" % [item_name, state])
+	# Advance turn counter (this action consumes a turn)
+	player.turn_count += 1
+
+	Log.turn("Turn %d: Toggled %s to %s" % [player.turn_count, item_name, state])
 
 func get_preview_info(player) -> Dictionary:
 	var pool = Action._get_pool_by_type(player, pool_type)
