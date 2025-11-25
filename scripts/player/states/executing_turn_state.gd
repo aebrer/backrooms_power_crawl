@@ -41,7 +41,6 @@ func _execute_turn() -> void:
 
 	# TODO: Process enemy turns
 	# TODO: Process environmental effects
-	# TODO: Check win/loss conditions
 
 	Log.turn("===== TURN %d COMPLETE =====" % player.turn_count)
 

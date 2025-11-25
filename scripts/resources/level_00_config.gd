@@ -31,8 +31,8 @@ entity density: very low"""
 	# ========================================================================
 	# VISUAL ASSETS
 	# ========================================================================
-	# Using existing grid mesh library (will be level-specific later)
-	mesh_library_path = "res://assets/grid_mesh_library.tres"
+	# Level 0 specific mesh library (yellow wallpaper, brown carpet, grey ceiling)
+	mesh_library_path = "res://assets/level_00_mesh_library.tres"
 
 	# Yellow office aesthetic
 	ambient_light_color = Color(1.0, 0.95, 0.7, 1.0)  # Warm yellow
@@ -104,19 +104,6 @@ entity density: very low"""
 
 	# Permitted items for Level 0 (rarity-based spawning)
 	add_permitted_item(DebugItem.new())  # DEBUG rarity - always spawns for testing
-
-	# Starting items for Level 0 (basic survival gear)
-	starting_items = [
-		# "flashlight",  # Future: items
-		# "water_bottle"
-	]
-
-	# Item spawn table (will populate when items are implemented)
-	# item_spawn_table = [
-	#     {"item_scene": "res://scenes/items/almond_water.tscn", "weight": 3.0},
-	#     {"item_scene": "res://scenes/items/energy_bar.tscn", "weight": 5.0},
-	#     {"item_scene": "res://scenes/items/flashlight_battery.tscn", "weight": 2.0}
-	# ]
 
 	# ========================================================================
 	# EXIT CONFIGURATION

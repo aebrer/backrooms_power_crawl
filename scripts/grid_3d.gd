@@ -59,11 +59,6 @@ func _ready() -> void:
 
 	print("[Grid3D] Initialized: %d x %d (octant size: %d)" % [grid_size.x, grid_size.y, grid_map.cell_octant_size])
 
-func initialize(size: Vector2i) -> void:
-	"""Initialize grid with given size (legacy method)"""
-	grid_size = size
-	_generate_grid()
-
 func configure_from_level(level_config: LevelConfig) -> void:
 	"""Configure grid from a LevelConfig resource"""
 	if not level_config:
@@ -88,16 +83,13 @@ func configure_from_level(level_config: LevelConfig) -> void:
 	# Apply visual settings
 	_apply_level_visuals(level_config)
 
-	# Generate grid with level parameters (unless using procedural generation)
-	if not use_procedural_generation:
-		_generate_grid()
-	else:
-		# Procedural mode: ChunkManager will populate via load_chunk()
-		Log.system("Procedural generation mode enabled - waiting for ChunkManager")
-		# Still cache materials and generate examination overlay
-		_cache_wall_materials()
-		_cache_ceiling_materials()
-		# Note: Examination overlay will be generated per-chunk as they load
+	# Procedural mode: ChunkManager will populate via load_chunk()
+	Log.system("Procedural generation mode enabled - waiting for ChunkManager")
+
+	# Cache materials and generate examination overlay
+	_cache_wall_materials()
+	_cache_ceiling_materials()
+	# Note: Examination overlay will be generated per-chunk as they load
 
 	# Lifecycle hook
 	level_config.on_generation_complete()
@@ -117,18 +109,6 @@ func _apply_level_visuals(config: LevelConfig) -> void:
 	IMPORTANT: game_3d.tscn has NEUTRAL DEFAULTS (grey background, white light).
 	Those defaults are ALWAYS overridden by level config values at runtime.
 	"""
-
-	# ========================================================================
-	# MATERIALS - Per-tile materials for walls, floors, ceilings
-	# ========================================================================
-	# Future: When level-specific materials are implemented, apply them here
-	if config.floor_material:
-		Log.system("Applying custom floor material")
-		# TODO: Apply to GridMap when material system is implemented
-
-	if config.wall_material:
-		Log.system("Applying custom wall material")
-		# TODO: Apply to GridMap when material system is implemented
 
 	# ========================================================================
 	# ENVIRONMENT - Background, fog, ambient lighting
@@ -190,47 +170,14 @@ func _apply_level_visuals(config: LevelConfig) -> void:
 	# ========================================================================
 	# Each level can have different wall/floor/ceiling meshes and textures.
 	# MeshLibrary defines what gets placed when GridMap sets a cell.
-	if not config.mesh_library_path.is_empty() and config.mesh_library_path != grid_map.mesh_library.resource_path:
+	var current_mesh_lib_path = grid_map.mesh_library.resource_path if grid_map.mesh_library else ""
+	if not config.mesh_library_path.is_empty() and config.mesh_library_path != current_mesh_lib_path:
 		var mesh_lib = load(config.mesh_library_path) as MeshLibrary
 		if mesh_lib:
 			grid_map.mesh_library = mesh_lib
 			Log.system("Loaded MeshLibrary: %s" % config.mesh_library_path)
 		else:
 			push_error("[Grid3D] Failed to load MeshLibrary: %s" % config.mesh_library_path)
-
-# ============================================================================
-# GRID GENERATION
-# ============================================================================
-
-func _generate_grid() -> void:
-	"""Generate 3D grid using GridMap
-
-	NOTE: This is the legacy method for static level configs.
-	For procedural generation (ChunkManager-based), chunks are loaded
-	dynamically via load_chunk() instead.
-	"""
-	# For now, create simple open area with walls around edges
-	# TODO: Replace with Backrooms procedural generation
-
-	for y in range(grid_size.y):
-		for x in range(grid_size.x):
-			var pos = Vector2i(x, y)
-			var is_edge = x == 0 or x == grid_size.x - 1 or y == 0 or y == grid_size.y - 1
-
-			if is_edge:
-				# Place wall
-				grid_map.set_cell_item(Vector3i(x, 0, y), TileType.WALL)
-			else:
-				# Place floor
-				grid_map.set_cell_item(Vector3i(x, 0, y), TileType.FLOOR)
-				walkable_cells[pos] = true
-
-			# Place ceiling everywhere (at y=1 in grid space, which is y=4 in world space due to mesh_transform)
-			grid_map.set_cell_item(Vector3i(x, 1, y), TileType.CEILING)
-
-	# Cache materials for line-of-sight proximity fade updates
-	_cache_wall_materials()
-	_cache_ceiling_materials()
 
 # ============================================================================
 # CHUNK LOADING (Procedural Generation Integration)
@@ -284,7 +231,6 @@ func load_chunk(chunk: Chunk) -> void:
 						grid_map.set_cell_item(grid_pos, TileType.FLOOR)
 						floor_count += 1
 						walkable_cells[world_tile_pos] = true
-					# TODO: Add support for EXIT_STAIRS and other special tiles
 
 					# Place ceiling from chunk data (Y=1 layer) - level generator controls placement
 					var ceiling_tile_type = sub_chunk.get_tile_at_layer(tile_pos, 1)

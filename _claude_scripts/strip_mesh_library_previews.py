@@ -87,8 +87,10 @@ def strip_preview_images(tres_path):
     return True
 
 if __name__ == '__main__':
-    # Default path relative to project root
-    tres_path = 'assets/grid_mesh_library.tres'
+    import sys
+
+    # Default to Level 0 MeshLibrary, or accept path as argument
+    tres_path = sys.argv[1] if len(sys.argv) > 1 else 'assets/level_00_mesh_library.tres'
 
     success = strip_preview_images(tres_path)
     exit(0 if success else 1)
