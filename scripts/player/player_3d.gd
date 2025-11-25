@@ -236,8 +236,6 @@ func hide_move_indicator() -> void:
 
 func _initialize_stats() -> void:
 	"""Initialize player stats from template (or defaults)"""
-	# TODO: Load from StatTemplate resource when created
-	# For now, use default StatBlock (BODY=5, MIND=5, NULL=0)
 	stats = StatBlock.new()
 
 	# Initialize item pools (3 slots each for BODY/MIND/NULL, 1 slot for LIGHT)

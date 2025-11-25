@@ -35,19 +35,14 @@ func _ready() -> void:
 	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "Initializing 3D viewport (640x480 with PSX shaders)")
 
 	# ========================================================================
-	# LEVEL LOADING - Environment settings applied here
+	# LEVEL LOADING - Game always starts on Level 0
 	# ========================================================================
-	# Load Level 0 config (defines appearance, generation params, entity spawns, etc.)
-	var level_0 := LevelManager.load_level(0)
-	if level_0:
-		# Configure grid with level-specific settings
-		# This applies: background color, lighting, materials, fog, etc.
-		grid.configure_from_level(level_0)
-		LevelManager.transition_to_level(0)
-	else:
-		# Fallback to default grid if level config not found
-		push_warning("[Game3D] Level 0 config not found, using default grid")
-		grid.initialize(Grid3D.GRID_SIZE)
+	# Transition to Level 0 (loads config and sets as current level)
+	LevelManager.transition_to_level(0)
+
+	# Configure grid with Level 0 settings (lighting, materials, fog, etc.)
+	var current_level := LevelManager.get_current_level()
+	grid.configure_from_level(current_level)
 
 	# Link player to grid and indicator
 	player.grid = grid

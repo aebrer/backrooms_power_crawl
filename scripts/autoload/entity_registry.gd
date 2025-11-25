@@ -25,10 +25,7 @@ func _ready() -> void:
 	Log.system("EntityRegistry initialized with %d entities" % _entities.size())
 
 func _load_entities() -> void:
-	"""Load all EntityInfo resources from data directory"""
-	# TODO: When entity data files are created, load them from /data/entities/
-	# For now, minimal placeholders for testing examination system
-
+	"""Load all EntityInfo resources"""
 	# Generic placeholder for unregistered entities
 	var unknown = EntityInfo.new()
 	unknown.entity_id = "unknown_entity"

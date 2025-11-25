@@ -49,8 +49,6 @@ var level_configs: Dictionary = {}  # level_id → LevelConfig (loaded from reso
 var grid_3d: Grid3D = null  # Cached reference to Grid3D (found via search)
 var generation_thread: ChunkGenerationThread = null  # Worker thread for async generation
 var item_spawner: ItemSpawner = null  # Item spawning system (initialized after corruption_tracker)
-# var island_manager: IslandManager  # TODO: Phase 5
-# var entity_spawner: EntitySpawner  # TODO: Phase 4
 
 # ============================================================================
 # LIFECYCLE
@@ -286,10 +284,6 @@ func _generate_chunk(chunk_pos: Vector2i, level_id: int) -> Chunk:
 		push_warning("No generator for level %d, using placeholder" % level_id)
 		_generate_placeholder_chunk(chunk)
 
-	# TODO: Phase 4 - Spawn entities
-	# var level_config := generator.get_level_config()
-	# entity_spawner.spawn_entities_in_chunk(chunk, level_config)
-
 	# NOTE: Item spawning happens in _on_chunk_completed() on main thread
 	# (not here, since this is only called for fallback synchronous generation)
 
@@ -487,8 +481,6 @@ func _unload_chunk(chunk_key: Vector3i) -> void:
 	"""Unload a chunk from memory"""
 	var chunk: Chunk = loaded_chunks[chunk_key]
 
-	# TODO: Phase 7 - Save chunk state if modified (entities killed, items taken)
-
 	# Remove from Grid3D render (use cached reference)
 	if grid_3d:
 		grid_3d.unload_chunk(chunk)
@@ -617,7 +609,6 @@ func _get_player_level() -> int:
 	"""Get player's current level
 
 	Returns 0 (Level 0) by default.
-	TODO: Add level tracking to Player when multi-level support is implemented.
 	"""
 	# Try to get player from game scene
 	if has_node("/root/Game/Player"):

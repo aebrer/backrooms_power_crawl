@@ -1,8 +1,7 @@
-[gd_scene load_steps=15 format=3 uid="uid://cy7w8qn1yf3d"]
+[gd_scene load_steps=14 format=3 uid="uid://cy7w8qn1yf3d"]
 
 [ext_resource type="Script" path="res://scripts/game_3d.gd" id="1_game3d"]
 [ext_resource type="Script" path="res://scripts/grid_3d.gd" id="2_grid3d"]
-[ext_resource type="MeshLibrary" uid="uid://beijc8l4th7t4" path="res://assets/grid_mesh_library.tres" id="3_meshlibrary"]
 [ext_resource type="Script" path="res://scripts/player/player_3d.gd" id="4_player3d"]
 [ext_resource type="Script" path="res://scripts/player/input_state_machine.gd" id="5_statemachine"]
 [ext_resource type="Script" path="res://scripts/player/states/idle_state.gd" id="6_idle"]
@@ -65,7 +64,6 @@ shadow_enabled = true
 script = ExtResource("2_grid3d")
 
 [node name="GridMap" type="GridMap" parent="Grid3D"]
-mesh_library = ExtResource("3_meshlibrary")
 cell_size = Vector3(2, 1, 2)
 collision_layer = 2
 collision_mask = 0

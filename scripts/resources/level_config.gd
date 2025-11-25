@@ -43,16 +43,8 @@ class_name LevelConfig
 @export_group("Visual Assets")
 
 ## Path to MeshLibrary resource for this level's tileset
+## MeshLibrary contains all tile meshes with materials baked in (walls, floors, ceilings)
 @export_file("*.tres") var mesh_library_path: String = ""
-
-## Material for wall tiles (PSX shader with level-specific textures)
-@export var wall_material: Material = null
-
-## Material for floor tiles
-@export var floor_material: Material = null
-
-## Material for ceiling tiles
-@export var ceiling_material: Material = null
 
 ## Ambient light color for this level
 @export var ambient_light_color: Color = Color(1.0, 1.0, 1.0, 1.0)
