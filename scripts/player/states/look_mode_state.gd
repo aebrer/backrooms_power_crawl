@@ -116,6 +116,13 @@ func handle_input(event: InputEvent) -> void:
 	# (RT/LMB handled in process_frame via InputManager)
 
 func process_frame(_delta: float) -> void:
+	# Check if look mode button released
+	# InputManager.is_action_pressed handles: LT trigger, RMB
+	if InputManager and not InputManager.is_action_pressed("look_mode"):
+		Log.system("[LookModeState] Look button released - transitioning to IdleState")
+		transition_to("IdleState")
+		return
+
 	# Handle RT/LMB for wait action (using InputManager for proper action tracking)
 	if InputManager and InputManager.is_action_just_pressed("move_confirm"):
 		_execute_wait_action()
@@ -139,18 +146,25 @@ func process_frame(_delta: float) -> void:
 				# Extract simple type from "level_0_floor" → "floor"
 				var env_type = new_target.entity_id.replace("level_0_", "")
 				KnowledgeDB.examine_environment(env_type)
+			elif new_target.entity_type == Examinable.EntityType.ITEM:
+				# Items - need to get rarity for correct EXP reward
+				var item = KnowledgeDB._get_item_by_id(new_target.entity_id)
+				if item:
+					var rarity_name = ItemRarity.RARITY_NAMES[item.rarity].to_lower()
+					KnowledgeDB.examine_item(new_target.entity_id, rarity_name)
+				else:
+					# Fallback if item not found
+					KnowledgeDB.examine_item(new_target.entity_id, "common")
 			else:
-				# Entities, items, hazards
+				# Entities, hazards
 				KnowledgeDB.examine_entity(new_target.entity_id)
 
 			if examination_panel:
-				# Log.system("Showing examination panel")  # Too verbose
 				examination_panel.show_panel(new_target)
 			else:
 				Log.warn(Log.Category.STATE, "Cannot show panel - examination_panel is null")
 		else:
 			# Looking at nothing
-			# Log.trace(Log.Category.STATE, "Looking at nothing")  # Too verbose
 			if examination_panel:
 				examination_panel.hide_panel()
 
@@ -159,19 +173,15 @@ func process_frame(_delta: float) -> void:
 # ============================================================================
 
 func _execute_wait_action() -> void:
-	"""Execute a wait action (pass turn without moving) while staying in look mode"""
+	"""Execute a wait action (pass turn without moving) via state machine flow"""
 	var wait_action = WaitAction.new()
 
-	Log.turn("[Look Mode] Player waiting (passing turn)")
-
-	# Execute the wait action directly (stay in look mode, don't transition)
+	# Set pending action and return state, then transition through turn flow
+	# PreTurnState → ExecutingTurnState → PostTurnState → back to LookModeState
 	if wait_action.can_execute(player):
-		wait_action.execute(player)
-
-		# TODO: Process enemy turns when enemy system is implemented
-		# TODO: Process environmental effects when physics system is implemented
-
-		Log.turn("===== TURN %d COMPLETE (from Look Mode) =====" % player.turn_count)
+		player.pending_action = wait_action
+		player.return_state = "LookModeState"  # Return here after turn completes
+		transition_to("PreTurnState")
 
 func _update_action_preview() -> void:
 	"""Update action preview with wait action"""

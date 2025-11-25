@@ -124,7 +124,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		"toggle_ability_2",
 		"toggle_ability_3",
 		"toggle_ability_4",
-		"examine_mode",
+		"look_mode",
 		"pause"
 	]
 
@@ -237,8 +237,6 @@ func _update_triggers() -> void:
 		_actions_this_frame["move_confirm"] = true
 		# Input event logging handled by _log_input_event()
 
-	# LT (left trigger) currently unmapped
-	# Future: Could map to examine_mode or other actions
 
 func _update_mouse_buttons() -> void:
 	"""Track mouse button state for input parity (left click = RT)"""
@@ -282,6 +280,13 @@ func is_action_pressed(action: String) -> bool:
 		# 2. Left mouse button is pressed (input parity!)
 		# 3. Regular keyboard/button action is pressed (Space)
 		return right_trigger_pressed or left_mouse_pressed or Input.is_action_pressed(action)
+
+	# Special handling for look_mode - check LT trigger state
+	if action == "look_mode":
+		# look_mode is "pressed" if any of:
+		# 1. Physical LT trigger is above threshold (already mapped in project.godot)
+		# 2. RMB (already mapped in project.godot)
+		return left_trigger_pressed or Input.is_action_pressed(action)
 
 	# For other actions, use Godot's built-in system
 	return Input.is_action_pressed(action)

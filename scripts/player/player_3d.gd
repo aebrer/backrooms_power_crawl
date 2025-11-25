@@ -27,10 +27,18 @@ signal turn_completed()
 # Grid state (SAME AS 2D VERSION)
 var grid_position: Vector2i = Vector2i(64, 64)
 var pending_action = null
+var return_state: String = "IdleState"  # State to return to after turn completes
+var suppress_input_next_frame: bool = false  # Skip input for one frame (prevents UI->movement double-trigger)
 var turn_count: int = 0
 
 # Stats (NEW)
 var stats: StatBlock = null
+
+# Item pools (4 pools: BODY, MIND, NULL, LIGHT)
+var body_pool: ItemPool = null
+var mind_pool: ItemPool = null
+var null_pool: ItemPool = null
+var light_pool: ItemPool = null
 
 # Node references
 var grid: Grid3D = null
@@ -232,6 +240,16 @@ func _initialize_stats() -> void:
 	# For now, use default StatBlock (BODY=5, MIND=5, NULL=0)
 	stats = StatBlock.new()
 
+	# Initialize item pools (3 slots each for BODY/MIND/NULL, 1 slot for LIGHT)
+	body_pool = ItemPool.new(Item.PoolType.BODY, 3)
+	mind_pool = ItemPool.new(Item.PoolType.MIND, 3)
+	null_pool = ItemPool.new(Item.PoolType.NULL, 3)
+	light_pool = ItemPool.new(Item.PoolType.LIGHT, 1)
+
+	# DEBUG: Add DEBUG_ITEM to NULL pool for testing
+	var debug_item = DebugItem.new()
+	null_pool.add_item(debug_item, 0, self)  # Add to slot 0, enabled by default
+
 	# Connect KnowledgeDB signals for EXP rewards
 	KnowledgeDB.discovery_made.connect(_on_discovery_made)
 
@@ -244,6 +262,12 @@ func _initialize_stats() -> void:
 
 	# Log for debugging
 	Log.system("Player stats initialized: %s" % str(stats))
+	Log.system("Item pools initialized: BODY=%s, MIND=%s, NULL=%s, LIGHT=%s" % [
+		body_pool,
+		mind_pool,
+		null_pool,
+		light_pool
+	])
 
 func _on_discovery_made(_subject_type: String, _subject_id: String, exp_reward: int) -> void:
 	"""Called when player discovers something novel - award EXP"""
@@ -270,3 +294,22 @@ func _on_clearance_increased(old_level: int, new_level: int) -> void:
 	"""Called when Clearance increases (via perk choice) - sync with KnowledgeDB"""
 	KnowledgeDB.set_clearance_level(new_level)
 	Log.player("Player Clearance increased: %d → %d (knowledge unlocked)" % [old_level, new_level])
+
+# ============================================================================
+# ITEM SYSTEM
+# ============================================================================
+
+func execute_item_pools() -> void:
+	"""Execute all item pools in order (called each turn)
+
+	Execution order: BODY → MIND → NULL → LIGHT
+	This order matters for synergies between items.
+	"""
+	if body_pool:
+		body_pool.execute_turn(self, turn_count)
+	if mind_pool:
+		mind_pool.execute_turn(self, turn_count)
+	if null_pool:
+		null_pool.execute_turn(self, turn_count)
+	if light_pool:
+		light_pool.execute_turn(self, turn_count)

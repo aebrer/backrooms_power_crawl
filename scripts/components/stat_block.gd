@@ -346,6 +346,15 @@ func restore_mana(amount: float) -> void:
 	current_mana += amount
 	Log.system("Restored %.1f mana (%.1f → %.1f)" % [amount, old_mana, current_mana])
 
+func regenerate_mana() -> void:
+	"""Regenerate mana based on NULL stat (NULL/2 per turn)."""
+	if null_stat > 0:
+		var regen_amount = null_stat / 2.0
+		var old_mana = current_mana
+		current_mana += regen_amount
+		if regen_amount > 0:
+			Log.system("Regenerated %.1f mana (%.1f → %.1f)" % [regen_amount, old_mana, current_mana])
+
 # ============================================================================
 # PROGRESSION
 # ============================================================================

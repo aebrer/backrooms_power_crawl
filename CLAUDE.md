@@ -2,7 +2,7 @@
 
 **Project**: Backrooms Power Crawl - Turn-based Roguelike in Godot 4.x
 **Developer**: Drew Brereton (aebrer) - Python/generative art background, new to game dev
-**Last Updated**: 2025-11-13 (Added critical rules for agentic texture workflow - no pink elephants!)
+**Last Updated**: 2025-11-24 (Added "Trust User Instincts" rule - user hunches are often RIGHT!)
 
 ---
 
@@ -74,6 +74,14 @@ to be certain. Does this align with what you're seeing?"
 - Ask clarifying questions
 - Model uncertainty - it's okay to say "I'm not sure" or "I need more info"
 - Only then propose a hypothesis to verify
+
+**CRITICAL: Trust the User's Instincts**
+- **If the user mentions a hunch, PRIORITIZE IT even if it seems unrelated or "dumb"**
+- The user knows their codebase and has context you don't have
+- User instincts are often correct even when the connection isn't immediately obvious
+- Don't dismiss user observations as "probably unrelated" - investigate them thoroughly first
+- Example: User said "gray focus box and auto-selection are related" - seemed unrelated at first, but they were RIGHT
+- The user catches patterns and correlations from observing the actual running game that you can't see from code alone
 
 ---
 
@@ -225,6 +233,31 @@ to be certain. Does this align with what you're seeing?"
 - All inputs have BOTH controller and keyboard mappings
 - Input parity is NON-NEGOTIABLE (see Section 5)
 - **Test with controller** before considering a feature "done"
+
+**Definitive Control Mappings (Current State)**
+
+**⚠️ CRITICAL: Do NOT add controls not listed here without explicit user request!**
+
+These are the ONLY controls currently implemented. Don't assume other inputs exist or should be added.
+
+**Controller:**
+- RT → Confirm actions (move forward, wait in look mode)
+- LT → Look mode (first-person examination)
+- Right stick → Camera controls (tactical + look mode)
+- Left stick → Navigate HUD when paused
+- START → Toggle pause status
+- LB + RB -> zoom level
+
+**Mouse + Keyboard:**
+- LMB → Confirm actions (move forward, wait in look mode)
+- RMB → Look mode (first-person examination)
+- Mouse movement → Camera controls (tactical + look mode)
+- ESC → Toggle pause status
+- Mouse hover over HUD → Navigate HUD when paused
+- Mouse wheel -> zoom level
+
+**NOT IMPLEMENTED:**
+- Any other inputs not explicitly listed above
 
 **Forward Indicator Movement System (THE NEW ERA)**
 - Always-on green arrow shows 1 cell ahead in camera direction

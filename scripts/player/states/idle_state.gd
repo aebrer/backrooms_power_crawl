@@ -32,7 +32,6 @@ func enter() -> void:
 	var rt_currently_held = InputManager.is_action_pressed("move_confirm")
 	if rt_currently_held and rt_held:
 		# Continue the hold timer
-		# Log.movement("RT/Click still held - continuing hold_time=%.2fs" % rt_hold_time)  # Too verbose
 		pass
 	else:
 		# Fresh entry or RT released - reset
@@ -49,7 +48,7 @@ func handle_input(event: InputEvent) -> void:
 	# Initial movement press handled in process_frame for consistent timing
 
 func _move_forward() -> void:
-	"""Move forward in camera direction"""
+	"""Move forward in camera direction (or pick up item if present)"""
 	if not player:
 		return
 
@@ -59,17 +58,25 @@ func _move_forward() -> void:
 		forward_direction = player.get_camera_forward_grid_direction()
 
 	if forward_direction == Vector2i.ZERO:
-		# Log.movement("No forward direction, ignoring move")  # Too verbose
 		return
 
-	# Log.movement_info("Moving forward: direction=%s" % forward_direction)  # Too verbose
+	# Check if there's an item at the target position
+	var target_position = player.grid_position + forward_direction
+	var item_at_target = _get_item_at_position(target_position)
 
-	# Create and execute movement action
-	var action = MovementAction.new(forward_direction)
+	# Create appropriate action (pickup or movement)
+	var action: Action
+	if item_at_target:
+		action = PickupItemAction.new(target_position, item_at_target)
+	else:
+		action = MovementAction.new(forward_direction)
+
+	# Execute action
 	if action.can_execute(player):
 		player.pending_action = action
+		player.return_state = "IdleState"  # Return here after turn completes
 		last_blocked_direction = Vector2i(-999, -999)  # Reset blocked tracking on success
-		transition_to("ExecutingTurnState")
+		transition_to("PreTurnState")
 	else:
 		# Only warn on initial press, not during hold-to-repeat (fast players can tell it's blocked)
 		if not rt_held:
@@ -79,14 +86,27 @@ func process_frame(delta: float) -> void:
 	if not InputManager:
 		return
 
+	# Skip input for one frame if requested (prevents UI button from triggering movement)
+	if player and player.suppress_input_next_frame:
+		player.suppress_input_next_frame = false
+		# Still update indicator and preview, just don't process input
+		player.update_move_indicator()
+		_update_action_preview()
+		return
+
 	# Update forward indicator every frame (follows camera rotation)
 	if player:
 		player.update_move_indicator()
 		_update_action_preview()
 
+	# Check for look mode activation via InputManager (handles trigger synthesis)
+	if InputManager.is_action_just_pressed("look_mode"):
+		Log.system("[IdleState] look_mode action detected - transitioning to LookModeState")
+		transition_to("LookModeState")
+		return
+
 	# Handle RT/Click press and hold-to-repeat
 	if InputManager.is_action_just_pressed("move_confirm"):
-		# Log.movement("RT/Click just pressed - initial move")  # Too verbose
 		_move_forward()
 		rt_held = true
 		rt_hold_time = 0.0
@@ -114,7 +134,6 @@ func process_frame(delta: float) -> void:
 			rt_repeat_timer = 0.0
 
 		if should_repeat:
-			# Log.movement("REPEAT! hold_time=%.2fs interval=%.2fs" % [rt_hold_time, current_interval])  # Too verbose
 			_move_forward()
 			return
 	elif not rt_is_down:
@@ -125,7 +144,7 @@ func process_frame(delta: float) -> void:
 		last_blocked_direction = Vector2i(-999, -999)  # Reset blocked tracking on release
 
 func _update_action_preview() -> void:
-	"""Update action preview with current forward movement"""
+	"""Update action preview with current forward movement or item pickup"""
 	if not player:
 		return
 
@@ -140,9 +159,33 @@ func _update_action_preview() -> void:
 		player.action_preview_changed.emit(empty_actions)
 		return
 
-	# Create movement action for preview (not executed yet)
-	var preview_action = MovementAction.new(forward_direction)
+	# Check if there's an item at the target position
+	var target_position = player.grid_position + forward_direction
+	var item_at_target = _get_item_at_position(target_position)
+
+	var preview_action: Action
+
+	if item_at_target:
+		# Show pickup action
+		preview_action = PickupItemAction.new(target_position, item_at_target)
+	else:
+		# Show movement action
+		preview_action = MovementAction.new(forward_direction)
 
 	# Emit preview signal with typed array
 	var actions: Array[Action] = [preview_action]
 	player.action_preview_changed.emit(actions)
+
+func _get_item_at_position(grid_pos: Vector2i) -> Dictionary:
+	"""Check if there's an item at the given grid position
+
+	Args:
+		grid_pos: Grid coordinates to check
+
+	Returns:
+		Item data Dictionary if item exists, empty Dictionary otherwise
+	"""
+	if not player or not player.grid or not player.grid.item_renderer:
+		return {}
+
+	return player.grid.item_renderer.get_item_at(grid_pos)

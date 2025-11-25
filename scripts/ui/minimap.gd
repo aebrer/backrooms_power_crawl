@@ -28,6 +28,7 @@ const COLOR_TRAIL_START := Color(0.9, 0.0, 1.0, 0.3)  # Faint purple
 const COLOR_TRAIL_END := Color(0.9, 0.0, 1.0, 1.0)  # Bright purple
 const COLOR_CHUNK_BOUNDARY := Color("#404040")  # Subtle gray
 const COLOR_UNLOADED := Color("#000000")  # Black
+const COLOR_ITEM := Color("#ffff00")  # Bright yellow (discovered items)
 
 # ============================================================================
 # NODES
@@ -206,6 +207,9 @@ func _update_dynamic_elements(player_pos: Vector2i) -> void:
 	# Draw player trail
 	_draw_trail(player_pos)
 
+	# Draw discovered items
+	_draw_discovered_items(player_pos)
+
 	# Draw player position (centered)
 	var player_screen := _world_to_screen(player_pos, player_pos)
 	if _is_valid_screen_pos(player_screen):
@@ -281,6 +285,21 @@ func _draw_trail(player_pos: Vector2i) -> void:
 
 		# Draw trail pixel
 		map_image.set_pixelv(screen_pos, color)
+
+func _draw_discovered_items(player_pos: Vector2i) -> void:
+	"""Draw discovered items as yellow pixels on minimap"""
+	if not grid or not grid.item_renderer:
+		return
+
+	# Get all discovered item positions from ItemRenderer
+	var discovered_items = grid.item_renderer.get_discovered_item_positions()
+
+	# Draw each discovered item as a yellow pixel
+	for item_pos in discovered_items:
+		var screen_pos := _world_to_screen(item_pos, player_pos)
+
+		if _is_valid_screen_pos(screen_pos):
+			map_image.set_pixelv(screen_pos, COLOR_ITEM)
 
 # ============================================================================
 # HELPERS

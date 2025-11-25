@@ -13,6 +13,7 @@ var action_list: VBoxContainer  # Shows list of actions that will execute
 # State
 var current_actions: Array[Action] = []
 var current_input_device: InputManager.InputDevice = InputManager.InputDevice.MOUSE_KEYBOARD
+var is_paused: bool = false
 
 # ============================================================================
 # LIFECYCLE
@@ -29,6 +30,11 @@ func _ready() -> void:
 		InputManager.input_device_changed.connect(_on_input_device_changed)
 		current_input_device = InputManager.current_input_device
 
+	# Connect to PauseManager for pause state changes
+	if PauseManager:
+		PauseManager.pause_toggled.connect(_on_pause_toggled)
+		is_paused = PauseManager.is_paused
+
 	# Hide by default (will show when actions provided)
 	panel.visible = false
 
@@ -40,22 +46,22 @@ func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	# Create panel (bottom-right corner)
+	# Create panel (center top)
 	panel = PanelContainer.new()
 	panel.name = "ActionPreviewPanel"
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(panel)
 
-	# Position in bottom-right corner (auto-sizes based on content)
-	panel.anchor_left = 1.0   # Right edge
-	panel.anchor_top = 1.0    # Bottom edge
-	panel.anchor_right = 1.0
-	panel.anchor_bottom = 1.0
-	panel.offset_left = -280   # 280px from right edge
-	panel.offset_right = -16   # 16px margin from edge
-	panel.offset_bottom = -16  # 16px margin from bottom
-	# No offset_top - let content determine height
-	panel.grow_vertical = Control.GROW_DIRECTION_BEGIN  # Grow upward from bottom
+	# Position at center top (auto-sizes based on content)
+	panel.anchor_left = 0.5   # Center horizontally
+	panel.anchor_top = 0.0    # Top edge
+	panel.anchor_right = 0.5
+	panel.anchor_bottom = 0.0
+	panel.offset_left = -140   # 280px wide panel, centered (-280/2)
+	panel.offset_right = 140   # 280px wide panel, centered (+280/2)
+	panel.offset_top = 16      # 16px margin from top
+	# No offset_bottom - let content determine height
+	panel.grow_vertical = Control.GROW_DIRECTION_END  # Grow downward from top
 
 	# Style panel (consistent with examination UI)
 	var style = StyleBoxFlat.new()
@@ -101,11 +107,12 @@ func _build_ui() -> void:
 
 func show_preview(actions: Array[Action], player) -> void:
 	"""Display preview for given actions"""
+	# Store actions for later (when unpausing)
+	current_actions = actions
+
 	if actions.is_empty():
 		hide_preview()
 		return
-
-	current_actions = actions
 
 	# Clear previous action list
 	for child in action_list.get_children():
@@ -168,11 +175,27 @@ func _add_action_entry(info: Dictionary) -> void:
 
 func _update_header() -> void:
 	"""Update header text based on current input device"""
+	if is_paused:
+		header_label.text = "GAME PAUSED"
+		return
+
 	var button_text = "[Left Click]"
 	if current_input_device == InputManager.InputDevice.GAMEPAD:
 		button_text = "[RT]"
 
 	header_label.text = "%s Next Turn" % button_text
+
+func _show_pause_message() -> void:
+	"""Show pause message instead of action preview"""
+	# Clear action list
+	for child in action_list.get_children():
+		child.queue_free()
+
+	# Update header to show pause state
+	header_label.text = "GAME PAUSED"
+
+	# Show panel
+	panel.visible = true
 
 # ============================================================================
 # SIGNALS
@@ -182,3 +205,23 @@ func _on_input_device_changed(device: InputManager.InputDevice) -> void:
 	"""Handle input device switching"""
 	current_input_device = device
 	_update_header()
+
+func _on_pause_toggled(paused: bool) -> void:
+	"""Handle pause state changes"""
+	is_paused = paused
+
+	if paused:
+		# Show pause message
+		_show_pause_message()
+	else:
+		# When unpausing, hide the pause message
+		# The game will call show_preview() again with current actions
+		hide_preview()
+
+# ============================================================================
+# LAYOUT MANAGEMENT (Portrait/Landscape)
+# ============================================================================
+
+func set_portrait_mode(is_portrait: bool) -> void:
+	"""Position is always center top in both modes - no change needed"""
+	pass  # Panel stays at center top in both portrait and landscape

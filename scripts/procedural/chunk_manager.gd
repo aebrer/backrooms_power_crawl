@@ -45,8 +45,10 @@ var initial_load_complete: bool = false  # Track if initial area load is done
 # Systems (will be initialized when available)
 var corruption_tracker: CorruptionTracker
 var level_generators: Dictionary = {}  # level_id → LevelGenerator
+var level_configs: Dictionary = {}  # level_id → LevelConfig (loaded from resources)
 var grid_3d: Grid3D = null  # Cached reference to Grid3D (found via search)
 var generation_thread: ChunkGenerationThread = null  # Worker thread for async generation
+var item_spawner: ItemSpawner = null  # Item spawning system (initialized after corruption_tracker)
 # var island_manager: IslandManager  # TODO: Phase 5
 # var entity_spawner: EntitySpawner  # TODO: Phase 4
 
@@ -61,6 +63,12 @@ func _ready() -> void:
 	# Initialize level generators
 	level_generators[0] = Level0Generator.new()
 
+	# Instantiate level configs (use .new() instead of load() so _init() is called)
+	level_configs[0] = Level0Config.new()
+
+	# Initialize item spawner with Level 0 config
+	item_spawner = ItemSpawner.new(corruption_tracker, level_configs[0])
+
 	# Initialize generation thread with Level 0 generator
 	generation_thread = ChunkGenerationThread.new(level_generators[0])
 	generation_thread.chunk_completed.connect(_on_chunk_completed)
@@ -72,7 +80,7 @@ func _ready() -> void:
 	# Find Grid3D in scene tree (it may be nested in UI structure)
 	_find_grid_3d()
 
-	Log.system("ChunkManager initialized (seed: %d, generators: %d, threaded: true)" % [
+	Log.system("ChunkManager initialized (seed: %d, generators: %d, threaded: true, items: true)" % [
 		world_seed,
 		level_generators.size()
 	])
@@ -113,19 +121,21 @@ func _process(_delta: float) -> void:
 
 func _connect_to_player_signal() -> void:
 	"""Connect to player's turn_completed signal"""
-	var player_path := "/root/Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D/Player3D"
-	if has_node(player_path):
-		var player = get_node(player_path)
+	var player = _find_player()
+	if player:
 		if not player.turn_completed.is_connected(on_turn_completed):
 			player.turn_completed.connect(on_turn_completed)
 			Log.system("[ChunkManager] Connected to player turn_completed signal")
 	else:
-		Log.warn(Log.Category.SYSTEM, "Player not found at %s for turn signal connection" % player_path)
+		Log.warn(Log.Category.SYSTEM, "Player not found for turn signal connection")
 
 func on_turn_completed() -> void:
 	"""Called when a turn completes (triggered by player's turn_completed signal)"""
 	# Check if player entered a new chunk (for corruption tracking)
 	_check_player_chunk_change()
+
+	# Update item discovery state (mark items near player as discovered)
+	_update_item_discovery()
 
 	# Update chunks around player (queue new chunks if needed)
 	_update_chunks_around_player()
@@ -172,13 +182,6 @@ func _update_chunks_around_player() -> void:
 			var distance := player_chunk.distance_to(chunk_pos)
 			chunks_to_queue.append({"key": chunk_key, "distance": distance})
 
-	# Log if we found chunks to queue
-	# if not chunks_to_queue.is_empty():
-	# 	Log.grid("Found %d new chunks to queue around player chunk %s" % [
-	# 		chunks_to_queue.size(),
-	# 		player_chunk
-	# 	])  # Too verbose
-
 	# Sort by distance (nearest first - CRITICAL for performance!)
 	chunks_to_queue.sort_custom(func(a, b): return a.distance < b.distance)
 
@@ -187,7 +190,6 @@ func _update_chunks_around_player() -> void:
 	var chunks_to_add := chunks_to_queue.size()
 	if initial_load_complete and chunks_to_add > 1:
 		chunks_to_add = 1
-		# Log.grid("Limiting to 1 chunk per turn (post-initial load)")  # Too verbose
 
 	for i in range(chunks_to_add):
 		generating_chunks.append(chunks_to_queue[i].key)
@@ -219,11 +221,6 @@ func _check_player_chunk_change() -> void:
 
 			corruption_tracker.increase_corruption(player_level, corruption_amount, 0.0)
 
-			# Log.grid("Entered new chunk %s (visited: %d, corruption: %.2f)" % [
-			# 	player_chunk,
-			# 	visited_chunks.size(),
-			# 	corruption_tracker.get_corruption(player_level)
-			# ])  # Too verbose (fires every new chunk)
 
 func _process_generation_queue() -> void:
 	"""Send chunks to worker thread for generation"""
@@ -293,6 +290,9 @@ func _generate_chunk(chunk_pos: Vector2i, level_id: int) -> Chunk:
 	# var level_config := generator.get_level_config()
 	# entity_spawner.spawn_entities_in_chunk(chunk, level_config)
 
+	# NOTE: Item spawning happens in _on_chunk_completed() on main thread
+	# (not here, since this is only called for fallback synchronous generation)
+
 	# Corruption is no longer increased during generation
 	# It now increases when player ENTERS a chunk for the first time
 
@@ -330,6 +330,40 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 	# Store chunk in loaded_chunks
 	loaded_chunks[chunk_key] = chunk
 
+	# Spawn items (separate pass after terrain generation, on main thread)
+	var level_config: LevelConfig = level_configs.get(level_id, null)
+
+	# Debug logging to diagnose spawning issues
+	Log.system("Item spawning check: level_config=%s, item_spawner=%s, permitted_items=%d" % [
+		"exists" if level_config else "null",
+		"exists" if item_spawner else "null",
+		level_config.permitted_items.size() if level_config else 0
+	])
+
+	if level_config and item_spawner and not level_config.permitted_items.is_empty():
+		Log.system("Attempting to spawn items in chunk at %s" % chunk.position)
+		var spawned_items = item_spawner.spawn_items_for_chunk(
+			chunk,
+			0,  # Turn number (will be updated later with actual turn tracking)
+			level_config.permitted_items
+		)
+
+		Log.system("Spawned %d items in chunk" % spawned_items.size())
+
+		# Store spawned items in subchunks for persistence
+		for world_item in spawned_items:
+			var item_data = world_item.to_dict()
+			# Find the subchunk containing this item
+			var chunk_world_pos = chunk.position * Chunk.SIZE  # Convert chunk coords to world tile coords
+			var local_pos = world_item.world_position - chunk_world_pos
+			var subchunk_x = local_pos.x / SubChunk.SIZE
+			var subchunk_y = local_pos.y / SubChunk.SIZE
+			var subchunk = chunk.get_sub_chunk(Vector2i(subchunk_x, subchunk_y))
+			if subchunk:
+				subchunk.add_world_item(item_data)
+	else:
+		Log.warn(Log.Category.SYSTEM, "Item spawning skipped: conditions not met")
+
 	# Emit progress during initial load
 	if not initial_load_complete:
 		var expected_chunks := (GENERATION_RADIUS * 2 + 1) * (GENERATION_RADIUS * 2 + 1)  # 7×7 = 49
@@ -354,9 +388,6 @@ func _load_chunk_to_grid(chunk: Chunk, chunk_key: Vector3i) -> void:
 		if loaded_chunks.size() == 1:
 			push_warning("[ChunkManager] Grid3D not found in scene tree - procedural generation disabled")
 
-	# Log chunk generation
-	# Log.grid("Generated chunk %s on Level %d" % [chunk_pos, level_id])  # Too verbose (per-chunk)
-
 	# Log first few chunks and progress milestones to System for visibility
 	if loaded_chunks.size() <= 5 or loaded_chunks.size() % 25 == 0:
 		Log.system("ChunkManager: %d chunks generated (latest: %s)" % [
@@ -368,6 +399,46 @@ func _load_chunk_immediate(chunk: Chunk, chunk_key: Vector3i) -> void:
 	"""Load chunk immediately (fallback for synchronous generation)"""
 	loaded_chunks[chunk_key] = chunk
 	_load_chunk_to_grid(chunk, chunk_key)
+
+# ============================================================================
+# ITEM DISCOVERY
+# ============================================================================
+
+func _update_item_discovery() -> void:
+	"""Check all items in loaded chunks and mark as discovered if within range"""
+	const DISCOVERY_RANGE = 50.0  # Tiles
+
+	var player_pos := _get_player_position()
+
+	# Iterate through all loaded chunks
+	for chunk_key in loaded_chunks:
+		var chunk: Chunk = loaded_chunks[chunk_key]
+
+		# Check all subchunks in this chunk
+		for subchunk in chunk.sub_chunks:
+			# Skip if no items in this subchunk
+			if subchunk.world_items.is_empty():
+				continue
+
+			# Check each item in the subchunk
+			for item_data in subchunk.world_items:
+				# Skip if already discovered
+				if item_data.get("discovered", false):
+					continue
+
+				# Get item position
+				var pos_data = item_data.get("world_position", {"x": 0, "y": 0})
+				var item_pos = Vector2i(pos_data.get("x", 0), pos_data.get("y", 0))
+
+				# Calculate distance
+				var dx = item_pos.x - player_pos.x
+				var dy = item_pos.y - player_pos.y
+				var distance = sqrt(dx * dx + dy * dy)
+
+				# Mark as discovered if within range
+				if distance <= DISCOVERY_RANGE:
+					item_data["discovered"] = true
+					Log.system("Item discovered at %s (distance: %.1f tiles)" % [item_pos, distance])
 
 # ============================================================================
 # CHUNK UNLOADING
@@ -502,6 +573,28 @@ func _search_for_grid_3d(node: Node) -> Grid3D:
 
 	return null
 
+func _find_player() -> Node:
+	"""Find Player3D node dynamically (works in both portrait and landscape layouts)
+
+	Searches the entire scene tree for a node named "Player3D".
+	"""
+	var root = get_tree().root
+	return _search_for_player(root)
+
+func _search_for_player(node: Node) -> Node:
+	"""Recursively search for Player3D node"""
+	# Check if this node is named Player3D
+	if node.name == "Player3D":
+		return node
+
+	# Search children
+	for child in node.get_children():
+		var result = _search_for_player(child)
+		if result:
+			return result
+
+	return null
+
 # ============================================================================
 # PLAYER QUERIES
 # ============================================================================
@@ -511,16 +604,11 @@ func _get_player_position() -> Vector2i:
 
 	Returns default (64, 64) if player not found.
 	"""
-	# Try to get player from game scene
-	# Player is at: /root/Game/.../SubViewport/Game3D/Player3D
-	var player_path := "/root/Game/MarginContainer/HBoxContainer/LeftSide/ViewportPanel/MarginContainer/SubViewportContainer/SubViewport/Game3D/Player3D"
-
-	if has_node(player_path):
-		var player = get_node(player_path)
-		# Player3D script has grid_position property
+	var player = _find_player()
+	if player:
 		return player.grid_position
 	else:
-		Log.warn(Log.Category.GRID, "Player node not found at %s" % player_path)
+		Log.warn(Log.Category.GRID, "Player node not found (using default spawn position)")
 
 	# Fallback to default spawn position
 	return Vector2i(64, 64)
@@ -619,7 +707,7 @@ func start_new_run(new_seed: int = -1) -> void:
 # ============================================================================
 
 # ============================================================================
-# DEBUG
+# UTILITY
 # ============================================================================
 
 func get_loaded_chunk_count() -> int:

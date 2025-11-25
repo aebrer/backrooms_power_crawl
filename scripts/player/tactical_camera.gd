@@ -23,8 +23,8 @@ extends Node3D
 @export var zoom_max: float = 25.0
 
 # Zoom-based pitch adjustment
-@export var pitch_min: float = -80.0    # Look down limit
-@export var pitch_max: float = -10.0    # Look up limit (negative = looking down)
+@export var pitch_min: float = -90.0    # Look down limit
+@export var pitch_max: float = -1.0     # Look up limit (negative = looking down)
 @export var pitch_near: float = -30.0   # Default when zoomed in
 @export var pitch_far: float = -60.0    # Default when zoomed out
 
@@ -96,8 +96,14 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
+	# Debug: Log all mouse events to diagnose portrait mode issue
+	if event is InputEventMouseMotion:
+		Log.camera("MouseMotion event received - relative: %v, mode: %s" % [event.relative, Input.mouse_mode])
+
 	# Mouse camera control (standard third-person!)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		Log.camera("Applying mouse rotation - yaw: %.2f, pitch: %.2f" % [event.relative.x, event.relative.y])
+
 		# Mouse X = horizontal rotation (yaw)
 		h_pivot.rotation_degrees.y -= event.relative.x * mouse_sensitivity
 		h_pivot.rotation_degrees.y = fmod(h_pivot.rotation_degrees.y, 360.0)
@@ -132,14 +138,6 @@ func zoom(delta: float) -> void:
 		var zoom_ratio = (current_zoom - zoom_min) / (zoom_max - zoom_min)
 		var target_pitch = lerp(pitch_near, pitch_far, zoom_ratio)
 		v_pivot.rotation_degrees.x = target_pitch
-
-func snap_rotate(direction: int) -> void:
-	"""Rotate camera to next 45° snap position (for keyboard Q/E)"""
-	# Snap to nearest 45° and rotate by 45°
-	var current_rotation = h_pivot.rotation_degrees.y
-	var snapped_angle = round(current_rotation / 45.0) * 45.0
-	h_pivot.rotation_degrees.y = snapped_angle + (direction * 45.0)
-	h_pivot.rotation_degrees.y = fmod(h_pivot.rotation_degrees.y, 360.0)
 
 # ============================================================================
 # UTILITY
