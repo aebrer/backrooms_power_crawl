@@ -26,6 +26,14 @@ func _ready():
 	# Don't pause the entire tree - just the 3D viewport
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
+func _input(event):
+	# MMB (middle mouse button) toggles pause - check in _input before scene tree consumes it
+	# This is useful on web where ESC in fullscreen exits fullscreen first
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_MIDDLE:
+		toggle_pause()
+		get_viewport().set_input_as_handled()
+		return
+
 func _unhandled_input(event):
 	# ESC (keyboard via ui_cancel) or START (controller via pause action) toggles pause
 	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):

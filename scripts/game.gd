@@ -205,7 +205,7 @@ func _on_inventory_reorder_state_changed(is_reordering: bool) -> void:
 		hints.append(ControlHintAction.new("🖱️", "Hover / Stick", "navigate inventory"))
 		hints.append(ControlHintAction.new("🖱️", "LMB / A", "toggle item ON/OFF"))
 		hints.append(ControlHintAction.new("🖱️", "RMB / X", "reorder item"))
-		hints.append(ControlHintAction.new("⏸️", "START / ESC", "unpause"))
+		hints.append(ControlHintAction.new("⏸️", "START / ESC / MMB", "unpause"))
 
 	action_preview_ui.show_preview(hints, player)
 
