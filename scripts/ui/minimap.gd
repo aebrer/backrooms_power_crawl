@@ -13,6 +13,9 @@ extends Control
 ## - Transform rotation: Rotates TextureRect node, not pixels
 ## - Full renders every turn: ~65k tile queries, but direct GridMap access is fast
 
+## Emitted when minimap scale factor changes (for high-res UI scaling)
+signal resolution_scale_changed(scale_factor: int)
+
 # ============================================================================
 # CONSTANTS
 # ============================================================================
@@ -63,6 +66,9 @@ var last_camera_rotation: float = 0.0
 
 ## Dirty flag - needs content redraw
 var content_dirty: bool = true
+
+## Current scale factor (for resolution-based UI scaling)
+var current_scale_factor: int = 0
 
 ## Last player position for incremental rendering
 var last_player_pos: Vector2i = Vector2i(-99999, -99999)
@@ -182,6 +188,11 @@ func _update_texture_scale() -> void:
 
 	# Update pivot for rotation (should stay centered)
 	map_texture_rect.pivot_offset = Vector2(half_size, half_size)
+
+	# Emit signal if scale changed (for high-res UI scaling)
+	if scale_factor != current_scale_factor:
+		current_scale_factor = scale_factor
+		resolution_scale_changed.emit(scale_factor)
 
 	Log.system("Minimap scaled to %dx (%d pixels) for container %v" % [
 		scale_factor, new_size, container_size

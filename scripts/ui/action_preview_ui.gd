@@ -5,6 +5,26 @@ extends Control
 ## Displays preview of actions that will execute when player presses RT/Left Click
 ## Updates in real-time based on player state and active input device
 
+# ============================================================================
+# CONSTANTS
+# ============================================================================
+
+## Resolution scale threshold for high-res mode (minimap scale > 3 means 4K+)
+const HIGH_RES_SCALE_THRESHOLD := 3
+
+## Font sizes for normal resolution
+const FONT_SIZE_HEADER := 14
+const FONT_SIZE_ICON := 16
+const FONT_SIZE_TEXT := 14
+const FONT_SIZE_COST := 12
+
+## Font size multiplier for high-res mode
+const HIGH_RES_FONT_MULTIPLIER := 1.5
+
+# ============================================================================
+# NODE REFERENCES
+# ============================================================================
+
 # Node references (created programmatically)
 var panel: PanelContainer
 var header_label: Label  # Shows input prompt: "[RT]" or "[Left Click]"
@@ -13,10 +33,14 @@ var action_list: VBoxContainer  # Shows list of actions that will execute
 # Font with emoji fallback (loaded once, used for all labels)
 var emoji_font: Font = null
 
-# State
+# ============================================================================
+# STATE
+# ============================================================================
+
 var current_actions: Array[Action] = []
 var current_input_device: InputManager.InputDevice = InputManager.InputDevice.MOUSE_KEYBOARD
 var is_paused: bool = false
+var is_high_res: bool = false  # True when minimap scale > HIGH_RES_SCALE_THRESHOLD
 
 # ============================================================================
 # LIFECYCLE
@@ -88,7 +112,7 @@ func _build_ui() -> void:
 	# Header showing input prompt
 	header_label = Label.new()
 	header_label.text = "[Left Click] Next Turn"
-	header_label.add_theme_font_size_override("font_size", 14)
+	header_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_HEADER))
 	header_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
 	if emoji_font:
 		header_label.add_theme_font_override("font", emoji_font)
@@ -138,9 +162,56 @@ func hide_preview() -> void:
 	panel.visible = false
 	current_actions.clear()
 
+func set_resolution_scale(scale_factor: int) -> void:
+	"""Update UI scaling based on resolution (called by minimap when scale changes)"""
+	var new_high_res = scale_factor > HIGH_RES_SCALE_THRESHOLD
+	if new_high_res == is_high_res:
+		return  # No change
+
+	is_high_res = new_high_res
+	Log.system("ActionPreviewUI: High-res mode %s (scale=%d, threshold=%d)" % [
+		"enabled" if is_high_res else "disabled", scale_factor, HIGH_RES_SCALE_THRESHOLD
+	])
+
+	# Update header font size immediately
+	header_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_HEADER))
+
+	# Update existing action entries if visible
+	for entry in action_list.get_children():
+		if entry is HBoxContainer:
+			var children = entry.get_children()
+			if children.size() >= 1 and children[0] is Label:
+				children[0].add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_ICON))
+			if children.size() >= 2 and children[1] is Label:
+				children[1].add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_TEXT))
+			if children.size() >= 3 and children[2] is Label:
+				children[2].add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_COST))
+
 # ============================================================================
 # INTERNAL HELPERS
 # ============================================================================
+
+func _get_font_size(base_size: int) -> int:
+	"""Get font size adjusted for resolution"""
+	if is_high_res:
+		return int(base_size * HIGH_RES_FONT_MULTIPLIER)
+	return base_size
+
+func _rebuild_action_list(player) -> void:
+	"""Rebuild action list with current font sizes (called after resolution change)"""
+	if current_actions.is_empty():
+		return
+
+	# Clear and rebuild
+	for child in action_list.get_children():
+		child.queue_free()
+
+	for action in current_actions:
+		var info = action.get_preview_info(player)
+		_add_action_entry(info)
+
+	# Also update header font size
+	header_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_HEADER))
 
 func _add_action_entry(info: Dictionary) -> void:
 	"""Add an action entry to the list"""
@@ -150,7 +221,7 @@ func _add_action_entry(info: Dictionary) -> void:
 	# Icon (uses emoji font for emoji/symbol support)
 	var icon_label = Label.new()
 	icon_label.text = info.get("icon", "?")
-	icon_label.add_theme_font_size_override("font_size", 16)
+	icon_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_ICON))
 	icon_label.add_theme_color_override("font_color", Color.WHITE)
 	if emoji_font:
 		icon_label.add_theme_font_override("font", emoji_font)
@@ -163,7 +234,7 @@ func _add_action_entry(info: Dictionary) -> void:
 		text_label.text = "%s %s" % [info.get("name", "Unknown"), target]
 	else:
 		text_label.text = info.get("name", "Unknown")
-	text_label.add_theme_font_size_override("font_size", 14)
+	text_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_TEXT))
 	text_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
 	text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if emoji_font:
@@ -175,7 +246,7 @@ func _add_action_entry(info: Dictionary) -> void:
 	if cost != "":
 		var cost_label = Label.new()
 		cost_label.text = cost
-		cost_label.add_theme_font_size_override("font_size", 12)
+		cost_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_COST))
 		cost_label.add_theme_color_override("font_color", Color.YELLOW)
 		if emoji_font:
 			cost_label.add_theme_font_override("font", emoji_font)

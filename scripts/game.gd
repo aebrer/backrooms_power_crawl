@@ -81,6 +81,11 @@ func _ready() -> void:
 			minimap.set_player(player)
 			Log.system("Minimap connected to grid and player")
 
+			# Connect minimap resolution changes to action preview UI scaling
+			if action_preview_ui:
+				minimap.resolution_scale_changed.connect(_on_minimap_resolution_scale_changed)
+				Log.system("Action preview UI connected to minimap resolution scaling")
+
 			# Connect to ChunkManager autoload for chunk updates
 			if ChunkManager:
 				ChunkManager.chunk_updates_completed.connect(_on_chunk_updates_completed)
@@ -234,6 +239,11 @@ func _on_chunk_updates_completed() -> void:
 		# Chunk updates completed - mark minimap for redraw
 		# (minimap checks grid.is_walkable() for each tile, so chunk changes affect rendering)
 		minimap.content_dirty = true
+
+func _on_minimap_resolution_scale_changed(scale_factor: int) -> void:
+	"""Update UI scaling when minimap detects resolution change"""
+	if action_preview_ui:
+		action_preview_ui.set_resolution_scale(scale_factor)
 
 # ============================================================================
 # LAYOUT MANAGEMENT (Portrait/Landscape)
