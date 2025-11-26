@@ -11,6 +11,7 @@ extends Node3D
 @export var rotation_speed: float = 360.0  # Same as TacticalCamera
 @export var mouse_sensitivity: float = 0.15  # Same as TacticalCamera
 @export var rotation_deadzone: float = 0.3  # Right stick deadzone
+@export var mouse_motion_deadzone: float = 0.5  # Ignore sub-pixel mouse jitter (Firefox 4K fix)
 
 # Vertical rotation limits (full range for first-person)
 @export var pitch_min: float = -89.0  # Look down
@@ -80,6 +81,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	# Mouse camera control (SAME AS TACTICAL CAMERA!)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
+		# Ignore tiny movements (sub-pixel jitter from high DPI scaling)
+		if abs(event.relative.x) < mouse_motion_deadzone and abs(event.relative.y) < mouse_motion_deadzone:
+			return
+
 		# Mouse X = horizontal rotation (yaw)
 		h_pivot.rotation_degrees.y -= event.relative.x * mouse_sensitivity
 		h_pivot.rotation_degrees.y = fmod(h_pivot.rotation_degrees.y, 360.0)
