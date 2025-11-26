@@ -10,6 +10,9 @@ var panel: PanelContainer
 var header_label: Label  # Shows input prompt: "[RT]" or "[Left Click]"
 var action_list: VBoxContainer  # Shows list of actions that will execute
 
+# Font with emoji fallback (loaded once, used for all labels)
+var emoji_font: Font = null
+
 # State
 var current_actions: Array[Action] = []
 var current_input_device: InputManager.InputDevice = InputManager.InputDevice.MOUSE_KEYBOARD
@@ -20,7 +23,8 @@ var is_paused: bool = false
 # ============================================================================
 
 func _ready() -> void:
-	Log.system("ActionPreviewUI _ready() called")
+	# Load emoji font (project setting doesn't auto-apply to programmatic Labels)
+	emoji_font = load("res://assets/fonts/default_font.tres")
 
 	# Build UI programmatically
 	_build_ui()
@@ -37,8 +41,6 @@ func _ready() -> void:
 
 	# Hide by default (will show when actions provided)
 	panel.visible = false
-
-	Log.system("ActionPreviewUI initialization complete")
 
 func _build_ui() -> void:
 	"""Build action preview UI programmatically"""
@@ -88,6 +90,8 @@ func _build_ui() -> void:
 	header_label.text = "[Left Click] Next Turn"
 	header_label.add_theme_font_size_override("font_size", 14)
 	header_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	if emoji_font:
+		header_label.add_theme_font_override("font", emoji_font)
 	vbox.add_child(header_label)
 
 	# Separator
@@ -143,14 +147,16 @@ func _add_action_entry(info: Dictionary) -> void:
 	var entry = HBoxContainer.new()
 	entry.add_theme_constant_override("separation", 4)
 
-	# Icon
+	# Icon (uses emoji font for emoji/symbol support)
 	var icon_label = Label.new()
 	icon_label.text = info.get("icon", "?")
 	icon_label.add_theme_font_size_override("font_size", 16)
 	icon_label.add_theme_color_override("font_color", Color.WHITE)
+	if emoji_font:
+		icon_label.add_theme_font_override("font", emoji_font)
 	entry.add_child(icon_label)
 
-	# Action name + target
+	# Action name + target (uses emoji font for arrow symbols like →)
 	var text_label = Label.new()
 	var target = info.get("target", "")
 	if target != "":
@@ -160,6 +166,8 @@ func _add_action_entry(info: Dictionary) -> void:
 	text_label.add_theme_font_size_override("font_size", 14)
 	text_label.add_theme_color_override("font_color", Color(0.9, 0.9, 0.9))
 	text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if emoji_font:
+		text_label.add_theme_font_override("font", emoji_font)
 	entry.add_child(text_label)
 
 	# Cost (if any)
@@ -169,6 +177,8 @@ func _add_action_entry(info: Dictionary) -> void:
 		cost_label.text = cost
 		cost_label.add_theme_font_size_override("font_size", 12)
 		cost_label.add_theme_color_override("font_color", Color.YELLOW)
+		if emoji_font:
+			cost_label.add_theme_font_override("font", emoji_font)
 		entry.add_child(cost_label)
 
 	action_list.add_child(entry)
