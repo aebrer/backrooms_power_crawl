@@ -17,7 +17,6 @@ extends Node3D
 @export var rotation_speed: float = 360.0  # Degrees per second when stick held
 @export var mouse_sensitivity: float = 0.15  # Mouse rotation sensitivity
 @export var rotation_deadzone: float = 0.3  # Right stick deadzone
-@export var mouse_motion_deadzone: float = 0.5  # Ignore sub-pixel mouse jitter (Firefox 4K fix)
 
 @export var zoom_speed: float = 2.0
 @export var zoom_min: float = 8.0
@@ -97,24 +96,15 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return
 
-	# Debug: Log all mouse events to diagnose portrait mode issue
-	if event is InputEventMouseMotion:
-		Log.camera("MouseMotion event received - relative: %v, mode: %s" % [event.relative, Input.mouse_mode])
-
 	# Mouse camera control (standard third-person!)
 	if event is InputEventMouseMotion and Input.mouse_mode == Input.MOUSE_MODE_CAPTURED:
-		# Ignore tiny movements (sub-pixel jitter from high DPI scaling)
-		if abs(event.relative.x) < mouse_motion_deadzone and abs(event.relative.y) < mouse_motion_deadzone:
-			return
-
-		Log.camera("Applying mouse rotation - yaw: %.2f, pitch: %.2f" % [event.relative.x, event.relative.y])
-
 		# Mouse X = horizontal rotation (yaw)
-		h_pivot.rotation_degrees.y -= event.relative.x * mouse_sensitivity
+		# Use screen_relative (not relative) - unscaled coordinates prevent 4K drift
+		h_pivot.rotation_degrees.y -= event.screen_relative.x * mouse_sensitivity
 		h_pivot.rotation_degrees.y = fmod(h_pivot.rotation_degrees.y, 360.0)
 
 		# Mouse Y = vertical rotation (pitch)
-		v_pivot.rotation_degrees.x -= event.relative.y * mouse_sensitivity
+		v_pivot.rotation_degrees.x -= event.screen_relative.y * mouse_sensitivity
 		v_pivot.rotation_degrees.x = clamp(v_pivot.rotation_degrees.x, pitch_min, pitch_max)
 
 		manual_pitch_override = true  # User manually controlled pitch
