@@ -66,6 +66,17 @@ var bonus_perception: float = 0.0
 var bonus_anomaly: float = 0.0
 
 # ============================================================================
+# REGENERATION RATES (percentage of max per turn, from perks)
+# ============================================================================
+# These are hidden stats that stack from level-up perks.
+# Regeneration happens in PreTurnState before action execution.
+# Formula: regen_amount = max_resource * (regen_percent / 100.0)
+
+var hp_regen_percent: float = 0.0      # % of max HP regenerated per turn
+var sanity_regen_percent: float = 0.0  # % of max Sanity regenerated per turn
+var mana_regen_percent: float = 0.0    # % of max Mana regenerated per turn (adds to base NULL/2 regen)
+
+# ============================================================================
 # CURRENT RESOURCE POOLS
 # ============================================================================
 
@@ -346,14 +357,43 @@ func restore_mana(amount: float) -> void:
 	current_mana += amount
 	Log.system("Restored %.1f mana (%.1f → %.1f)" % [amount, old_mana, current_mana])
 
+func regenerate_resources() -> void:
+	"""Regenerate all resources based on regen stats. Called each turn in PreTurnState.
+
+	HP Regen: hp_regen_percent % of max HP
+	Sanity Regen: sanity_regen_percent % of max Sanity
+	Mana Regen: (NULL/2) base + (mana_regen_percent % of max Mana)
+	"""
+	# HP regeneration (from perks only)
+	if hp_regen_percent > 0.0 and current_hp < max_hp:
+		var regen_amount: float = max_hp * (hp_regen_percent / 100.0)
+		var old_hp := current_hp
+		current_hp += regen_amount
+		if regen_amount > 0.0:
+			Log.system("Regenerated %.1f HP (%.1f → %.1f)" % [regen_amount, old_hp, current_hp])
+
+	# Sanity regeneration (from perks only)
+	if sanity_regen_percent > 0.0 and current_sanity < max_sanity:
+		var regen_amount: float = max_sanity * (sanity_regen_percent / 100.0)
+		var old_sanity := current_sanity
+		current_sanity += regen_amount
+		if regen_amount > 0.0:
+			Log.system("Regenerated %.1f sanity (%.1f → %.1f)" % [regen_amount, old_sanity, current_sanity])
+
+	# Mana regeneration (base NULL/2 + perk bonus)
+	var base_mana_regen: float = null_stat / 2.0 if null_stat > 0 else 0.0
+	var perk_mana_regen: float = max_mana * (mana_regen_percent / 100.0) if mana_regen_percent > 0.0 else 0.0
+	var total_mana_regen: float = base_mana_regen + perk_mana_regen
+
+	if total_mana_regen > 0.0 and current_mana < max_mana:
+		var old_mana := current_mana
+		current_mana += total_mana_regen
+		Log.system("Regenerated %.1f mana (%.1f → %.1f)" % [total_mana_regen, old_mana, current_mana])
+
 func regenerate_mana() -> void:
-	"""Regenerate mana based on NULL stat (NULL/2 per turn)."""
-	if null_stat > 0:
-		var regen_amount = null_stat / 2.0
-		var old_mana = current_mana
-		current_mana += regen_amount
-		if regen_amount > 0:
-			Log.system("Regenerated %.1f mana (%.1f → %.1f)" % [regen_amount, old_mana, current_mana])
+	"""DEPRECATED: Use regenerate_resources() instead. Kept for backwards compatibility."""
+	# Just call the new function (it handles mana regen)
+	regenerate_resources()
 
 # ============================================================================
 # PROGRESSION

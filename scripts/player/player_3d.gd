@@ -286,7 +286,30 @@ func _on_new_chunk_entered(chunk_position: Vector3i) -> void:
 func _on_level_increased(old_level: int, new_level: int) -> void:
 	"""Called when Level increases - trigger perk selection"""
 	Log.player("Player Level Up! %d → %d" % [old_level, new_level])
-	# TODO: Show perk selection UI
+
+	# Show level-up perk selection UI
+	var level_up_ui = _get_level_up_ui()
+	if level_up_ui:
+		level_up_ui.show_level_up(self, new_level)
+
+func _get_level_up_ui() -> LevelUpPanel:
+	"""Get or create the LevelUpPanel UI instance"""
+	var ui = get_node_or_null("/root/Game/LevelUpPanel")
+	if ui:
+		return ui
+
+	# Create new instance
+	var game_node = get_node_or_null("/root/Game")
+	if not game_node:
+		Log.error(Log.Category.SYSTEM, "Cannot create LevelUpPanel - no Game node!")
+		return null
+
+	ui = LevelUpPanel.new()
+	ui.name = "LevelUpPanel"
+	game_node.add_child(ui)
+	Log.system("Created LevelUpPanel UI")
+
+	return ui
 
 func _on_clearance_increased(old_level: int, new_level: int) -> void:
 	"""Called when Clearance increases (via perk choice) - sync with KnowledgeDB"""
