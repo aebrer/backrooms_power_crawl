@@ -238,9 +238,6 @@ func _initialize_stats() -> void:
 	"""Initialize player stats from template (or defaults)"""
 	stats = StatBlock.new()
 
-	# DEBUG: Start with 80 EXP for testing level-up (Level 1 = 100 EXP)
-	stats.exp = 80
-
 	# Initialize item pools (3 slots each for BODY/MIND/NULL, 1 slot for LIGHT)
 	body_pool = ItemPool.new(Item.PoolType.BODY, 3)
 	mind_pool = ItemPool.new(Item.PoolType.MIND, 3)
