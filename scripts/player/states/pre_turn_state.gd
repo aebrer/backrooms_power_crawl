@@ -1,9 +1,12 @@
 extends PlayerInputState
-## Pre-Turn State - Regenerate mana before action execution
+## Pre-Turn State - Regenerate resources before action execution
 ##
 ## In this state:
 ## - Input is blocked (player cannot interrupt)
-## - Mana regeneration happens (NULL/2 per turn)
+## - Resource regeneration happens:
+##   - HP: hp_regen_percent % of max HP (from perks)
+##   - Sanity: sanity_regen_percent % of max Sanity (from perks)
+##   - Mana: NULL/2 base + mana_regen_percent % of max Mana (from perks)
 ## - Transitions to ExecutingTurnState to execute the pending action
 
 func _init() -> void:
@@ -22,7 +25,7 @@ func handle_input(_event: InputEvent) -> void:
 	pass
 
 func _execute_pre_turn() -> void:
-	"""Execute pre-turn processing (mana regeneration, future: status effects, etc.)"""
+	"""Execute pre-turn processing (resource regeneration, future: status effects, etc.)"""
 	if not player:
 		Log.error(Log.Category.TURN, "No player in PreTurnState!")
 		transition_to("IdleState")
@@ -30,9 +33,9 @@ func _execute_pre_turn() -> void:
 
 	Log.turn("===== TURN %d PRE-TURN =====" % (player.turn_count + 1))
 
-	# Regenerate mana (NULL/2 per turn)
+	# Regenerate all resources (HP, Sanity, Mana)
 	if player.stats:
-		player.stats.regenerate_mana()
+		player.stats.regenerate_resources()
 
 	# TODO: Process start-of-turn status effects (buffs, debuffs, etc.)
 	# TODO: Process environmental effects that trigger at turn start
