@@ -105,8 +105,10 @@ func _exit_hud_mode():
 	# Save current focus as last HUD focus before releasing
 	# This captures focus changes made via Godot's native navigation (focus_neighbor_*)
 	var focused = get_viewport().gui_get_focus_owner()
+	Log.system("PauseManager: Exiting HUD mode, focused element: %s" % (focused.name if focused else "null"))
 	if focused:
 		_update_last_hud_focus(focused)
+		Log.system("PauseManager: last_hud_focus is now: %s" % (last_hud_focus.name if last_hud_focus else "null"))
 
 	# Clear focus
 	if current_focus:
@@ -212,7 +214,10 @@ func _is_popup_visible() -> bool:
 
 func _grab_hud_focus():
 	"""Grab focus on last HUD element or first available (for manual controller pause)."""
+	Log.system("PauseManager: _grab_hud_focus called, last_hud_focus: %s" % (last_hud_focus.name if last_hud_focus and is_instance_valid(last_hud_focus) else "null/invalid"))
+
 	if focusable_elements.is_empty():
+		Log.system("PauseManager: No focusable elements, returning")
 		return
 
 	# Try to restore last HUD focus if it's still valid and visible
@@ -221,6 +226,8 @@ func _grab_hud_focus():
 			set_hud_focus(last_hud_focus)
 			Log.system("PauseManager: Restored focus to last HUD element: %s" % last_hud_focus.name)
 			return
+		else:
+			Log.system("PauseManager: last_hud_focus not in focusable_elements")
 
 	# Otherwise focus first element
 	set_hud_focus(focusable_elements[0])
