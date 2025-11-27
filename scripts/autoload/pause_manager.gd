@@ -21,6 +21,7 @@ signal hud_focus_changed(focused_element: Control)
 var is_paused: bool = false
 var current_focus: Control = null
 var focusable_elements: Array[Control] = []
+var last_hud_focus: Control = null  # Remembers last focused HUD element for manual pause
 
 func _ready():
 	# Don't pause the entire tree - just the 3D viewport
@@ -84,27 +85,32 @@ func _enter_hud_mode():
 
 	# Register focusable HUD elements
 	_refresh_focusable_elements()
-	Log.system("PauseManager: Found %d focusable elements" % focusable_elements.size())
-	for i in range(min(3, focusable_elements.size())):
-		Log.system("  - Element %d: %s" % [i, focusable_elements[i].name])
 
-	# NOTE: Focus is player-determined, not auto-grabbed by PauseManager
-	# Individual UI panels (CoreInventory, ItemSlotSelectionPanel) handle their own focus
-	# Auto-grabbing focus here caused race conditions with panel focus management
-
-	Log.system("Entered HUD interaction mode (paused)")
+	# Auto-grab focus for controller users on manual pause (not popup-triggered)
+	# Popups (LevelUpPanel, ItemSlotSelectionPanel) handle their own focus
+	if InputManager and InputManager.current_input_device == InputManager.InputDevice.GAMEPAD:
+		if not _is_popup_visible():
+			_grab_hud_focus()
 
 func _exit_hud_mode():
 	"""Exit HUD interaction mode, return to camera control."""
-	# Capture mouse for camera control
+	# Save current focus as last HUD focus BEFORE changing mouse mode
+	# (Changing to MOUSE_MODE_CAPTURED clears focus!)
+	# Use viewport's focus owner, but fallback to our tracked current_focus
+	# (gui_get_focus_owner can return null even when we have focus tracked)
+	var focused = get_viewport().gui_get_focus_owner()
+	if not focused and current_focus and is_instance_valid(current_focus):
+		focused = current_focus
+	if focused:
+		_update_last_hud_focus(focused)
+
+	# Capture mouse for camera control (this clears focus)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
-	# Clear focus
+	# Clear our tracked focus
 	if current_focus:
 		current_focus.release_focus()
 	current_focus = null
-
-	Log.system("Resumed gameplay (unpaused)")
 
 func _find_subviewport() -> SubViewport:
 	"""Find the game SubViewport dynamically (works in portrait and landscape layouts)"""
@@ -133,15 +139,28 @@ func _find_nodes_by_type(node: Node, type_name: String) -> Array:
 
 func _refresh_focusable_elements():
 	"""Find all HUD elements that can be focused."""
+	# Disconnect old focus signals
+	for element in focusable_elements:
+		if is_instance_valid(element) and element.focus_entered.is_connected(_on_element_focus_entered):
+			element.focus_entered.disconnect(_on_element_focus_entered)
+
 	focusable_elements.clear()
 
 	# Find all nodes in "hud_focusable" group
 	for node in get_tree().get_nodes_in_group("hud_focusable"):
 		if node is Control and node.visible:
 			focusable_elements.append(node)
+			# Connect to focus_entered to track focus changes from Godot's built-in navigation
+			if not node.focus_entered.is_connected(_on_element_focus_entered):
+				node.focus_entered.connect(_on_element_focus_entered.bind(node))
 
 	# Sort by position (top to bottom, left to right)
 	focusable_elements.sort_custom(_sort_by_position)
+
+func _on_element_focus_entered(element: Control):
+	"""Called when any focusable element gains focus (from Godot's built-in navigation)."""
+	current_focus = element
+	_update_last_hud_focus(element)
 
 func _sort_by_position(a: Control, b: Control) -> bool:
 	"""Sort controls by visual position."""
@@ -161,10 +180,11 @@ func set_hud_focus(element: Control):
 		current_focus.release_focus()
 
 	current_focus = element
-	Log.system("PauseManager: Calling grab_focus() on '%s'" % element.name)
 	element.grab_focus()
-	Log.system("PauseManager: Element has focus = %s" % element.has_focus())
 	emit_signal("hud_focus_changed", element)
+
+	# Remember this as last HUD focus (if it's not a popup button)
+	_update_last_hud_focus(element)
 
 func navigate_hud(direction: Vector2i):
 	"""Navigate HUD with controller (up/down/left/right)."""
@@ -180,3 +200,50 @@ func navigate_hud(direction: Vector2i):
 		current_index += direction.y
 		current_index = clamp(current_index, 0, focusable_elements.size() - 1)
 		set_hud_focus(focusable_elements[current_index])
+
+func _is_popup_visible() -> bool:
+	"""Check if any popup panel is currently visible (LevelUpPanel, ItemSlotSelectionPanel)."""
+	# Check for LevelUpPanel
+	for node in get_tree().get_nodes_in_group("hud_focusable"):
+		var parent = node.get_parent()
+		while parent:
+			if parent.get_class() == "Control":
+				# Check if this is a popup panel by class_name
+				var script = parent.get_script()
+				if script:
+					var script_path = script.resource_path
+					if "level_up_panel" in script_path or "item_slot_selection_panel" in script_path:
+						if parent.visible:
+							return true
+			parent = parent.get_parent()
+	return false
+
+func _grab_hud_focus():
+	"""Grab focus on last HUD element or first available (for manual controller pause)."""
+	if focusable_elements.is_empty():
+		return
+
+	# Try to restore last HUD focus if it's still valid and visible
+	if last_hud_focus and is_instance_valid(last_hud_focus) and last_hud_focus.visible:
+		if last_hud_focus in focusable_elements:
+			set_hud_focus(last_hud_focus)
+			return
+
+	# Otherwise focus first element
+	set_hud_focus(focusable_elements[0])
+
+func _update_last_hud_focus(element: Control):
+	"""Update last_hud_focus if this is a HUD element (not a popup button)."""
+	# Check if this element belongs to a popup
+	var parent = element.get_parent()
+	while parent:
+		var script = parent.get_script()
+		if script:
+			var script_path = script.resource_path
+			if "level_up_panel" in script_path or "item_slot_selection_panel" in script_path:
+				# This is a popup button, don't remember it
+				return
+		parent = parent.get_parent()
+
+	# It's a regular HUD element, remember it
+	last_hud_focus = element
