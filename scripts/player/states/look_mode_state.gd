@@ -5,6 +5,8 @@ extends PlayerInputState
 ## Exits when player releases LT/RMB.
 ## Turn progression is PAUSED during look mode.
 
+const _AttackTypes = preload("res://scripts/combat/attack_types.gd")
+
 # NOTE: These will be initialized in enter() since they depend on player node
 var first_person_camera: FirstPersonCamera = null
 var tactical_camera: TacticalCamera = null
@@ -184,15 +186,146 @@ func _execute_wait_action() -> void:
 		transition_to("PreTurnState")
 
 func _update_action_preview() -> void:
-	"""Update action preview with wait action"""
+	"""Update action preview with wait action and pending attacks"""
 	if not player:
 		return
 
 	# In look mode, player will wait (pass turn) when clicking RT/LMB
 	var preview_action = WaitAction.new()
 
-	# Emit preview signal with typed array
+	# Build action list: wait action first
 	var actions: Array[Action] = [preview_action]
+
+	# Add attack previews from current position (player stays in place when waiting)
+	_add_attack_previews(actions, player.grid_position)
+
+	# Add cooldown displays at the bottom
+	_add_cooldown_previews(actions)
+
+	# Add mana-blocked item effects
+	_add_item_mana_blocked_previews(actions)
+
+	# Emit preview signal
 	player.action_preview_changed.emit(actions)
+
+func _add_attack_previews(actions: Array[Action], destination: Vector2i) -> void:
+	"""Add attack preview actions for attacks that will fire this turn from destination."""
+	if not player or not player.attack_executor:
+		return
+
+	var attack_types = [_AttackTypes.Type.BODY, _AttackTypes.Type.MIND, _AttackTypes.Type.NULL]
+
+	for attack_type in attack_types:
+		var preview = player.attack_executor.get_attack_preview(player, attack_type, destination)
+
+		if not preview.get("ready", false):
+			continue
+
+		# Skip NULL attack if player has no mana pool yet
+		if attack_type == _AttackTypes.Type.NULL:
+			if player.stats and player.stats.max_mana <= 0:
+				continue
+
+		var targets: Array = preview.get("targets", [])
+		var attack_name = preview.get("attack_name", _AttackTypes.BASE_ATTACK_NAMES.get(attack_type, "Attack"))
+
+		# Check if attack can afford after regen (preview shows post-regen state)
+		var can_afford_after_regen = preview.get("can_afford_after_regen", true)
+
+		# If attack has mana cost and can't afford even after regen, show mana blocked
+		if not can_afford_after_regen:
+			var mana_blocked = ManaBlockedAction.new(
+				attack_name,
+				preview.get("mana_cost", 0.0),
+				preview.get("current_mana", 0.0),
+				preview.get("mana_after_regen", 0.0)
+			)
+			actions.append(mana_blocked)
+			continue
+
+		# Only show attacks that have targets - no targets = don't clutter UI
+		if targets.is_empty():
+			continue
+
+		var attack_preview = AttackPreviewAction.new(
+			attack_type,
+			attack_name,
+			preview.get("damage", 0.0),
+			targets.size(),
+			preview.get("mana_cost", 0.0)
+		)
+		actions.append(attack_preview)
+
+func _add_cooldown_previews(actions: Array[Action]) -> void:
+	"""Add cooldown displays for attacks not ready to fire."""
+	if not player or not player.attack_executor:
+		return
+
+	var attack_types = [_AttackTypes.Type.BODY, _AttackTypes.Type.MIND, _AttackTypes.Type.NULL]
+
+	for attack_type in attack_types:
+		var preview = player.attack_executor.get_attack_preview(player, attack_type)
+
+		if preview.get("ready", false):
+			continue
+
+		if attack_type == _AttackTypes.Type.NULL and player.stats and player.stats.max_mana <= 0:
+			continue
+
+		var attack_name = preview.get("attack_name", _AttackTypes.BASE_ATTACK_NAMES.get(attack_type, "Attack"))
+		var cd_remaining = preview.get("cooldown_remaining", 0)
+		var cd_current = cd_remaining + 1
+
+		var cooldown_preview = AttackCooldownAction.new(
+			attack_name,
+			cd_current,
+			cd_remaining
+		)
+		actions.append(cooldown_preview)
+
+func _add_item_mana_blocked_previews(actions: Array[Action]) -> void:
+	"""Add mana-blocked displays for equipped items that can't afford their turn effects."""
+	if not player or not player.stats:
+		return
+
+	var mana_after_regen = player.stats.get_mana_after_regen()
+	var current_mana = player.stats.current_mana
+
+	# Check all equipped items in all pools
+	var pools = [player.body_pool, player.mind_pool, player.null_pool]
+
+	for pool in pools:
+		if not pool:
+			continue
+
+		for i in range(pool.max_slots):
+			var item = pool.items[i]
+			var is_enabled = pool.enabled[i]
+
+			if not item or not is_enabled:
+				continue
+
+			# Check if item has turn effect info
+			var effect_info = item.get_turn_effect_info()
+			if effect_info.is_empty():
+				continue
+
+			var mana_cost = effect_info.get("mana_cost", 0.0)
+			if mana_cost <= 0:
+				continue
+
+			# Check if item can afford its effect after regen
+			if mana_after_regen >= mana_cost:
+				continue  # Can afford, no need to show blocked
+
+			# Show mana blocked for this item
+			var effect_name = effect_info.get("effect_name", item.item_name)
+			var mana_blocked = ManaBlockedAction.new(
+				effect_name,
+				mana_cost,
+				current_mana,
+				mana_after_regen
+			)
+			actions.append(mana_blocked)
 
 # All target handling now unified - no special cases for grid tiles vs entities

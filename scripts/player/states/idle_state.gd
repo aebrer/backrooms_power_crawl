@@ -4,6 +4,8 @@ extends PlayerInputState
 ## This is the default resting state.
 ## Handles forward movement with RT/Space/Left Click.
 
+const _AttackTypes = preload("res://scripts/combat/attack_types.gd")
+
 ## RT/Click hold-to-repeat system
 var rt_held: bool = false
 var rt_hold_time: float = 0.0
@@ -144,7 +146,7 @@ func process_frame(delta: float) -> void:
 		last_blocked_direction = Vector2i(-999, -999)  # Reset blocked tracking on release
 
 func _update_action_preview() -> void:
-	"""Update action preview with current forward movement or item pickup"""
+	"""Update action preview with current forward movement or item pickup, plus pending attacks"""
 	if not player:
 		return
 
@@ -172,12 +174,167 @@ func _update_action_preview() -> void:
 		# Show movement action
 		preview_action = MovementAction.new(forward_direction)
 
+	# Build action list: main action first
+	var actions: Array[Action] = [preview_action]
+
+	# Add attack previews from destination (shows what attacks will fire after moving)
+	_add_attack_previews(actions, target_position)
+
 	# Add look mode hint
 	var look_mode_hint = ControlHintAction.new("👁", "Look Mode", "[LT/RMB]")
+	actions.append(look_mode_hint)
 
-	# Emit preview signal with typed array (main action + look mode hint)
-	var actions: Array[Action] = [preview_action, look_mode_hint]
+	# Add cooldown displays at the bottom (understated)
+	_add_cooldown_previews(actions)
+
+	# Add mana-blocked item effects
+	_add_item_mana_blocked_previews(actions)
+
+	# Emit preview signal
 	player.action_preview_changed.emit(actions)
+
+func _add_attack_previews(actions: Array[Action], destination: Vector2i) -> void:
+	"""Add attack preview actions for attacks that will fire this turn from destination.
+
+	Args:
+		actions: Array to append attack previews to
+		destination: Position player will be at when attacks fire
+	"""
+	if not player or not player.attack_executor:
+		return
+
+	# Check each attack type
+	var attack_types = [_AttackTypes.Type.BODY, _AttackTypes.Type.MIND, _AttackTypes.Type.NULL]
+
+	for attack_type in attack_types:
+		# Get preview from destination position (where player will be after moving)
+		var preview = player.attack_executor.get_attack_preview(player, attack_type, destination)
+
+		# Only show attacks that are ready to fire
+		if not preview.get("ready", false):
+			continue
+
+		# Skip NULL attack if player has no mana pool yet
+		if attack_type == _AttackTypes.Type.NULL:
+			if player.stats and player.stats.max_mana <= 0:
+				continue
+
+		var targets: Array = preview.get("targets", [])
+
+		# Use attack_name from preview (may be modified by items)
+		var attack_name = preview.get("attack_name", _AttackTypes.BASE_ATTACK_NAMES.get(attack_type, "Attack"))
+
+		# Check if attack can afford after regen (preview shows post-regen state)
+		var can_afford_after_regen = preview.get("can_afford_after_regen", true)
+
+		# If attack has mana cost and can't afford even after regen, show mana blocked
+		if not can_afford_after_regen:
+			var mana_blocked = ManaBlockedAction.new(
+				attack_name,
+				preview.get("mana_cost", 0.0),
+				preview.get("current_mana", 0.0),
+				preview.get("mana_after_regen", 0.0)
+			)
+			actions.append(mana_blocked)
+			continue
+
+		# Only show attacks that have targets - no targets = don't clutter UI
+		if targets.is_empty():
+			continue
+
+		var attack_preview = AttackPreviewAction.new(
+			attack_type,
+			attack_name,
+			preview.get("damage", 0.0),
+			targets.size(),
+			preview.get("mana_cost", 0.0)
+		)
+		actions.append(attack_preview)
+
+func _add_cooldown_previews(actions: Array[Action]) -> void:
+	"""Add cooldown displays for attacks not ready to fire.
+
+	Shows at bottom of preview with clock emoji, e.g. "🕐 Whistle 4 → 3"
+	"""
+	if not player or not player.attack_executor:
+		return
+
+	# Check each attack type for cooldowns
+	var attack_types = [_AttackTypes.Type.BODY, _AttackTypes.Type.MIND, _AttackTypes.Type.NULL]
+
+	for attack_type in attack_types:
+		var preview = player.attack_executor.get_attack_preview(player, attack_type)
+
+		# Only show if NOT ready (on cooldown)
+		if preview.get("ready", false):
+			continue
+
+		# Skip NULL if player has no mana pool
+		if attack_type == _AttackTypes.Type.NULL and player.stats and player.stats.max_mana <= 0:
+			continue
+
+		# Use attack_name from preview (may be modified by items)
+		var attack_name = preview.get("attack_name", _AttackTypes.BASE_ATTACK_NAMES.get(attack_type, "Attack"))
+		var cd_remaining = preview.get("cooldown_remaining", 0)
+
+		# cooldown_remaining is already the "after tick" value from get_attack_preview
+		# We need to show current -> after, so add 1 back to get current
+		var cd_current = cd_remaining + 1
+
+		var cooldown_preview = AttackCooldownAction.new(
+			attack_name,
+			cd_current,
+			cd_remaining
+		)
+		actions.append(cooldown_preview)
+
+func _add_item_mana_blocked_previews(actions: Array[Action]) -> void:
+	"""Add mana-blocked displays for equipped items that can't afford their turn effects.
+
+	Shows items with on_turn() mana costs that won't be able to trigger.
+	"""
+	if not player or not player.stats:
+		return
+
+	var mana_after_regen = player.stats.get_mana_after_regen()
+	var current_mana = player.stats.current_mana
+
+	# Check all equipped items in all pools
+	var pools = [player.body_pool, player.mind_pool, player.null_pool]
+
+	for pool in pools:
+		if not pool:
+			continue
+
+		for i in range(pool.max_slots):
+			var item = pool.items[i]
+			var is_enabled = pool.enabled[i]
+
+			if not item or not is_enabled:
+				continue
+
+			# Check if item has turn effect info
+			var effect_info = item.get_turn_effect_info()
+			if effect_info.is_empty():
+				continue
+
+			var mana_cost = effect_info.get("mana_cost", 0.0)
+			if mana_cost <= 0:
+				continue
+
+			# Check if item can afford its effect after regen
+			if mana_after_regen >= mana_cost:
+				continue  # Can afford, no need to show blocked
+
+			# Show mana blocked for this item
+			var effect_name = effect_info.get("effect_name", item.item_name)
+			var mana_blocked = ManaBlockedAction.new(
+				effect_name,
+				mana_cost,
+				current_mana,
+				mana_after_regen
+			)
+			actions.append(mana_blocked)
 
 func _get_item_at_position(grid_pos: Vector2i) -> Dictionary:
 	"""Check if there's an item at the given grid position

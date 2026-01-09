@@ -85,7 +85,6 @@ func on_turn(player: Player3D, turn_number: int) -> void:
 	# Check if we have enough mana
 	var mana_cost = float(level)
 	if not player.stats.consume_mana(mana_cost):
-		Log.player("DEBUG_ITEM: Not enough mana (need %.0f)" % mana_cost)
 		return  # Skip effects if no mana
 
 	# EVERY turn - randomly damage HP or Sanity
@@ -172,6 +171,14 @@ func get_description(clearance_level: int) -> String:
 # ============================================================================
 # UTILITY
 # ============================================================================
+
+func get_turn_effect_info() -> Dictionary:
+	"""Return mana cost info for UI preview."""
+	return {
+		"effect_name": ITEM_NAME,
+		"mana_cost": float(level),
+		"description": "Chaos effect"
+	}
 
 func _to_string() -> String:
 	"""Debug representation."""

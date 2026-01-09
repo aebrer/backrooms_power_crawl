@@ -347,9 +347,7 @@ func consume_mana(amount: float) -> bool:
 		current_mana -= amount
 		Log.system("Consumed %.1f mana (%.1f → %.1f)" % [amount, old_mana, current_mana])
 		return true
-	else:
-		Log.system("Not enough mana (%.1f/%.1f)" % [current_mana, amount])
-		return false
+	return false
 
 func restore_mana(amount: float) -> void:
 	"""Restore Mana by amount (clamped to max)."""
@@ -394,6 +392,23 @@ func regenerate_mana() -> void:
 	"""DEPRECATED: Use regenerate_resources() instead. Kept for backwards compatibility."""
 	# Just call the new function (it handles mana regen)
 	regenerate_resources()
+
+func get_mana_regen_amount() -> float:
+	"""Calculate how much mana would be regenerated on the next turn.
+
+	Formula: (NULL/2) base + (mana_regen_percent % of max Mana)
+	Used for previewing attack affordability in UI.
+	"""
+	var base_mana_regen: float = null_stat / 2.0 if null_stat > 0 else 0.0
+	var perk_mana_regen: float = max_mana * (mana_regen_percent / 100.0) if mana_regen_percent > 0.0 else 0.0
+	return base_mana_regen + perk_mana_regen
+
+func get_mana_after_regen() -> float:
+	"""Predict mana value after next turn's regeneration (clamped to max).
+
+	Used for previewing attack affordability in UI.
+	"""
+	return minf(current_mana + get_mana_regen_amount(), max_mana)
 
 # ============================================================================
 # PROGRESSION
