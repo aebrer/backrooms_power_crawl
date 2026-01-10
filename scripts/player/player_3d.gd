@@ -300,7 +300,6 @@ func _on_entity_died(entity_data: Dictionary) -> void:
 	var exp_reward = max(10, int(max_hp / 10.0))
 
 	stats.gain_exp(exp_reward)
-	Log.player("Killed %s - awarded %d EXP" % [entity_type, exp_reward])
 
 func _on_level_increased(old_level: int, new_level: int) -> void:
 	"""Called when Level increases - trigger perk selection"""

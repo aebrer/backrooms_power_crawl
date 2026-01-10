@@ -350,33 +350,45 @@ func has_entity_at(world_pos: Vector2i) -> bool:
 		world_pos: World tile coordinates
 
 	Returns:
-		true if entity exists and is alive
+		true if entity exists and is alive (not dead)
 	"""
-	return entity_billboards.has(world_pos)
+	if not entity_billboards.has(world_pos):
+		return false
+	# Check if entity is marked dead (billboard removal may be delayed for VFX)
+	var entity_data = entity_data_cache.get(world_pos, {})
+	return not entity_data.get("is_dead", false)
 
 func get_all_entity_positions() -> Array[Vector2i]:
-	"""Get world positions of all rendered entities
+	"""Get world positions of all living entities
 
 	Returns:
-		Array of world tile positions with entities
+		Array of world tile positions with living entities (excludes dead)
 	"""
 	var positions: Array[Vector2i] = []
 	for pos in entity_billboards.keys():
+		# Skip dead entities (billboard removal may be delayed for VFX)
+		var entity_data = entity_data_cache.get(pos, {})
+		if entity_data.get("is_dead", false):
+			continue
 		positions.append(pos)
 	return positions
 
 func get_entities_in_range(center: Vector2i, radius: float) -> Array[Vector2i]:
-	"""Get entities within radius of center position
+	"""Get living entities within radius of center position
 
 	Args:
 		center: Center world tile position
 		radius: Search radius in tiles
 
 	Returns:
-		Array of entity positions within range
+		Array of entity positions within range (excludes dead entities)
 	"""
 	var in_range: Array[Vector2i] = []
 	for pos in entity_billboards.keys():
+		# Skip dead entities (billboard removal may be delayed for VFX)
+		var entity_data = entity_data_cache.get(pos, {})
+		if entity_data.get("is_dead", false):
+			continue
 		var distance = center.distance_to(pos)
 		if distance <= radius:
 			in_range.append(pos)
@@ -395,12 +407,17 @@ func damage_entity_at(world_pos: Vector2i, amount: float, attack_emoji: String =
 		attack_emoji: Emoji to display as hit VFX (default: punch)
 
 	Returns:
-		true if entity was found and damaged
+		true if entity was found and damaged (false if dead or missing)
 	"""
 	if not entity_data_cache.has(world_pos):
 		return false
 
 	var entity_data = entity_data_cache[world_pos]
+
+	# Don't damage already-dead entities (prevents multi-kill exploits)
+	if entity_data.get("is_dead", false):
+		return false
+
 	var current_hp = entity_data.get("current_hp", 0.0)
 	var new_hp = max(0.0, current_hp - amount)
 	entity_data["current_hp"] = new_hp
