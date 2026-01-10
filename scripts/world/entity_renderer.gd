@@ -130,6 +130,7 @@ func render_chunk_entities(chunk: Chunk) -> void:
 				# Connect to WorldEntity signals
 				entity.hp_changed.connect(_on_entity_hp_changed.bind(world_pos))
 				entity.died.connect(_on_entity_died_signal)
+				entity.moved.connect(_on_entity_moved)
 
 				# Check if entity is already damaged
 				var hp_percent = entity.get_hp_percentage()
@@ -167,6 +168,8 @@ func unload_chunk_entities(chunk: Chunk) -> void:
 					entity.hp_changed.disconnect(hp_callback)
 				if entity.died.is_connected(_on_entity_died_signal):
 					entity.died.disconnect(_on_entity_died_signal)
+				if entity.moved.is_connected(_on_entity_moved):
+					entity.moved.disconnect(_on_entity_moved)
 
 				var billboard = entity_billboards[world_pos]
 				billboard.queue_free()
@@ -186,6 +189,95 @@ func unload_chunk_entities(chunk: Chunk) -> void:
 			removed_count,
 			chunk.position
 		])
+
+# ============================================================================
+# DYNAMIC ENTITY MANAGEMENT (for mid-game spawns and movement)
+# ============================================================================
+
+func add_entity_billboard(entity: WorldEntity) -> void:
+	"""Add a billboard for a newly spawned entity (mid-game spawn)
+
+	Used when entities spawn during gameplay (e.g., Brood Mother spawning minions).
+
+	Args:
+		entity: WorldEntity to create billboard for
+	"""
+	if entity.is_dead:
+		return
+
+	var world_pos = entity.world_position
+
+	# Skip if billboard already exists
+	if entity_billboards.has(world_pos):
+		Log.warn(Log.Category.ENTITY, "Billboard already exists at %s" % world_pos)
+		return
+
+	# Create billboard
+	var billboard = _create_billboard_for_entity(entity)
+	if billboard:
+		add_child(billboard)
+		entity_billboards[world_pos] = billboard
+		entity_cache[world_pos] = entity
+
+		# Create health bar
+		var health_bar = _create_health_bar(billboard.position)
+		add_child(health_bar)
+		entity_health_bars[world_pos] = health_bar
+		health_bar.visible = false  # Hidden at full HP
+
+		# Connect to WorldEntity signals
+		entity.hp_changed.connect(_on_entity_hp_changed.bind(world_pos))
+		entity.died.connect(_on_entity_died_signal)
+		entity.moved.connect(_on_entity_moved)
+
+		Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Added billboard for spawned entity at %s" % world_pos)
+
+func _on_entity_moved(old_pos: Vector2i, new_pos: Vector2i) -> void:
+	"""Handle WorldEntity moved signal - update billboard position
+
+	Args:
+		old_pos: Previous world tile position
+		new_pos: New world tile position
+	"""
+	if not entity_billboards.has(old_pos):
+		Log.warn(Log.Category.ENTITY, "Entity moved from %s but no billboard found" % old_pos)
+		return
+
+	# Get billboard and health bar
+	var billboard = entity_billboards[old_pos]
+	var entity = entity_cache[old_pos]
+	var health_bar = entity_health_bars.get(old_pos, null)
+
+	# Reconnect hp_changed signal with new position (old binding is stale)
+	var old_hp_callback = _on_entity_hp_changed.bind(old_pos)
+	if entity.hp_changed.is_connected(old_hp_callback):
+		entity.hp_changed.disconnect(old_hp_callback)
+	entity.hp_changed.connect(_on_entity_hp_changed.bind(new_pos))
+
+	# Update cache keys
+	entity_billboards.erase(old_pos)
+	entity_billboards[new_pos] = billboard
+	entity_cache.erase(old_pos)
+	entity_cache[new_pos] = entity
+	if health_bar:
+		entity_health_bars.erase(old_pos)
+		entity_health_bars[new_pos] = health_bar
+
+	# Calculate new 3D position
+	var new_world_3d = grid_3d.grid_to_world_centered(new_pos, BILLBOARD_HEIGHT) if grid_3d else Vector3(
+		new_pos.x * 2.0 + 1.0,
+		BILLBOARD_HEIGHT,
+		new_pos.y * 2.0 + 1.0
+	)
+
+	# Update billboard position (instant for now, can add lerp later)
+	billboard.position = new_world_3d
+
+	# Update health bar position
+	if health_bar:
+		health_bar.position = new_world_3d + Vector3(0, HEALTH_BAR_OFFSET_Y, 0)
+
+	Log.msg(Log.Category.ENTITY, Log.Level.TRACE, "Entity billboard moved from %s to %s" % [old_pos, new_pos])
 
 # ============================================================================
 # BILLBOARD CREATION

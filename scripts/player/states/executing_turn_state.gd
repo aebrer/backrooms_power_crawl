@@ -39,7 +39,9 @@ func _execute_turn() -> void:
 	# Execute all item pools (BODY → MIND → NULL → LIGHT)
 	player.execute_item_pools()
 
-	# TODO: Process enemy turns
+	# Process enemy turns
+	ChunkManager.process_entity_ai()
+
 	# TODO: Process environmental effects
 
 	Log.turn("===== TURN %d COMPLETE =====" % player.turn_count)

@@ -82,11 +82,34 @@ entity density: very low"""
 	spawn_interval = 50  # Very slow spawning
 	escalation_rate = 0.05  # Minimal escalation
 
-	# Entity spawn table (will populate when entities are implemented)
-	# entity_spawn_table = [
-	#     {"entity_scene": "res://scenes/entities/bacteria.tscn", "weight": 5.0, "min_distance": 20},
-	#     {"entity_scene": "res://scenes/entities/hound.tscn", "weight": 1.0, "min_distance": 40}
-	# ]
+	# Entity spawn table - uses entity_type strings (WorldEntity pattern)
+	# weight: spawn probability (higher = more common)
+	# base_hp: HP at 0 corruption
+	# hp_scale: HP multiplier per corruption point
+	# corruption_threshold: minimum corruption to spawn (0.0 = always, 0.5 = high corruption only)
+	entity_spawn_table = [
+		{
+			"entity_type": "bacteria_spawn",
+			"weight": 10.0,
+			"base_hp": 100.0,
+			"hp_scale": 0.5,  # +50% HP per corruption point
+			"corruption_threshold": 0.0,  # Spawns at any corruption
+		},
+		{
+			"entity_type": "bacteria_brood_mother",
+			"weight": 2.0,
+			"base_hp": 1000.0,
+			"hp_scale": 1.0,  # +100% HP per corruption point
+			"corruption_threshold": 0.3,  # Only spawns at 30%+ corruption
+		},
+		{
+			"entity_type": "debug_enemy",
+			"weight": 5.0,
+			"base_hp": 50.0,
+			"hp_scale": 0.0,  # No scaling
+			"corruption_threshold": 0.0,  # Always available (for testing)
+		},
+	]
 
 	# ========================================================================
 	# ENVIRONMENTAL HAZARDS
