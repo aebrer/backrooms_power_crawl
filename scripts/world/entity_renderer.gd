@@ -30,6 +30,9 @@ var entity_billboards: Dictionary = {}  # Vector2i -> Sprite3D
 ## Maps world tile position to WorldEntity data (for state sync)
 var entity_data_cache: Dictionary = {}  # Vector2i -> Dictionary
 
+## Maps world tile position to health bar Node3D
+var entity_health_bars: Dictionary = {}  # Vector2i -> Node3D
+
 ## Currently highlighted entity positions (for attack preview)
 var _highlighted_positions: Array[Vector2i] = []
 
@@ -71,6 +74,13 @@ const HIT_EMOJI_DURATION = 1.0  # Seconds for full animation (turn-based, no rus
 const HIT_EMOJI_BASE_SIZE = 96  # Base font size (before scaling) - needs to be large for 3D visibility
 const HIT_EMOJI_JITTER = 0.4  # Random position offset range (world units)
 
+## Health bar configuration
+const HEALTH_BAR_WIDTH = 0.5  # World units (larger for visibility)
+const HEALTH_BAR_HEIGHT = 0.08  # World units (thicker)
+const HEALTH_BAR_OFFSET_Y = 0.4  # Above entity sprite
+const HEALTH_BAR_BG_COLOR = Color(0.0, 0.0, 0.0, 0.9)  # Black background (very visible)
+const HEALTH_BAR_FG_COLOR = Color(0.9, 0.15, 0.15, 1.0)  # Bright red health
+
 # ============================================================================
 # CHUNK LOADING
 # ============================================================================
@@ -102,6 +112,20 @@ func render_chunk_entities(chunk: Chunk) -> void:
 				entity_billboards[world_pos] = billboard
 				entity_data_cache[world_pos] = entity_data
 
+				# Create health bar (as sibling, not child - avoids billboard nesting issues)
+				var health_bar = _create_health_bar(billboard.position)
+				add_child(health_bar)
+				entity_health_bars[world_pos] = health_bar
+
+				# Check if entity is already damaged
+				var current_hp = entity_data.get("current_hp", 0.0)
+				var max_hp = entity_data.get("max_hp", 1.0)
+				var hp_percent = current_hp / max_hp if max_hp > 0 else 1.0
+				if hp_percent < 1.0:
+					_update_health_bar(world_pos, hp_percent)
+				else:
+					health_bar.visible = false
+
 	var entity_count = chunk.sub_chunks.map(func(s): return s.world_entities.size()).reduce(func(a, b): return a + b, 0)
 	if entity_count > 0:
 		Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "EntityRenderer: Created %d entity billboards for chunk at %s" % [
@@ -127,6 +151,13 @@ func unload_chunk_entities(chunk: Chunk) -> void:
 				billboard.queue_free()
 				entity_billboards.erase(world_pos)
 				entity_data_cache.erase(world_pos)
+
+				# Also remove health bar
+				if entity_health_bars.has(world_pos):
+					var health_bar = entity_health_bars[world_pos]
+					health_bar.queue_free()
+					entity_health_bars.erase(world_pos)
+
 				removed_count += 1
 
 	if removed_count > 0:
@@ -203,6 +234,95 @@ func _create_billboard(entity_data: Dictionary, world_pos: Vector2i) -> Sprite3D
 	exam_body.add_child(collision_shape)
 
 	return sprite
+
+func _create_health_bar(entity_pos: Vector3) -> MeshInstance3D:
+	"""Create a health bar using a shader for proper fill behavior.
+
+	Uses a single quad mesh with a shader that handles the fill direction.
+	This avoids scaling/positioning issues with sprite-based approaches.
+
+	Args:
+		entity_pos: World position of the entity
+
+	Returns:
+		MeshInstance3D with health bar shader
+	"""
+	var mesh_instance = MeshInstance3D.new()
+	mesh_instance.name = "HealthBar"
+	mesh_instance.position = entity_pos + Vector3(0, HEALTH_BAR_OFFSET_Y, 0)
+
+	# Create quad mesh
+	var quad = QuadMesh.new()
+	quad.size = Vector2(HEALTH_BAR_WIDTH, HEALTH_BAR_HEIGHT)
+	mesh_instance.mesh = quad
+
+	# Create shader material
+	var shader = Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+
+uniform vec4 fg_color : source_color = vec4(0.9, 0.15, 0.15, 1.0);
+uniform vec4 bg_color : source_color = vec4(0.0, 0.0, 0.0, 0.9);
+uniform float health : hint_range(0.0, 1.0) = 1.0;
+
+void vertex() {
+	// Billboard: make quad always face camera
+	MODELVIEW_MATRIX = VIEW_MATRIX * mat4(
+		INV_VIEW_MATRIX[0],
+		INV_VIEW_MATRIX[1],
+		INV_VIEW_MATRIX[2],
+		MODEL_MATRIX[3]
+	);
+}
+
+void fragment() {
+	// UV.x goes 0.0 (left) to 1.0 (right)
+	// Show foreground color where UV.x < health (left side = remaining health)
+	if (UV.x < health) {
+		ALBEDO = fg_color.rgb;
+		ALPHA = fg_color.a;
+	} else {
+		ALBEDO = bg_color.rgb;
+		ALPHA = bg_color.a;
+	}
+}
+"""
+
+	var material = ShaderMaterial.new()
+	material.shader = shader
+	material.set_shader_parameter("fg_color", HEALTH_BAR_FG_COLOR)
+	material.set_shader_parameter("bg_color", HEALTH_BAR_BG_COLOR)
+	material.set_shader_parameter("health", 1.0)
+
+	mesh_instance.material_override = material
+
+	return mesh_instance
+
+func _update_health_bar(world_pos: Vector2i, hp_percent: float) -> void:
+	"""Update health bar display for entity at position.
+
+	Shows the health bar if entity is damaged, updates fill amount.
+	Bar depletes from RIGHT to LEFT (health remaining on left side).
+
+	Args:
+		world_pos: Entity world position
+		hp_percent: Health as 0.0-1.0 (1.0 = full health)
+	"""
+	if not entity_health_bars.has(world_pos):
+		return
+
+	var health_bar = entity_health_bars[world_pos] as MeshInstance3D
+	if not health_bar:
+		return
+
+	# Show health bar only when damaged (not at full HP)
+	health_bar.visible = hp_percent < 1.0
+
+	# Update shader health parameter
+	var material = health_bar.material_override as ShaderMaterial
+	if material:
+		material.set_shader_parameter("health", hp_percent)
 
 # ============================================================================
 # ENTITY QUERIES
@@ -281,12 +401,18 @@ func damage_entity_at(world_pos: Vector2i, amount: float, attack_emoji: String =
 	var new_hp = max(0.0, current_hp - amount)
 	entity_data["current_hp"] = new_hp
 
+	var max_hp = entity_data.get("max_hp", 1.0)
+	var hp_percent = new_hp / max_hp if max_hp > 0 else 0.0
+
 	Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Entity at %s took %.1f damage (%.1f/%.1f HP)" % [
 		world_pos,
 		amount,
 		new_hp,
-		entity_data.get("max_hp", 0.0)
+		max_hp
 	])
+
+	# Update health bar display
+	_update_health_bar(world_pos, hp_percent)
 
 	# Spawn floating emoji VFX
 	_spawn_hit_emoji(world_pos, attack_emoji)
@@ -326,6 +452,12 @@ func remove_entity_at(world_pos: Vector2i) -> bool:
 	billboard.queue_free()
 	entity_billboards.erase(world_pos)
 	entity_data_cache.erase(world_pos)
+
+	# Remove health bar
+	if entity_health_bars.has(world_pos):
+		var health_bar = entity_health_bars[world_pos]
+		health_bar.queue_free()
+		entity_health_bars.erase(world_pos)
 
 	Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Removed entity billboard at %s" % world_pos)
 	return true
@@ -547,8 +679,12 @@ func clear_all_entities() -> void:
 	for billboard in entity_billboards.values():
 		billboard.queue_free()
 
+	for health_bar in entity_health_bars.values():
+		health_bar.queue_free()
+
 	entity_billboards.clear()
 	entity_data_cache.clear()
+	entity_health_bars.clear()
 
 	Log.msg(Log.Category.ENTITY, Log.Level.INFO, "EntityRenderer: Cleared all entity billboards")
 
