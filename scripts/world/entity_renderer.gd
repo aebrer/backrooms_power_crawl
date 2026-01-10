@@ -546,17 +546,17 @@ func _spawn_hit_emoji(world_pos: Vector2i, emoji: String, damage: float = 0.0) -
 	# Determine scaling based on active camera
 	if first_person_camera and first_person_camera.get("camera") and first_person_camera.camera.current:
 		# Look mode - scale based on FOV (60-90, lower = zoomed in)
-		# At FOV 60 (zoomed in): 0.5x, at FOV 90 (zoomed out): 0.75x
+		# 75% smaller than tactical: at FOV 60: 0.125x, at FOV 90: 0.1875x
 		var fov = first_person_camera.camera.fov
 		var fov_ratio = clampf((fov - 60.0) / 30.0, 0.0, 1.0)
-		var zoom_scale = lerp(0.5, 0.75, fov_ratio)
+		var zoom_scale = lerp(0.125, 0.1875, fov_ratio)
 		base_size = int(base_size * zoom_scale)
 	elif tactical_camera and "current_zoom" in tactical_camera:
 		# Tactical view - scale based on zoom distance (8-25)
-		# At zoom 8 (close): 1.0x, at zoom 25 (far): 3.0x
+		# 10% smaller: at zoom 8 (close): 0.9x, at zoom 25 (far): 2.7x
 		var zoom = tactical_camera.current_zoom
 		var zoom_ratio = clampf((zoom - 8.0) / 17.0, 0.0, 1.0)
-		var zoom_scale = lerp(1.0, 3.0, zoom_ratio)
+		var zoom_scale = lerp(0.9, 2.7, zoom_ratio)
 		base_size = int(base_size * zoom_scale)
 
 	# Create floating emoji label with damage number
