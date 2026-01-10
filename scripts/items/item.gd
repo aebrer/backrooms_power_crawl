@@ -199,6 +199,48 @@ func _remove_stat_bonus(player: Player3D) -> void:
 			pass  # No stat bonus for LIGHT items
 
 # ============================================================================
+# ATTACK MODIFIERS
+# ============================================================================
+
+func get_attack_modifiers() -> Dictionary:
+	"""Return this item's contribution to the pool's attack.
+
+	Override in subclasses to modify the pool's attack properties.
+	Items do NOT have their own attacks - they MODIFY the pool's single attack.
+
+	Possible keys:
+	- attack_name: String (override attack display name, e.g., "Brass Knuckles")
+	- attack_emoji: String (override attack emoji for UI and VFX, e.g., "🔥")
+	- damage_add: float (flat damage bonus)
+	- damage_multiply: float (damage multiplier, default 1.0)
+	- range_add: float (extra range in tiles)
+	- cooldown_add: int (cooldown modifier, negative = faster attacks)
+	- area: AttackTypes.Area (override attack pattern)
+	- mana_cost_multiply: float (mana cost modifier for NULL, default 1.0)
+	- special_effects: Array (effect objects with apply(player, targets) method)
+
+	Returns:
+		Dictionary of modifiers (empty dict = no modifications)
+	"""
+	return {}
+
+func get_turn_effect_info() -> Dictionary:
+	"""Return info about this item's on_turn() effect for UI preview.
+
+	Override in subclasses that have mana-consuming turn effects.
+	Used by action preview to show 🚫 when item can't afford its effect.
+
+	Returns:
+		Dictionary with:
+		- effect_name: String (display name for the effect)
+		- mana_cost: float (mana required per turn, 0 if none)
+		- description: String (brief effect description, optional)
+
+		Empty dict = no turn effect to preview
+	"""
+	return {}
+
+# ============================================================================
 # UTILITY
 # ============================================================================
 

@@ -358,6 +358,9 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 	else:
 		Log.warn(Log.Category.SYSTEM, "Item spawning skipped: conditions not met")
 
+	# NOTE: Debug enemy spawning moved to _load_chunk_to_grid()
+	# because it uses grid.is_walkable() which queries GridMap
+
 	# Emit progress during initial load
 	if not initial_load_complete:
 		var expected_chunks := (GENERATION_RADIUS * 2 + 1) * (GENERATION_RADIUS * 2 + 1)  # 7×7 = 49
@@ -376,7 +379,16 @@ func _load_chunk_to_grid(chunk: Chunk, chunk_key: Vector3i) -> void:
 		_find_grid_3d()
 
 	if grid_3d:
+		# First load terrain into GridMap (needed for is_walkable)
 		grid_3d.load_chunk(chunk)
+
+		# Spawn entities AFTER GridMap is populated (is_walkable needs GridMap)
+		# but BEFORE entity rendering (entities need to be in chunk data)
+		_spawn_debug_enemy_in_chunk(chunk, chunk_key)
+
+		# Now render entities (after they've been added to chunk data)
+		if grid_3d.entity_renderer:
+			grid_3d.entity_renderer.render_chunk_entities(chunk)
 	else:
 		# Only warn once per session
 		if loaded_chunks.size() == 1:
@@ -393,6 +405,89 @@ func _load_chunk_immediate(chunk: Chunk, chunk_key: Vector3i) -> void:
 	"""Load chunk immediately (fallback for synchronous generation)"""
 	loaded_chunks[chunk_key] = chunk
 	_load_chunk_to_grid(chunk, chunk_key)
+
+# ============================================================================
+# DEBUG ENEMY SPAWNING
+# ============================================================================
+
+const DEBUG_ENEMIES_PER_CHUNK = 20  # Number of debug enemies to spawn per chunk
+
+func _spawn_debug_enemy_in_chunk(chunk: Chunk, _chunk_key: Vector3i) -> void:
+	"""Spawn multiple debug enemies throughout the chunk for combat testing.
+
+	Debug enemies:
+	- Spawns ~20 per chunk (scattered randomly)
+	- Has moderate HP for testing
+	- Does NOT move or attack
+	- Stationary punching bags for testing attack systems
+
+	Now uses WorldEntity data pattern (like items) instead of Node3D instances.
+	EntityRenderer creates billboards when chunk loads.
+	"""
+	if not grid_3d:
+		Log.warn(Log.Category.ENTITY, "Cannot spawn debug enemy - no grid_3d reference")
+		return
+
+	var chunk_world_pos = chunk.position * CHUNK_SIZE  # Chunk origin in world tiles
+	var spawned_count = 0
+	var occupied_positions: Array[Vector2i] = []
+
+	# Try to spawn DEBUG_ENEMIES_PER_CHUNK enemies scattered throughout chunk
+	for _i in range(DEBUG_ENEMIES_PER_CHUNK):
+		var spawn_pos = _find_random_walkable_in_chunk(chunk_world_pos, occupied_positions)
+		if spawn_pos == Vector2i(-99999, -99999):
+			continue  # Couldn't find a position
+
+		occupied_positions.append(spawn_pos)
+
+		# Create WorldEntity object
+		var entity = WorldEntity.new(
+			"debug_enemy",
+			spawn_pos,
+			50.0,  # max_hp - lower for faster testing (was 1100)
+			0      # spawn_turn
+		)
+
+		# Find the subchunk containing this position and add entity
+		var local_pos = spawn_pos - chunk_world_pos
+		var subchunk_x = local_pos.x / SubChunk.SIZE
+		var subchunk_y = local_pos.y / SubChunk.SIZE
+		var subchunk = chunk.get_sub_chunk(Vector2i(subchunk_x, subchunk_y))
+		if subchunk:
+			subchunk.add_world_entity(entity)
+			spawned_count += 1
+
+	if spawned_count > 0:
+		Log.msg(Log.Category.ENTITY, Log.Level.INFO, "Spawned %d DebugEnemies in chunk %s" % [spawned_count, chunk.position])
+
+
+func _find_random_walkable_in_chunk(chunk_world_pos: Vector2i, occupied: Array[Vector2i]) -> Vector2i:
+	"""Find a random walkable position in the chunk that isn't already occupied.
+
+	Args:
+		chunk_world_pos: World position of chunk origin
+		occupied: Positions already used for spawning
+
+	Returns:
+		Walkable position, or Vector2i(-99999, -99999) if none found
+	"""
+	const MAX_ATTEMPTS = 50
+
+	for _attempt in range(MAX_ATTEMPTS):
+		# Random position within chunk
+		var local_x = randi_range(2, CHUNK_SIZE - 3)  # Avoid edges
+		var local_y = randi_range(2, CHUNK_SIZE - 3)
+		var test_pos = chunk_world_pos + Vector2i(local_x, local_y)
+
+		# Skip if already occupied
+		if test_pos in occupied:
+			continue
+
+		# Check if walkable
+		if grid_3d.is_walkable(test_pos):
+			return test_pos
+
+	return Vector2i(-99999, -99999)  # Failed to find position
 
 # ============================================================================
 # ITEM DISCOVERY

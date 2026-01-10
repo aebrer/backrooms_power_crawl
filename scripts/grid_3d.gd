@@ -17,6 +17,9 @@ const CELL_SIZE := Vector3(2.0, 1.0, 2.0)  # X, Y (height), Z - doubled for visi
 # Item rendering
 var item_renderer: ItemRenderer = null
 
+# Entity rendering
+var entity_renderer: EntityRenderer = null
+
 # Grid data (same as 2D version)
 var grid_size: Vector2i = GRID_SIZE
 var walkable_cells: Dictionary = {}  # Vector2i -> bool (using Dictionary for O(1) erase instead of O(n))
@@ -56,6 +59,10 @@ func _ready() -> void:
 	# Create item renderer
 	item_renderer = ItemRenderer.new()
 	add_child(item_renderer)
+
+	# Create entity renderer
+	entity_renderer = EntityRenderer.new()
+	add_child(entity_renderer)
 
 	print("[Grid3D] Initialized: %d x %d (octant size: %d)" % [grid_size.x, grid_size.y, grid_map.cell_octant_size])
 
@@ -239,9 +246,12 @@ func load_chunk(chunk: Chunk) -> void:
 
 	var load_time := (Time.get_ticks_usec() - load_start) / 1000.0
 
-	# Render items in chunk
+	# Render items in chunk (items are already in chunk data from _on_chunk_completed)
 	if item_renderer:
 		item_renderer.render_chunk_items(chunk)
+
+	# NOTE: Entity rendering is handled by ChunkManager AFTER entity spawning
+	# because entities need is_walkable() which requires GridMap to be populated first
 
 func unload_chunk(chunk: Chunk) -> void:
 	"""Unload a chunk from GridMap
@@ -273,6 +283,10 @@ func unload_chunk(chunk: Chunk) -> void:
 	# Unload item billboards
 	if item_renderer:
 		item_renderer.unload_chunk_items(chunk)
+
+	# Unload entity billboards
+	if entity_renderer:
+		entity_renderer.unload_chunk_entities(chunk)
 
 	Log.grid("Unloaded chunk %s from GridMap" % chunk.position)
 
@@ -414,22 +428,58 @@ func world_to_grid(world_pos: Vector3) -> Vector2i:
 # ============================================================================
 
 func is_walkable(pos: Vector2i) -> bool:
-	"""Check if grid position is walkable
+	"""Check if grid position is walkable (floor tile + no entity blocking)
 
 	For procedural generation (infinite world), queries GridMap directly.
 	For static levels, checks bounds first.
+	Also checks for entities blocking the position.
 	"""
 	# For procedural generation: infinite world, no bounds checking
 	if use_procedural_generation:
 		var cell_item = grid_map.get_cell_item(Vector3i(pos.x, 0, pos.y))
-		return cell_item == TileType.FLOOR
+		if cell_item != TileType.FLOOR:
+			return false
+
+		# Check for entities blocking this position
+		return not _is_position_blocked_by_entity(pos)
 
 	# For static levels: check bounds first
 	if not is_in_bounds(pos):
 		return false
 
 	var cell_item = grid_map.get_cell_item(Vector3i(pos.x, 0, pos.y))
-	return cell_item == TileType.FLOOR
+	if cell_item != TileType.FLOOR:
+		return false
+
+	# Check for entities blocking this position
+	return not _is_position_blocked_by_entity(pos)
+
+func _is_position_blocked_by_entity(pos: Vector2i) -> bool:
+	"""Check if any entity is occupying this grid position
+
+	Returns true if blocked, false if clear.
+	Uses EntityRenderer to check entity positions (data-driven, like items).
+	"""
+	if entity_renderer:
+		return entity_renderer.has_entity_at(pos)
+	return false  # No renderer = no entities = not blocked
+
+# ============================================================================
+# ENTITY QUERIES
+# ============================================================================
+
+func get_entity_at(world_pos: Vector2i) -> WorldEntity:
+	"""Get WorldEntity at world position
+
+	Args:
+		world_pos: World tile coordinates
+
+	Returns:
+		WorldEntity or null if no living entity at position
+	"""
+	if entity_renderer:
+		return entity_renderer.get_entity_at(world_pos)
+	return null
 
 func is_in_bounds(pos: Vector2i) -> bool:
 	"""Check if position is within grid bounds
@@ -455,3 +505,82 @@ func get_random_walkable_position() -> Vector2i:
 		var center_y: int = grid_size.y / 2
 		return Vector2i(center_x, center_y)
 	return walkable_cells.keys().pick_random()
+
+# ============================================================================
+# LINE OF SIGHT
+# ============================================================================
+
+func has_line_of_sight(from_pos: Vector2i, to_pos: Vector2i) -> bool:
+	"""Check if there's a clear line of sight between two positions.
+
+	Uses Bresenham's line algorithm to check all tiles between positions.
+	A wall (non-FLOOR tile) blocks line of sight.
+	Entities do NOT block line of sight (attacks can pass through enemies).
+
+	Args:
+		from_pos: Starting grid position (e.g., player position)
+		to_pos: Target grid position (e.g., enemy position)
+
+	Returns:
+		true if clear line of sight, false if blocked by wall
+	"""
+	# Same position = always has LOS
+	if from_pos == to_pos:
+		return true
+
+	# Use Bresenham's line algorithm to get all tiles on the line
+	var line_tiles = _get_line_tiles(from_pos, to_pos)
+
+	# Check each tile (excluding start and end positions)
+	for i in range(1, line_tiles.size() - 1):
+		var tile_pos = line_tiles[i]
+		if _is_tile_blocking_los(tile_pos):
+			return false
+
+	return true
+
+
+func _get_line_tiles(from_pos: Vector2i, to_pos: Vector2i) -> Array[Vector2i]:
+	"""Get all tile positions on a line between two points using Bresenham's algorithm.
+
+	Returns array of positions from start to end (inclusive).
+	"""
+	var tiles: Array[Vector2i] = []
+
+	var x0 = from_pos.x
+	var y0 = from_pos.y
+	var x1 = to_pos.x
+	var y1 = to_pos.y
+
+	var dx = abs(x1 - x0)
+	var dy = -abs(y1 - y0)
+	var sx = 1 if x0 < x1 else -1
+	var sy = 1 if y0 < y1 else -1
+	var err = dx + dy
+
+	while true:
+		tiles.append(Vector2i(x0, y0))
+
+		if x0 == x1 and y0 == y1:
+			break
+
+		var e2 = 2 * err
+		if e2 >= dy:
+			err += dy
+			x0 += sx
+		if e2 <= dx:
+			err += dx
+			y0 += sy
+
+	return tiles
+
+
+func _is_tile_blocking_los(pos: Vector2i) -> bool:
+	"""Check if a tile blocks line of sight (walls block, floor doesn't).
+
+	This is different from is_walkable() because:
+	- Entities don't block LOS (attacks pass through enemies to hit all)
+	- Only terrain/walls block LOS
+	"""
+	var cell_item = grid_map.get_cell_item(Vector3i(pos.x, 0, pos.y))
+	return cell_item != TileType.FLOOR

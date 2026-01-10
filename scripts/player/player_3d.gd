@@ -40,6 +40,10 @@ var mind_pool: ItemPool = null
 var null_pool: ItemPool = null
 var light_pool: ItemPool = null
 
+# Combat system
+const AttackExecutorClass = preload("res://scripts/combat/attack_executor.gd")
+var attack_executor = null  # Initialized in _ready()
+
 # Node references
 var grid: Grid3D = null
 var move_indicator: Node3D = null  # Set by Game node
@@ -57,6 +61,9 @@ func _ready() -> void:
 
 	# Initialize stats system
 	_initialize_stats()
+
+	# Initialize combat system
+	attack_executor = AttackExecutorClass.new()
 
 	# Grid reference will be set by Game node
 	await get_tree().process_frame
@@ -275,13 +282,21 @@ func _on_discovery_made(_subject_type: String, _subject_id: String, exp_reward: 
 func _on_new_chunk_entered(chunk_position: Vector3i) -> void:
 	"""Called when player enters a new chunk - award exploration EXP"""
 	if stats:
-		var exp_reward = 10 * (stats.level + 1)
+		# Flat 10 EXP per new chunk - clearance multiplier is applied in gain_exp()
+		var exp_reward = 10
 		stats.gain_exp(exp_reward)
-		Log.player("Entered new chunk %s - awarded %d EXP (Level %d)" % [
-			Vector2i(chunk_position.x, chunk_position.y),
-			exp_reward,
-			stats.level
-		])
+		Log.player("Entered new chunk %s" % Vector2i(chunk_position.x, chunk_position.y))
+
+func _on_entity_died(entity: WorldEntity) -> void:
+	"""Called when an entity is killed - award EXP"""
+	if not stats:
+		return
+
+	# EXP reward based on entity max HP (no level scaling - kills become more frequent with corruption)
+	# Base: max_hp / 10, minimum 10 EXP
+	var exp_reward = max(10, int(entity.max_hp / 10.0))
+
+	stats.gain_exp(exp_reward)
 
 func _on_level_increased(old_level: int, new_level: int) -> void:
 	"""Called when Level increases - trigger perk selection"""
@@ -321,11 +336,19 @@ func _on_clearance_increased(old_level: int, new_level: int) -> void:
 # ============================================================================
 
 func execute_item_pools() -> void:
-	"""Execute all item pools in order (called each turn)
+	"""Execute attacks, then item effects (called each turn)
 
-	Execution order: BODY → MIND → NULL → LIGHT
-	This order matters for synergies between items.
+	Execution order:
+	1. Auto-attacks (BODY → MIND → NULL via AttackExecutor)
+	2. Item on_turn() effects (BODY → MIND → NULL → LIGHT pools)
+
+	This is an auto-battler: attacks happen automatically based on cooldowns.
+	Items modify attack properties, then run their own on_turn() effects.
 	"""
+	# First: Execute pool attacks (auto-battler style)
+	attack_executor.execute_turn(self)
+
+	# Then: Execute item on_turn() for non-attack effects
 	if body_pool:
 		body_pool.execute_turn(self, turn_count)
 	if mind_pool:

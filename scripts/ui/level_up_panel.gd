@@ -62,7 +62,7 @@ const PERK_DATA: Dictionary = {
 	},
 	PerkType.CLEARANCE_PLUS_1: {
 		"name": "+1 Clearance Level",
-		"description": "Unlock higher-tier knowledge. Multiplies ALL EXP gains!",
+		"description": "Unlock higher-tier knowledge. +10% EXP from all sources!",
 		"icon": "🔓",
 		"color": Color.GOLD,
 	},
@@ -97,17 +97,27 @@ var panel: PanelContainer
 var content_vbox: VBoxContainer
 var perk_buttons: Array[Button] = []
 
+## Font with emoji fallback (project default doesn't auto-apply to programmatic Labels)
+var emoji_font: Font = null
+
 # State
 var player_ref: Player3D = null
 var new_level: int = 0
 var available_perks: Array[PerkType] = []
 var _accepting_input: bool = false
 
+## Queue of pending level-ups (for when player gains multiple levels at once)
+## Each entry is a Dictionary: {"player": Player3D, "level": int}
+var _pending_levelups: Array[Dictionary] = []
+
 # ============================================================================
 # LIFECYCLE
 # ============================================================================
 
 func _ready() -> void:
+	# Load emoji font (project setting doesn't auto-apply to programmatic Labels)
+	emoji_font = load("res://assets/fonts/default_font.tres")
+
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
@@ -154,12 +164,25 @@ func _build_panel() -> void:
 func show_level_up(player: Player3D, level: int) -> void:
 	"""Display level-up perk selection UI
 
+	If a level-up dialog is already showing, queue this one for later.
+
 	Args:
 		player: Player reference
 		level: New level reached
 	"""
-	Log.system("show_level_up: Level %d" % level)
+	Log.system("show_level_up: Level %d (visible=%s, queue_size=%d)" % [level, visible, _pending_levelups.size()])
 
+	# If already showing, queue this level-up for later
+	if visible:
+		_pending_levelups.append({"player": player, "level": level})
+		Log.system("Queued level-up for Level %d (queue size: %d)" % [level, _pending_levelups.size()])
+		return
+
+	# Show immediately
+	_show_level_up_immediate(player, level)
+
+func _show_level_up_immediate(player: Player3D, level: int) -> void:
+	"""Actually display the level-up UI (called when not already showing)"""
 	player_ref = player
 	new_level = level
 
@@ -186,16 +209,42 @@ func show_level_up(player: Player3D, level: int) -> void:
 # ============================================================================
 
 func _select_random_perks(count: int) -> Array[PerkType]:
-	"""Select N random unique perks from the pool"""
-	var all_perks: Array[PerkType] = []
-	for perk_type in PerkType.values():
-		all_perks.append(perk_type as PerkType)
+	"""Select N random unique perks from the pool using weighted selection.
 
-	# Shuffle and take first N
-	all_perks.shuffle()
+	Clearance is intentionally rare since it boosts ALL EXP gains (+10%/level).
+	"""
+	# Define weights for each perk type (higher = more common)
+	var perk_weights: Dictionary = {
+		PerkType.BODY_PLUS_1: 10,
+		PerkType.MIND_PLUS_1: 10,
+		PerkType.NULL_PLUS_1: 10,
+		PerkType.HP_REGEN_PLUS_1: 8,
+		PerkType.SANITY_REGEN_PLUS_1: 8,
+		PerkType.MANA_REGEN_PLUS_1: 8,
+		PerkType.CLEARANCE_PLUS_1: 2,  # Rare - very powerful
+		PerkType.CORRUPTION_PLUS_5: 6,
+		PerkType.CORRUPTION_MINUS_5: 6,
+	}
+
+	# Build weighted pool
+	var weighted_pool: Array[PerkType] = []
+	for perk_type in PerkType.values():
+		var weight = perk_weights.get(perk_type, 5)  # Default weight 5
+		for _i in range(weight):
+			weighted_pool.append(perk_type as PerkType)
+
+	# Select unique perks using weighted random
 	var selected: Array[PerkType] = []
-	for i in range(min(count, all_perks.size())):
-		selected.append(all_perks[i])
+	while selected.size() < count and weighted_pool.size() > 0:
+		var idx = randi() % weighted_pool.size()
+		var picked = weighted_pool[idx]
+
+		# Only add if not already selected
+		if not selected.has(picked):
+			selected.append(picked)
+
+		# Remove ALL instances of this perk from pool (to avoid duplicates)
+		weighted_pool = weighted_pool.filter(func(p): return p != picked)
 
 	return selected
 
@@ -228,13 +277,13 @@ func _update_panel_position() -> void:
 
 func _rebuild_content() -> void:
 	"""Rebuild UI content for current level-up"""
-	# Clear old content
+	# Clear old content (use queue_free to avoid freeing locked objects)
 	for child in content_vbox.get_children():
 		if child is Button and child.has_focus():
 			child.release_focus()
 		if child.is_in_group("hud_focusable"):
 			child.remove_from_group("hud_focusable")
-		child.free()
+		child.queue_free()
 	perk_buttons.clear()
 
 	# Header
@@ -243,6 +292,8 @@ func _rebuild_content() -> void:
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_HEADER))
 	header.add_theme_color_override("font_color", Color.GOLD)
+	if emoji_font:
+		header.add_theme_font_override("font", emoji_font)
 	content_vbox.add_child(header)
 
 	# Level info
@@ -251,6 +302,8 @@ func _rebuild_content() -> void:
 	level_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	level_label.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_LEVEL))
 	level_label.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	if emoji_font:
+		level_label.add_theme_font_override("font", emoji_font)
 	content_vbox.add_child(level_label)
 
 	# Separator
@@ -264,6 +317,8 @@ func _rebuild_content() -> void:
 	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instructions.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_PERK_DESC))
 	instructions.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
+	if emoji_font:
+		instructions.add_theme_font_override("font", emoji_font)
 	content_vbox.add_child(instructions)
 
 	# Perk buttons
@@ -280,6 +335,8 @@ func _create_perk_button(perk_type: PerkType) -> Button:
 	button.text = "%s %s\n%s" % [data["icon"], data["name"], data["description"]]
 	button.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_PERK_NAME))
 	button.add_theme_color_override("font_color", data["color"])
+	if emoji_font:
+		button.add_theme_font_override("font", emoji_font)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.pressed.connect(func(): _on_perk_selected(perk_type))
 
@@ -374,8 +431,22 @@ func _modify_corruption(percent_change: float) -> void:
 	Log.player("Corruption changed: %.2f → %.2f (%+.1f%%)" % [current_corruption, new_corruption, percent_change * 100])
 
 func _close_panel() -> void:
-	"""Hide panel and unpause game"""
+	"""Hide panel and either show next queued level-up or unpause game"""
 	visible = false
+
+	# Check for queued level-ups
+	if _pending_levelups.size() > 0:
+		var next_levelup = _pending_levelups.pop_front()
+		Log.system("Processing queued level-up: Level %d (%d remaining)" % [
+			next_levelup["level"],
+			_pending_levelups.size()
+		])
+		# Defer showing next level-up to allow current button to finish its callback
+		# This prevents "Object is locked" errors from freeing buttons mid-signal
+		call_deferred("_show_level_up_immediate", next_levelup["player"], next_levelup["level"])
+		return
+
+	# No more queued level-ups, unpause game
 	if PauseManager:
 		PauseManager.toggle_pause()
 

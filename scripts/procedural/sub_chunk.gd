@@ -23,8 +23,8 @@ var world_position: Vector2i  # Absolute tile position in world
 # Data
 var tile_data: Array[Array] = []  # 16×16 tile types (layer 0)
 var ceiling_data: Array[Array] = []  # 16×16 ceiling tiles (layer 1)
-var entities: Array[int] = []  # Entity IDs spawned in this sub-chunk
 var world_items: Array[Dictionary] = []  # Serialized WorldItem data (persists across chunk load/unload)
+var world_entities: Array[WorldEntity] = []  # WorldEntity objects (persist across chunk load/unload)
 
 # ============================================================================
 # INITIALIZATION
@@ -177,13 +177,67 @@ func get_world_items_in_subchunk() -> Array[Dictionary]:
 	return world_items.duplicate()
 
 # ============================================================================
+# WORLD ENTITY MANAGEMENT
+# ============================================================================
+
+func add_world_entity(entity: WorldEntity) -> void:
+	"""Add a WorldEntity to this sub-chunk
+
+	Args:
+		entity: WorldEntity object to store
+	"""
+	world_entities.append(entity)
+
+func remove_world_entity(world_position: Vector2i) -> bool:
+	"""Remove world entity at position (when killed/despawned)
+
+	Args:
+		world_position: World tile coordinates
+
+	Returns:
+		true if entity was found and removed
+	"""
+	for i in range(world_entities.size()):
+		if world_entities[i].world_position == world_position:
+			world_entities.remove_at(i)
+			return true
+	return false
+
+func get_entity_at(world_position: Vector2i) -> WorldEntity:
+	"""Get entity at world position
+
+	Args:
+		world_position: World tile coordinates
+
+	Returns:
+		WorldEntity at position, or null if none
+	"""
+	for entity in world_entities:
+		if entity.world_position == world_position:
+			return entity
+	return null
+
+func get_living_entities() -> Array[WorldEntity]:
+	"""Get all living (non-dead) entities in this sub-chunk
+
+	Returns:
+		Array of WorldEntity objects that are alive
+	"""
+	var living: Array[WorldEntity] = []
+	for entity in world_entities:
+		if not entity.is_dead:
+			living.append(entity)
+	return living
+
+# ============================================================================
 # UTILITY
 # ============================================================================
 
 func _to_string() -> String:
-	return "SubChunk(local=%s, world=%s, walkable=%d, items=%d)" % [
+	return "SubChunk(local=%s, world=%s, walkable=%d, items=%d, entities=%d)" % [
 		local_position,
 		world_position,
 		get_walkable_count(),
-		world_items.size()
+		world_items.size(),
+		world_entities.size()
 	]

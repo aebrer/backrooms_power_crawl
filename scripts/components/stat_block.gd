@@ -112,10 +112,10 @@ var current_mana: float = 0.0:
 # CLEARANCE (manual choice):
 #   - Only increases when chosen as a perk
 #   - Unlocks knowledge/entity information in KnowledgeDB
-#   - Multiplies ALL EXP gains (×1 at CL0, ×2 at CL1, ×3 at CL2, etc.)
+#   - Bonus to ALL EXP gains (+10% per level: ×1.0 at CL0, ×1.1 at CL1, ×1.2 at CL2, etc.)
 #   - "Glass cannon" build: faster scaling but must spend perk slots
 #
-# Example: At Clearance 2, examining floor gives 10 base → 30 EXP (10×3)
+# Example: At Clearance 2, examining floor gives 10 base → 12 EXP (10×1.2)
 # ============================================================================
 
 var exp: int = 0
@@ -347,9 +347,7 @@ func consume_mana(amount: float) -> bool:
 		current_mana -= amount
 		Log.system("Consumed %.1f mana (%.1f → %.1f)" % [amount, old_mana, current_mana])
 		return true
-	else:
-		Log.system("Not enough mana (%.1f/%.1f)" % [current_mana, amount])
-		return false
+	return false
 
 func restore_mana(amount: float) -> void:
 	"""Restore Mana by amount (clamped to max)."""
@@ -395,6 +393,23 @@ func regenerate_mana() -> void:
 	# Just call the new function (it handles mana regen)
 	regenerate_resources()
 
+func get_mana_regen_amount() -> float:
+	"""Calculate how much mana would be regenerated on the next turn.
+
+	Formula: (NULL/2) base + (mana_regen_percent % of max Mana)
+	Used for previewing attack affordability in UI.
+	"""
+	var base_mana_regen: float = null_stat / 2.0 if null_stat > 0 else 0.0
+	var perk_mana_regen: float = max_mana * (mana_regen_percent / 100.0) if mana_regen_percent > 0.0 else 0.0
+	return base_mana_regen + perk_mana_regen
+
+func get_mana_after_regen() -> float:
+	"""Predict mana value after next turn's regeneration (clamped to max).
+
+	Used for previewing attack affordability in UI.
+	"""
+	return minf(current_mana + get_mana_regen_amount(), max_mana)
+
 # ============================================================================
 # PROGRESSION
 # ============================================================================
@@ -406,52 +421,65 @@ func gain_exp(amount: int) -> void:
 	This is intentional - Clearance is the "glass cannon" build choice.
 	Higher Clearance = faster scaling but must be chosen via perks.
 
-	Formula: EXP gained = base_amount × (clearance_level + 1)
-	  Clearance 0: ×1
-	  Clearance 1: ×2
-	  Clearance 2: ×3
+	Formula: EXP gained = base_amount × (1.0 + clearance_level × 0.1)
+	  Clearance 0: ×1.0 (no bonus)
+	  Clearance 1: ×1.1 (+10%)
+	  Clearance 2: ×1.2 (+20%)
 	  etc.
 	"""
-	var multiplied = amount * (clearance_level + 1)
-	exp += multiplied
-	emit_signal("exp_gained", multiplied, exp)
-	Log.player("Gained %d EXP (×%d = %d total, now %d)" % [amount, clearance_level + 1, multiplied, exp])
+	var multiplier = 1.0 + clearance_level * 0.1
+	var actual_gain = int(amount * multiplier)
+	exp += actual_gain
+	emit_signal("exp_gained", actual_gain, exp)
+
+	# Log EXP gain with progress toward next level
+	var needed = _exp_for_next_level()
+	if clearance_level > 0:
+		Log.player("+%d EXP (base %d × CL%d bonus) → %d/%d to Lv%d" % [actual_gain, amount, clearance_level, exp, needed, level + 1])
+	else:
+		Log.player("+%d EXP → %d/%d to Lv%d" % [actual_gain, exp, needed, level + 1])
 
 	_check_level_up()
 
 func _check_level_up() -> void:
-	"""Check if player has enough EXP to level up (triggers perk selection)."""
-	var required = _exp_for_level(level + 1)
+	"""Check if player has enough EXP to level up (triggers perk selection).
+
+	EXP is SPENT on level ups - the cost is subtracted from current EXP.
+	Any overflow carries to the next level.
+	"""
+	var required = _exp_for_next_level()
 
 	while exp >= required:
+		# Spend EXP on level up
+		exp -= required
 		var old_level = level
 		level += 1
 		emit_signal("level_increased", old_level, level)
-		Log.system("Level Up! %d → %d (choose a perk!)" % [old_level, level])
+		Log.system("Level Up! %d → %d (spent %d EXP, %d remaining)" % [old_level, level, required, exp])
 
-		# Check next level
-		required = _exp_for_level(level + 1)
+		# Check next level with new cost
+		required = _exp_for_next_level()
 
-func _exp_for_level(target_level: int) -> int:
-	"""Calculate EXP required for a given Level.
+func _exp_for_next_level() -> int:
+	"""Calculate EXP cost for the NEXT level up.
 
-	Formula: BASE × (level ^ EXPONENT)
+	Formula: BASE × ((level + 1) ^ EXPONENT)
 	BASE = 100
 	EXPONENT = 1.5
 
-	Examples:
-	  Level 1:  100 × (1^1.5) = 100
-	  Level 2:  100 × (2^1.5) = 283
-	  Level 5:  100 × (5^1.5) = 1118
-	  Level 10: 100 × (10^1.5) = 3162
+	Examples (cost to reach level):
+	  Level 0 → 1:  100 × (1^1.5) = 100
+	  Level 1 → 2:  100 × (2^1.5) = 283
+	  Level 4 → 5:  100 × (5^1.5) = 1118
+	  Level 9 → 10: 100 × (10^1.5) = 3162
 	"""
 	const BASE = 100
 	const EXPONENT = 1.5
-	return int(BASE * pow(target_level, EXPONENT))
+	return int(BASE * pow(level + 1, EXPONENT))
 
 func exp_to_next_level() -> int:
-	"""How much EXP needed for next Level."""
-	return _exp_for_level(level + 1) - exp
+	"""How much more EXP needed for next Level."""
+	return _exp_for_next_level() - exp
 
 func increase_clearance() -> void:
 	"""Manually increase Clearance (called when player chooses Clearance perk)."""
