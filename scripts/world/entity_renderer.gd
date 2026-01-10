@@ -414,8 +414,8 @@ func damage_entity_at(world_pos: Vector2i, amount: float, attack_emoji: String =
 	# Update health bar display
 	_update_health_bar(world_pos, hp_percent)
 
-	# Spawn floating emoji VFX
-	_spawn_hit_emoji(world_pos, attack_emoji)
+	# Spawn floating emoji VFX with damage number
+	_spawn_hit_emoji(world_pos, attack_emoji, amount)
 
 	# Check for death
 	if new_hp <= 0:
@@ -505,10 +505,10 @@ func clear_attack_highlights() -> void:
 # HIT VFX
 # ============================================================================
 
-func _spawn_hit_emoji(world_pos: Vector2i, emoji: String) -> void:
-	"""Spawn a floating emoji that rises and fades when entity takes damage.
+func _spawn_hit_emoji(world_pos: Vector2i, emoji: String, damage: float = 0.0) -> void:
+	"""Spawn a floating emoji with damage number that rises and fades.
 
-	Creates a Label3D billboard with the attack emoji that:
+	Creates a Label3D billboard with the attack emoji and damage that:
 	- Starts at the entity position (with random jitter)
 	- Rises upward while fading out
 	- Auto-removes when animation completes
@@ -517,6 +517,7 @@ func _spawn_hit_emoji(world_pos: Vector2i, emoji: String) -> void:
 	Args:
 		world_pos: Position of entity that was hit
 		emoji: Emoji character to display
+		damage: Damage amount to show (0 = don't show number)
 	"""
 	if not entity_billboards.has(world_pos):
 		return
@@ -558,9 +559,12 @@ func _spawn_hit_emoji(world_pos: Vector2i, emoji: String) -> void:
 		var zoom_scale = lerp(1.0, 3.0, zoom_ratio)
 		base_size = int(base_size * zoom_scale)
 
-	# Create floating emoji label
+	# Create floating emoji label with damage number
 	var label = Label3D.new()
-	label.text = emoji
+	if damage > 0:
+		label.text = "%s %.0f" % [emoji, damage]
+	else:
+		label.text = emoji
 	label.font_size = base_size
 	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	label.no_depth_test = true  # Always render on top
