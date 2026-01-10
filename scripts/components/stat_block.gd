@@ -428,46 +428,58 @@ func gain_exp(amount: int) -> void:
 	  etc.
 	"""
 	var multiplier = 1.0 + clearance_level * 0.1
-	var multiplied = int(amount * multiplier)
-	exp += multiplied
-	emit_signal("exp_gained", multiplied, exp)
-	Log.player("Gained %d EXP (×%.1f = %d total, now %d)" % [amount, multiplier, multiplied, exp])
+	var actual_gain = int(amount * multiplier)
+	exp += actual_gain
+	emit_signal("exp_gained", actual_gain, exp)
+
+	# Log EXP gain with progress toward next level
+	var needed = _exp_for_next_level()
+	if clearance_level > 0:
+		Log.player("+%d EXP (base %d × CL%d bonus) → %d/%d to Lv%d" % [actual_gain, amount, clearance_level, exp, needed, level + 1])
+	else:
+		Log.player("+%d EXP → %d/%d to Lv%d" % [actual_gain, exp, needed, level + 1])
 
 	_check_level_up()
 
 func _check_level_up() -> void:
-	"""Check if player has enough EXP to level up (triggers perk selection)."""
-	var required = _exp_for_level(level + 1)
+	"""Check if player has enough EXP to level up (triggers perk selection).
+
+	EXP is SPENT on level ups - the cost is subtracted from current EXP.
+	Any overflow carries to the next level.
+	"""
+	var required = _exp_for_next_level()
 
 	while exp >= required:
+		# Spend EXP on level up
+		exp -= required
 		var old_level = level
 		level += 1
 		emit_signal("level_increased", old_level, level)
-		Log.system("Level Up! %d → %d (choose a perk!)" % [old_level, level])
+		Log.system("Level Up! %d → %d (spent %d EXP, %d remaining)" % [old_level, level, required, exp])
 
-		# Check next level
-		required = _exp_for_level(level + 1)
+		# Check next level with new cost
+		required = _exp_for_next_level()
 
-func _exp_for_level(target_level: int) -> int:
-	"""Calculate EXP required for a given Level.
+func _exp_for_next_level() -> int:
+	"""Calculate EXP cost for the NEXT level up.
 
-	Formula: BASE × (level ^ EXPONENT)
+	Formula: BASE × ((level + 1) ^ EXPONENT)
 	BASE = 100
 	EXPONENT = 1.5
 
-	Examples:
-	  Level 1:  100 × (1^1.5) = 100
-	  Level 2:  100 × (2^1.5) = 283
-	  Level 5:  100 × (5^1.5) = 1118
-	  Level 10: 100 × (10^1.5) = 3162
+	Examples (cost to reach level):
+	  Level 0 → 1:  100 × (1^1.5) = 100
+	  Level 1 → 2:  100 × (2^1.5) = 283
+	  Level 4 → 5:  100 × (5^1.5) = 1118
+	  Level 9 → 10: 100 × (10^1.5) = 3162
 	"""
 	const BASE = 100
 	const EXPONENT = 1.5
-	return int(BASE * pow(target_level, EXPONENT))
+	return int(BASE * pow(level + 1, EXPONENT))
 
 func exp_to_next_level() -> int:
-	"""How much EXP needed for next Level."""
-	return _exp_for_level(level + 1) - exp
+	"""How much more EXP needed for next Level."""
+	return _exp_for_next_level() - exp
 
 func increase_clearance() -> void:
 	"""Manually increase Clearance (called when player chooses Clearance perk)."""

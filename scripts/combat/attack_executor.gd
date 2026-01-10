@@ -9,10 +9,10 @@ The AttackExecutor:
 Items provide modifiers via get_attack_modifiers() method.
 Modifiers are aggregated: ADD first, then MULTIPLY.
 
-Special NULL behavior:
-- Base damage = max_mana (total mana capacity, not current available)
-- Only fires if player has mana to spend (costs mana)
-- Thematic: anomaly power tied to mana pool size
+Damage scaling:
+- BODY attacks scale with STRENGTH (derived from BODY stat)
+- MIND attacks scale with PERCEPTION (derived from MIND stat)
+- NULL attacks scale with ANOMALY (derived from NULL stat) and cost mana
 
 Cooldown behavior:
 - Ticked at start of each turn (before attack checks)
@@ -82,8 +82,11 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	1. Start with base stats for attack type
 	2. Add flat modifiers (damage_add, range_add, cooldown_add)
 	3. Multiply by multipliers (damage_multiply, mana_cost_multiply)
-	4. Apply stat scaling (strength/perception/anomaly)
-	5. For NULL: set base damage to current_mana
+	4. Apply stat scaling: damage *= (1.0 + stat_value * rate)
+	   - BODY → STRENGTH (+10% per point)
+	   - MIND → PERCEPTION (+20% per point)
+	   - NULL → ANOMALY (+50% per point)
+	5. Banker's rounding (round half to even, like Python)
 
 	Args:
 		player: Player3D reference
@@ -138,16 +141,10 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	attack.cooldown = maxi(1, attack.cooldown + cooldown_add)  # Minimum 1 turn
 	attack.mana_cost = attack.mana_cost * mana_cost_multiply
 
-	# Special NULL behavior: base damage = TOTAL mana (max_mana)
-	if attack_type == _AttackTypes.Type.NULL and player and player.stats:
-		# For NULL, damage is max_mana + any damage_add modifiers
-		# The base damage (0) gets replaced by max_mana (total mana capacity)
-		# This ties anomaly power to your mana pool size, not current available mana
-		attack.damage = (player.stats.max_mana + damage_add) * damage_multiply
-
-	# Apply stat scaling
+	# Apply stat scaling (STRENGTH/PERCEPTION/ANOMALY)
 	if player and player.stats:
 		var scaling_stat = _AttackTypes.SCALING_STAT[attack_type]
+		var scaling_rate = _AttackTypes.SCALING_RATE[attack_type]
 		var stat_value: float = 0.0
 
 		# Get the scaling stat value
@@ -159,10 +156,43 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 			"anomaly":
 				stat_value = player.stats.anomaly
 
-		# Formula: damage *= (1.0 + stat_value / 100.0)
-		attack.damage *= (1.0 + stat_value / 100.0)
+		# Formula: damage *= (1.0 + stat_value * scaling_rate)
+		# BODY: +10% per STR, MIND: +20% per PER, NULL: +50% per ANOM
+		attack.damage *= (1.0 + stat_value * scaling_rate)
+
+	# Banker's rounding (round half to even) - unbiased like Python's round()
+	attack.damage = _bankers_round(attack.damage)
 
 	return attack
+
+
+func _bankers_round(value: float) -> float:
+	"""Round using banker's rounding (round half to even).
+
+	Unlike roundf() which rounds 0.5 away from zero (biased upward for positive),
+	banker's rounding rounds 0.5 to the nearest even integer, giving an unbiased
+	distribution over many values. This is Python's default round() behavior.
+
+	Examples:
+		0.5 → 0 (rounds to even)
+		1.5 → 2 (rounds to even)
+		2.5 → 2 (rounds to even)
+		3.5 → 4 (rounds to even)
+		2.4 → 2, 2.6 → 3 (normal rounding)
+	"""
+	var floored = floorf(value)
+	var frac = value - floored
+
+	if frac < 0.5:
+		return floored
+	elif frac > 0.5:
+		return floored + 1.0
+	else:
+		# Exactly 0.5 - round to even
+		if int(floored) % 2 == 0:
+			return floored  # Already even, round down
+		else:
+			return floored + 1.0  # Odd, round up to even
 
 # ============================================================================
 # ATTACK EXECUTION

@@ -33,11 +33,11 @@ enum Area {
 # ============================================================================
 
 # Base damage per attack type
-# Note: NULL damage is REPLACED by current mana total (not added to base)
+# All attack types scale with their respective stat (STRENGTH/PERCEPTION/ANOMALY)
 const BASE_DAMAGE = {
-	Type.BODY: 5.0,   # Punch
-	Type.MIND: 3.0,   # Whistle
-	Type.NULL: 0.0,   # Damage = current_mana (set dynamically)
+	Type.BODY: 5.0,   # Punch - scales with STRENGTH
+	Type.MIND: 3.0,   # Whistle - scales with PERCEPTION
+	Type.NULL: 5.0,   # Anomaly Burst - scales with ANOMALY
 }
 
 # Range in tiles (grid distance)
@@ -73,11 +73,18 @@ const BASE_MANA_COST = {
 # ============================================================================
 
 # Which derived stat scales damage for each type
-# Formula: damage *= (1.0 + stat_value / 100.0)
 const SCALING_STAT = {
 	Type.BODY: "strength",    # Derived from BODY
 	Type.MIND: "perception",  # Derived from MIND
 	Type.NULL: "anomaly",     # Derived from NULL
+}
+
+# Scaling multiplier per stat point (different rates per attack type)
+# Formula: damage *= (1.0 + stat_value * SCALING_RATE)
+const SCALING_RATE = {
+	Type.BODY: 0.10,   # +10% per STRENGTH point (steady, reliable)
+	Type.MIND: 0.20,   # +20% per PERCEPTION point (more impactful)
+	Type.NULL: 0.50,   # +50% per ANOMALY point (glass cannon)
 }
 
 # ============================================================================

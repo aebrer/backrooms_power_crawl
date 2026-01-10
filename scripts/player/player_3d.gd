@@ -282,13 +282,10 @@ func _on_discovery_made(_subject_type: String, _subject_id: String, exp_reward: 
 func _on_new_chunk_entered(chunk_position: Vector3i) -> void:
 	"""Called when player enters a new chunk - award exploration EXP"""
 	if stats:
-		var exp_reward = 10 * (stats.level + 1)
+		# Flat 10 EXP per new chunk - clearance multiplier is applied in gain_exp()
+		var exp_reward = 10
 		stats.gain_exp(exp_reward)
-		Log.player("Entered new chunk %s - awarded %d EXP (Level %d)" % [
-			Vector2i(chunk_position.x, chunk_position.y),
-			exp_reward,
-			stats.level
-		])
+		Log.player("Entered new chunk %s" % Vector2i(chunk_position.x, chunk_position.y))
 
 func _on_entity_died(entity_data: Dictionary) -> void:
 	"""Called when an entity is killed - award EXP"""
