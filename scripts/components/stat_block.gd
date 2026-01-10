@@ -421,16 +421,17 @@ func gain_exp(amount: int) -> void:
 	This is intentional - Clearance is the "glass cannon" build choice.
 	Higher Clearance = faster scaling but must be chosen via perks.
 
-	Formula: EXP gained = base_amount × (clearance_level + 1)
-	  Clearance 0: ×1
-	  Clearance 1: ×2
-	  Clearance 2: ×3
+	Formula: EXP gained = base_amount × (1.0 + clearance_level × 0.1)
+	  Clearance 0: ×1.0 (no bonus)
+	  Clearance 1: ×1.1 (+10%)
+	  Clearance 2: ×1.2 (+20%)
 	  etc.
 	"""
-	var multiplied = amount * (clearance_level + 1)
+	var multiplier = 1.0 + clearance_level * 0.1
+	var multiplied = int(amount * multiplier)
 	exp += multiplied
 	emit_signal("exp_gained", multiplied, exp)
-	Log.player("Gained %d EXP (×%d = %d total, now %d)" % [amount, clearance_level + 1, multiplied, exp])
+	Log.player("Gained %d EXP (×%.1f = %d total, now %d)" % [amount, multiplier, multiplied, exp])
 
 	_check_level_up()
 

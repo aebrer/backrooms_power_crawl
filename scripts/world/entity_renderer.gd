@@ -34,6 +34,14 @@ var entity_data_cache: Dictionary = {}  # Vector2i -> Dictionary
 var _highlighted_positions: Array[Vector2i] = []
 
 # ============================================================================
+# SIGNALS
+# ============================================================================
+
+## Emitted when an entity dies from damage
+## entity_data: Dictionary with entity info (entity_type, exp_reward, etc.)
+signal entity_died(entity_data: Dictionary)
+
+# ============================================================================
 # CONFIGURATION
 # ============================================================================
 
@@ -286,9 +294,18 @@ func damage_entity_at(world_pos: Vector2i, amount: float, attack_emoji: String =
 	# Check for death
 	if new_hp <= 0:
 		entity_data["is_dead"] = true
+
+		# Spawn death skull emoji (2x size of hit emoji)
+		_spawn_death_emoji(world_pos)
+
+		# Emit death signal for EXP rewards etc.
+		entity_died.emit(entity_data)
+
 		# Delay removal slightly so VFX is visible
 		_remove_entity_delayed(world_pos, HIT_EMOJI_DURATION)
-		Log.msg(Log.Category.ENTITY, Log.Level.INFO, "Entity at %s died" % world_pos)
+
+		var entity_type = entity_data.get("entity_type", "unknown")
+		Log.msg(Log.Category.ENTITY, Log.Level.INFO, "Entity '%s' at %s died!" % [entity_type, world_pos])
 
 	return true
 
@@ -442,6 +459,72 @@ func _spawn_hit_emoji(world_pos: Vector2i, emoji: String) -> void:
 	tween.tween_property(label, "modulate:a", 0.0, HIT_EMOJI_DURATION)
 
 	# Remove when done
+	tween.chain().tween_callback(label.queue_free)
+
+func _spawn_death_emoji(world_pos: Vector2i) -> void:
+	"""Spawn a skull emoji when entity dies (2x size of hit emoji).
+
+	Args:
+		world_pos: Position of entity that died
+	"""
+	if not entity_billboards.has(world_pos):
+		return
+
+	var sprite = entity_billboards[world_pos] as Sprite3D
+	if not sprite:
+		return
+
+	# Calculate scaled font size (2x the hit emoji size)
+	var base_size = HIT_EMOJI_BASE_SIZE * 2
+	if UIScaleManager:
+		base_size = UIScaleManager.get_scaled_font_size(base_size)
+
+	# Scale with camera zoom (same logic as hit emoji)
+	var tactical_camera: Node = null
+	var first_person_camera: Node = null
+	if grid_3d:
+		var game_3d = grid_3d.get_parent()
+		if game_3d:
+			var player = game_3d.get_node_or_null("Player3D")
+			if player:
+				tactical_camera = player.get_node_or_null("CameraRig")
+				first_person_camera = player.get_node_or_null("FirstPersonCamera")
+
+	if first_person_camera and first_person_camera.get("camera") and first_person_camera.camera.current:
+		var fov = first_person_camera.camera.fov
+		var fov_ratio = clampf((fov - 60.0) / 30.0, 0.0, 1.0)
+		var zoom_scale = lerp(0.5, 0.75, fov_ratio)
+		base_size = int(base_size * zoom_scale)
+	elif tactical_camera and "current_zoom" in tactical_camera:
+		var zoom = tactical_camera.current_zoom
+		var zoom_ratio = clampf((zoom - 8.0) / 17.0, 0.0, 1.0)
+		var zoom_scale = lerp(1.0, 3.0, zoom_ratio)
+		base_size = int(base_size * zoom_scale)
+
+	# Create death emoji label
+	var label = Label3D.new()
+	label.text = "💀"
+	label.font_size = base_size
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.no_depth_test = true
+	label.modulate = Color.WHITE
+
+	# Position at entity (no jitter - death is centered)
+	var start_pos = sprite.position + Vector3(0, 0.5, 0)
+	label.position = start_pos
+
+	add_child(label)
+
+	# Animate rise and fade (same timing as hit emoji)
+	var tween = create_tween()
+	tween.set_parallel(true)
+	tween.set_ease(Tween.EASE_OUT)
+	tween.set_trans(Tween.TRANS_QUAD)
+
+	var end_pos = start_pos + Vector3(0, HIT_EMOJI_RISE_HEIGHT * 1.5, 0)
+	tween.tween_property(label, "position", end_pos, HIT_EMOJI_DURATION)
+	tween.tween_property(label, "modulate:a", 0.0, HIT_EMOJI_DURATION)
+
 	tween.chain().tween_callback(label.queue_free)
 
 func _remove_entity_delayed(world_pos: Vector2i, delay: float) -> void:

@@ -51,4 +51,8 @@ func _ready() -> void:
 	# Link grid back to player (for line-of-sight proximity fade)
 	grid.set_player(player)
 
+	# Connect entity death signal for EXP rewards
+	if grid.entity_renderer:
+		grid.entity_renderer.entity_died.connect(player._on_entity_died)
+
 	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "3D viewport ready - controls active")

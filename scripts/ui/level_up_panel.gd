@@ -62,7 +62,7 @@ const PERK_DATA: Dictionary = {
 	},
 	PerkType.CLEARANCE_PLUS_1: {
 		"name": "+1 Clearance Level",
-		"description": "Unlock higher-tier knowledge. Multiplies ALL EXP gains!",
+		"description": "Unlock higher-tier knowledge. +10% EXP from all sources!",
 		"icon": "🔓",
 		"color": Color.GOLD,
 	},
@@ -203,16 +203,42 @@ func _show_level_up_immediate(player: Player3D, level: int) -> void:
 # ============================================================================
 
 func _select_random_perks(count: int) -> Array[PerkType]:
-	"""Select N random unique perks from the pool"""
-	var all_perks: Array[PerkType] = []
-	for perk_type in PerkType.values():
-		all_perks.append(perk_type as PerkType)
+	"""Select N random unique perks from the pool using weighted selection.
 
-	# Shuffle and take first N
-	all_perks.shuffle()
+	Clearance is intentionally rare since it multiplies ALL EXP gains.
+	"""
+	# Define weights for each perk type (higher = more common)
+	var perk_weights: Dictionary = {
+		PerkType.BODY_PLUS_1: 10,
+		PerkType.MIND_PLUS_1: 10,
+		PerkType.NULL_PLUS_1: 10,
+		PerkType.HP_REGEN_PLUS_1: 8,
+		PerkType.SANITY_REGEN_PLUS_1: 8,
+		PerkType.MANA_REGEN_PLUS_1: 8,
+		PerkType.CLEARANCE_PLUS_1: 2,  # Rare - very powerful
+		PerkType.CORRUPTION_PLUS_5: 6,
+		PerkType.CORRUPTION_MINUS_5: 6,
+	}
+
+	# Build weighted pool
+	var weighted_pool: Array[PerkType] = []
+	for perk_type in PerkType.values():
+		var weight = perk_weights.get(perk_type, 5)  # Default weight 5
+		for _i in range(weight):
+			weighted_pool.append(perk_type as PerkType)
+
+	# Select unique perks using weighted random
 	var selected: Array[PerkType] = []
-	for i in range(min(count, all_perks.size())):
-		selected.append(all_perks[i])
+	while selected.size() < count and weighted_pool.size() > 0:
+		var idx = randi() % weighted_pool.size()
+		var picked = weighted_pool[idx]
+
+		# Only add if not already selected
+		if not selected.has(picked):
+			selected.append(picked)
+
+		# Remove ALL instances of this perk from pool (to avoid duplicates)
+		weighted_pool = weighted_pool.filter(func(p): return p != picked)
 
 	return selected
 
