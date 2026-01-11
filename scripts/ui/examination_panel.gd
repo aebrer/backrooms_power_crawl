@@ -12,6 +12,9 @@ const FONT_SIZE_ENTITY_NAME := 14
 const FONT_SIZE_INFO := 12
 const FONT_SIZE_DESCRIPTION := 11
 
+## Font resource path for emoji support
+const EMOJI_FONT_PATH := "res://assets/fonts/default_font.tres"
+
 # ============================================================================
 # NODE REFERENCES
 # ============================================================================
@@ -34,10 +37,11 @@ var portrait_overlay: PanelContainer = null
 
 var current_target: Examinable = null
 var _is_portrait_mode: bool = false
+var _is_repositioning: bool = false  ## Guard flag to prevent concurrent repositioning
 
 func _ready() -> void:
 	# Load emoji font (project setting doesn't auto-apply to programmatic Labels)
-	emoji_font = load("res://assets/fonts/default_font.tres")
+	emoji_font = load(EMOJI_FONT_PATH)
 
 	# Fill remaining available space in RightSide VBoxContainer
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -196,28 +200,25 @@ func _show_portrait_overlay(entity_name: String, threat_text: String, descriptio
 	if not portrait_overlay:
 		return  # Failed to create overlay
 
-	# Get overlay labels
-	var vbox = portrait_overlay.get_node("ContentVBox")
-	var header = vbox.get_node("OverlayHeader")
-	var entity_label = vbox.get_node("OverlayEntityName")
-	var threat_label = vbox.get_node("OverlayThreatLevel")
-	var desc_label = vbox.get_node("OverlayDescription")
+	# Get overlay labels with null checks
+	var vbox = portrait_overlay.get_node_or_null("ContentVBox")
+	if not vbox:
+		return
+	var header = vbox.get_node_or_null("OverlayHeader")
+	var entity_label = vbox.get_node_or_null("OverlayEntityName")
+	var threat_label = vbox.get_node_or_null("OverlayThreatLevel")
+	var desc_label = vbox.get_node_or_null("OverlayDescription")
 
-	# Update content
-	header.text = "OBJECT EXAMINATION REPORT"
-	entity_label.text = entity_name
-	threat_label.text = threat_text
-	desc_label.text = description
-
-	# Set threat color on threat label
-	var color: Color
-	match threat:
-		0, 1: color = Color.WHITE
-		2: color = Color.YELLOW
-		3, 4: color = Color.ORANGE
-		5: color = Color.RED
-		_: color = Color.GRAY
-	threat_label.add_theme_color_override("font_color", color)
+	# Update content (with null guards)
+	if header:
+		header.text = "OBJECT EXAMINATION REPORT"
+	if entity_label:
+		entity_label.text = entity_name
+	if threat_label:
+		threat_label.text = threat_text
+		threat_label.add_theme_color_override("font_color", _get_threat_color(threat))
+	if desc_label:
+		desc_label.text = description
 
 	# Position overlay over the info panel (minimap + log row at bottom)
 	_position_portrait_overlay()
@@ -230,8 +231,14 @@ func _position_portrait_overlay() -> void:
 	if not portrait_overlay:
 		return
 
+	# Guard against concurrent repositioning (async method with awaits)
+	if _is_repositioning:
+		return
+	_is_repositioning = true
+
 	var game_root = get_tree().root.get_node_or_null("Game")
 	if not game_root:
+		_is_repositioning = false
 		return
 
 	# Get the window size
@@ -242,6 +249,11 @@ func _position_portrait_overlay() -> void:
 
 	# Wait a frame for size to be calculated
 	await get_tree().process_frame
+
+	# Check overlay still valid after await
+	if not portrait_overlay or not is_instance_valid(portrait_overlay):
+		_is_repositioning = false
+		return
 
 	# Position at bottom of screen with some margin
 	var margin = 10
@@ -254,11 +266,18 @@ func _position_portrait_overlay() -> void:
 	# Wait for size update
 	await get_tree().process_frame
 
+	# Check overlay still valid after second await
+	if not portrait_overlay or not is_instance_valid(portrait_overlay):
+		_is_repositioning = false
+		return
+
 	panel_size = portrait_overlay.size
 	portrait_overlay.position = Vector2(
 		margin,  # Left margin
 		window_size.y - panel_size.y - margin  # Bottom with margin
 	)
+
+	_is_repositioning = false
 
 func hide_panel() -> void:
 	"""Hide the panel (both embedded and overlay)"""
@@ -414,18 +433,24 @@ func _show_stat_info_overlay(stat_name: String, description: String) -> void:
 	if not portrait_overlay:
 		return
 
-	# Get overlay labels
-	var vbox = portrait_overlay.get_node("ContentVBox")
-	var header = vbox.get_node("OverlayHeader")
-	var entity_label = vbox.get_node("OverlayEntityName")
-	var threat_label = vbox.get_node("OverlayThreatLevel")
-	var desc_label = vbox.get_node("OverlayDescription")
+	# Get overlay labels with null checks
+	var vbox = portrait_overlay.get_node_or_null("ContentVBox")
+	if not vbox:
+		return
+	var header = vbox.get_node_or_null("OverlayHeader")
+	var entity_label = vbox.get_node_or_null("OverlayEntityName")
+	var threat_label = vbox.get_node_or_null("OverlayThreatLevel")
+	var desc_label = vbox.get_node_or_null("OverlayDescription")
 
-	# Update content
-	header.text = "STAT INFO"
-	entity_label.text = stat_name
-	threat_label.visible = false  # Hide threat for stats
-	desc_label.text = description
+	# Update content (with null guards)
+	if header:
+		header.text = "STAT INFO"
+	if entity_label:
+		entity_label.text = stat_name
+	if threat_label:
+		threat_label.visible = false  # Hide threat for stats
+	if desc_label:
+		desc_label.text = description
 
 	# Position and show overlay
 	_position_portrait_overlay()
@@ -442,17 +467,18 @@ func _format_threat_level(level: int) -> String:
 		5: return "Critical"
 		_: return "Unknown"
 
+func _get_threat_color(threat: int) -> Color:
+	"""Get color for a threat level (shared by embedded and overlay panels)"""
+	match threat:
+		0, 1: return Color.WHITE
+		2: return Color.YELLOW
+		3, 4: return Color.ORANGE
+		5: return Color.RED
+		_: return Color.GRAY
+
 func _set_threat_colors(threat: int) -> void:
 	"""Set label colors based on threat level"""
-	var color: Color
-	match threat:
-		0, 1: color = Color.WHITE
-		2: color = Color.YELLOW
-		3, 4: color = Color.ORANGE
-		5: color = Color.RED
-		_: color = Color.GRAY
-
-	threat_level_label.add_theme_color_override("font_color", color)
+	threat_level_label.add_theme_color_override("font_color", _get_threat_color(threat))
 
 # ============================================================================
 # UI SCALING

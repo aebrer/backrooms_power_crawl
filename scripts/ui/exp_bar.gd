@@ -112,14 +112,19 @@ func _draw() -> void:
 
 func set_player(player_ref: Node) -> void:
 	"""Set player reference and connect to stat signals"""
+	# Disconnect from old player if reconnecting
+	if player and player.stats:
+		if player.stats.exp_gained.is_connected(_on_exp_gained):
+			player.stats.exp_gained.disconnect(_on_exp_gained)
+		if player.stats.level_increased.is_connected(_on_level_increased):
+			player.stats.level_increased.disconnect(_on_level_increased)
+
 	player = player_ref
 
 	if player and player.stats:
-		# Connect to EXP signals
-		if not player.stats.exp_gained.is_connected(_on_exp_gained):
-			player.stats.exp_gained.connect(_on_exp_gained)
-		if not player.stats.level_increased.is_connected(_on_level_increased):
-			player.stats.level_increased.connect(_on_level_increased)
+		# Connect to EXP signals (fresh connection after disconnect above)
+		player.stats.exp_gained.connect(_on_exp_gained)
+		player.stats.level_increased.connect(_on_level_increased)
 
 		# Initial update
 		_update_fill()

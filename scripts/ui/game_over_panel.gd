@@ -11,6 +11,15 @@ class_name GameOverPanel
 ## (same as ItemSlotSelectionPanel)
 
 # ============================================================================
+# CONSTANTS
+# ============================================================================
+
+## Score formula weights
+const SCORE_CORRUPTION_WEIGHT := 500.0  ## Multiplier for corruption in score
+const SCORE_KILL_WEIGHT := 10.0  ## Points per kill
+const SCORE_TURN_DIVISOR := 0.025  ## Turn penalty divisor (higher = less penalty)
+
+# ============================================================================
 # SIGNALS
 # ============================================================================
 
@@ -204,10 +213,10 @@ func show_game_over(cause: String, turns: int, level: int, total_exp: int, kills
 	# - Corruption × Kills: risk-taking multiplied by combat engagement
 	# - EXP / Turns: progression efficiency (more EXP per turn = better)
 	# Formula prioritizes risk-taking and efficient progression
-	var corruption_score: float = corruption * 500.0
-	var kill_score: float = kills * 10.0
+	var corruption_score: float = corruption * SCORE_CORRUPTION_WEIGHT
+	var kill_score: float = kills * SCORE_KILL_WEIGHT
 	var exp_score: float = float(total_exp)
-	var turn_divisor: float = maxf(1.0, turns * 0.025)  # Avoid division by zero
+	var turn_divisor: float = maxf(1.0, turns * SCORE_TURN_DIVISOR)  # Avoid division by zero
 	final_score = Utilities.bankers_round((corruption_score * kill_score) + (exp_score / turn_divisor))
 
 	# Update labels
