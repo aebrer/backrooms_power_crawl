@@ -197,7 +197,6 @@ func show_game_over(cause: String, turns: int, level: int, total_exp: int) -> vo
 		restart_button.grab_focus()
 		_accepting_input = true
 
-	Log.system("Game Over: %s (Turns: %d, Level: %d, EXP: %d)" % [cause, turns, level, total_exp])
 
 func _update_panel_position() -> void:
 	"""Update panel position to center it on game viewport (SubViewportContainer)"""
@@ -310,7 +309,6 @@ func _on_restart_pressed() -> void:
 	if not _accepting_input:
 		return
 
-	Log.system("Restart requested")
 
 	# Hide panel first
 	visible = false

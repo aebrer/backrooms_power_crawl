@@ -199,12 +199,23 @@ func show_panel(target: Examinable) -> void:
 	# Update labels
 	entity_name_label.text = "Entity: " + info.get("name", "Unknown")
 	# Use SCP-style threat level name from EntityInfo (e.g., "●●●○○ Keter")
-	threat_level_label.text = "Threat: " + info.get("threat_level_name", _format_threat_level(info.get("threat_level", 0)))
+	var threat_name = info.get("threat_level_name", "")
+	if threat_name.is_empty():
+		# Debug: Log when threat_level_name is missing
+		print("[ExaminationPanel] WARNING: threat_level_name empty for entity_id: %s, info: %s" % [target.entity_id, info])
+		threat_name = _format_threat_level(info.get("threat_level", 0))
+	threat_level_label.text = "Threat: " + threat_name
 	description_label.text = info.get("description", "[DATA EXPUNGED]")
 
 	# Set colors based on threat
 	var threat = info.get("threat_level", 0)
 	_set_threat_colors(threat)
+
+	# Ensure all labels are visible (defensive fix for intermittent visibility bug)
+	header_label.visible = true
+	entity_name_label.visible = true
+	threat_level_label.visible = true
+	description_label.visible = true
 
 	# Show panel
 	panel.visible = true
@@ -296,9 +307,11 @@ func _set_threat_colors(threat: int) -> void:
 
 func _get_font_size(base_size: int) -> int:
 	"""Get font size scaled by UIScaleManager"""
+	var scaled: int = base_size
 	if UIScaleManager:
-		return UIScaleManager.get_scaled_font_size(base_size)
-	return base_size
+		scaled = UIScaleManager.get_scaled_font_size(base_size)
+	# Defensive: ensure font size is never 0 or negative
+	return max(1, scaled)
 
 func _update_all_font_sizes() -> void:
 	"""Update all font sizes after scale change"""

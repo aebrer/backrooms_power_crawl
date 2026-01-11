@@ -90,9 +90,7 @@ func _ready() -> void:
 	# CRITICAL: Wait for initial chunks to load before spawning
 	# This ensures walkable_cells is populated and spawn position is valid
 	if ChunkManager:
-		Log.system("Player waiting for initial chunk load to complete...")
 		await ChunkManager.initial_load_completed
-		Log.system("Initial chunks loaded, proceeding with player spawn")
 
 	if grid:
 		# Build navigation graph for starting chunk (0,0) AND adjacent chunks
@@ -131,7 +129,6 @@ func _ready() -> void:
 			if Pathfinding.can_reach_chunk_edges(candidate, starting_chunk):  # Default min_adjacent = 2
 				grid_position = candidate
 				spawn_found = true
-				Log.system("Found valid spawn at %s after %d attempts (reaches 2+ adjacent chunks)" % [candidate, attempt + 1])
 				break
 
 		if not spawn_found:
@@ -161,7 +158,6 @@ func _ready() -> void:
 		# SNAP to grid position (turn-based = no smooth movement)
 		update_visual_position()
 
-		Log.system("Player3D ready at grid position: %s" % grid_position)
 
 func _unhandled_input(event: InputEvent) -> void:
 	# Block gameplay input when paused (UI navigation takes over)
@@ -283,14 +279,6 @@ func _initialize_stats() -> void:
 	# Create health and sanity bars above player
 	_create_player_bars()
 
-	# Log for debugging
-	Log.system("Player stats initialized: %s" % str(stats))
-	Log.system("Item pools initialized: BODY=%s, MIND=%s, NULL=%s" % [
-		body_pool,
-		mind_pool,
-		null_pool
-	])
-
 func _on_discovery_made(_subject_type: String, _subject_id: String, exp_reward: int) -> void:
 	"""Called when player discovers something novel - award EXP"""
 	if stats:
@@ -302,7 +290,7 @@ func _on_new_chunk_entered(chunk_position: Vector3i) -> void:
 		# Flat 10 EXP per new chunk - clearance multiplier is applied in gain_exp()
 		var exp_reward = 10
 		stats.gain_exp(exp_reward)
-		Log.player("Entered new chunk %s" % Vector2i(chunk_position.x, chunk_position.y))
+		Log.turn("Entered new chunk %s" % Vector2i(chunk_position.x, chunk_position.y))
 
 func _on_entity_died(entity: WorldEntity) -> void:
 	"""Called when an entity is killed - award EXP"""
@@ -339,7 +327,6 @@ func _get_level_up_ui() -> LevelUpPanel:
 	ui = LevelUpPanel.new()
 	ui.name = "LevelUpPanel"
 	game_node.add_child(ui)
-	Log.system("Created LevelUpPanel UI")
 
 	return ui
 

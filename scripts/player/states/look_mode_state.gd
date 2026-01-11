@@ -38,9 +38,7 @@ func enter() -> void:
 		examination_crosshair = game_3d.get_node_or_null("ViewportUILayer/ExaminationCrosshair")
 	if not examination_panel:
 		examination_panel = get_node_or_null("/root/Game/TextUIOverlay/ExaminationPanel")
-		if examination_panel:
-			Log.system("ExaminationPanel found at /root/Game/TextUIOverlay/ExaminationPanel")
-		else:
+		if not examination_panel:
 			Log.warn(Log.Category.STATE, "ExaminationPanel NOT found at /root/Game/TextUIOverlay/ExaminationPanel")
 
 	if not first_person_camera:
@@ -53,7 +51,6 @@ func enter() -> void:
 		transition_to("IdleState")
 		return
 
-	Log.state("Entering Look Mode - switching to first-person camera")
 
 	# Capture mouse for camera control (standard FPS controls)
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
@@ -78,7 +75,6 @@ func enter() -> void:
 func exit() -> void:
 	super.exit()
 
-	Log.state("Exiting Look Mode - switching to tactical camera")
 
 	# Recapture mouse for tactical camera control (unless paused)
 	if not PauseManager.is_paused:
@@ -121,7 +117,6 @@ func process_frame(_delta: float) -> void:
 	# Check if look mode button released
 	# InputManager.is_action_pressed handles: LT trigger, RMB
 	if InputManager and not InputManager.is_action_pressed("look_mode"):
-		Log.system("[LookModeState] Look button released - transitioning to IdleState")
 		transition_to("IdleState")
 		return
 

@@ -32,7 +32,6 @@ extends Node3D
 @onready var move_indicator: Node3D = $MoveIndicator
 
 func _ready() -> void:
-	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "Initializing 3D viewport (640x480 with PSX shaders)")
 
 	# ========================================================================
 	# LEVEL LOADING - Game always starts on Level 0
@@ -54,5 +53,3 @@ func _ready() -> void:
 	# Connect entity death signal for EXP rewards
 	if grid.entity_renderer:
 		grid.entity_renderer.entity_died.connect(player._on_entity_died)
-
-	Log.msg(Log.Category.SYSTEM, Log.Level.INFO, "3D viewport ready - controls active")

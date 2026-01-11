@@ -450,7 +450,6 @@ func _start_reorder(slot: Control, pool_type: Item.PoolType, slot_index: int) ->
 		label.add_theme_stylebox_override("normal", style)
 		label.add_theme_stylebox_override("focus", style)
 
-	Log.system("Picked up item from slot %d in %s pool (press X/RMB to drop, B to cancel)" % [slot_index, Item.PoolType.keys()[pool_type]])
 
 	# Emit signal to update action preview
 	reorder_state_changed.emit(true)
@@ -476,7 +475,6 @@ func _toggle_item(pool_type: Item.PoolType, slot_index: int) -> void:
 	if player.state_machine:
 		player.state_machine.change_state("PreTurnState")
 
-	Log.system("Queued toggle action for slot %d" % slot_index)
 
 func _drop_reorder(target_slot: Control, target_pool_type: Item.PoolType, target_slot_index: int) -> void:
 	"""Drop item at new position (reorder within same pool, consumes a turn)"""
@@ -513,7 +511,6 @@ func _drop_reorder(target_slot: Control, target_pool_type: Item.PoolType, target
 	if player.state_machine:
 		player.state_machine.change_state("PreTurnState")
 
-	Log.system("Queued reorder action from slot %d to %d" % [reordering_slot_index, target_slot_index])
 
 func _cancel_reorder() -> void:
 	"""Cancel current reorder operation"""
@@ -523,7 +520,6 @@ func _cancel_reorder() -> void:
 		if label:
 			label.remove_theme_stylebox_override("normal")
 			label.remove_theme_stylebox_override("focus")
-		Log.system("Cancelled reorder operation")
 
 	reordering_slot = null
 	reordering_slot_index = -1
