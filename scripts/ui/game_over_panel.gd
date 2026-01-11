@@ -169,10 +169,10 @@ func show_game_over(cause: String, turns: int, level: int, total_exp: int) -> vo
 	# Update labels
 	match cause:
 		"hp_depleted":
-			cause_label.text = "Your body gave out."
+			cause_label.text = "your corpse will never leave the backrooms"
 			cause_label.add_theme_color_override("font_color", Color(0.9, 0.2, 0.2))
 		"sanity_depleted":
-			cause_label.text = "Your mind shattered."
+			cause_label.text = "thats not you in there anymore"
 			cause_label.add_theme_color_override("font_color", Color(0.6, 0.2, 0.8))
 		_:
 			cause_label.text = "You have perished."
