@@ -81,8 +81,8 @@ func get_description(clearance: int) -> String:
 		desc += "\nScaling: " + scaling_hint + "\n"
 
 	# Add clearance-specific additional info (ADDITIVE)
-	var cl = clampi(clearance, 0, 5)
-	for i in range(cl + 1):
+	var clamped_clearance := clampi(clearance, 0, 5)
+	for i in range(clamped_clearance + 1):
 		if i < clearance_info.size() and not clearance_info[i].is_empty():
 			desc += "\n" + clearance_info[i]
 

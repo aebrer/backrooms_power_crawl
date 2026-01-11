@@ -477,7 +477,7 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 	# Spawn entities
 	for _i in range(entity_count):
 		var spawn_pos = _find_random_walkable_in_chunk(chunk_world_pos, occupied_positions)
-		if spawn_pos == Vector2i(-99999, -99999):
+		if spawn_pos == INVALID_POSITION:
 			continue
 
 		occupied_positions.append(spawn_pos)
@@ -572,6 +572,9 @@ func _select_weighted_entity(valid_entities: Array, corruption: float) -> Dictio
 	return valid_entities[-1] if not valid_entities.is_empty() else {}
 
 
+## Invalid position sentinel (project-wide standard)
+const INVALID_POSITION := Vector2i(-999999, -999999)
+
 func _find_random_walkable_in_chunk(chunk_world_pos: Vector2i, occupied: Array[Vector2i]) -> Vector2i:
 	"""Find a random walkable position in the chunk that isn't already occupied.
 
@@ -580,7 +583,7 @@ func _find_random_walkable_in_chunk(chunk_world_pos: Vector2i, occupied: Array[V
 		occupied: Positions already used for spawning
 
 	Returns:
-		Walkable position, or Vector2i(-99999, -99999) if none found
+		Walkable position, or INVALID_POSITION if none found
 	"""
 	const MAX_ATTEMPTS = 50
 
@@ -590,15 +593,21 @@ func _find_random_walkable_in_chunk(chunk_world_pos: Vector2i, occupied: Array[V
 		var local_y = randi_range(2, CHUNK_SIZE - 3)
 		var test_pos = chunk_world_pos + Vector2i(local_x, local_y)
 
-		# Skip if already occupied
+		# Skip if already occupied by pending spawn
 		if test_pos in occupied:
 			continue
 
 		# Check if walkable
-		if grid_3d.is_walkable(test_pos):
-			return test_pos
+		if not grid_3d.is_walkable(test_pos):
+			continue
 
-	return Vector2i(-99999, -99999)  # Failed to find position
+		# Check if existing entity already at this position
+		if grid_3d.entity_renderer and grid_3d.entity_renderer.has_entity_at(test_pos):
+			continue
+
+		return test_pos
+
+	return INVALID_POSITION  # Failed to find position
 
 # ============================================================================
 # ENTITY AI PROCESSING

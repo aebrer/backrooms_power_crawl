@@ -43,6 +43,11 @@ var entity_cache: Dictionary = {}  # Vector2i -> WorldEntity
 ## Maps world tile position to health bar Node3D
 var entity_health_bars: Dictionary = {}  # Vector2i -> Node3D
 
+## Reverse lookup: WorldEntity -> Vector2i (for O(1) entity position lookup)
+var entity_to_pos: Dictionary = {}  # WorldEntity -> Vector2i
+
+## Project-wide invalid position sentinel
+const INVALID_POSITION := Vector2i(-999999, -999999)
 
 # ============================================================================
 # SIGNALS
@@ -140,8 +145,14 @@ func render_chunk_entities(chunk: Chunk) -> void:
 				add_child(health_bar)
 				entity_health_bars[world_pos] = health_bar
 
-				# Connect to WorldEntity signals (only if not already connected)
-				entity.hp_changed.connect(_on_entity_hp_changed.bind(world_pos))
+				# Add reverse lookup for O(1) entity position finding
+				entity_to_pos[entity] = world_pos
+
+				# Connect to WorldEntity signals using metadata to track callbacks
+				# This allows proper disconnect later (Callable.bind() creates new instances)
+				var hp_callback = _on_entity_hp_changed.bind(world_pos)
+				entity.set_meta("_hp_callback", hp_callback)
+				entity.hp_changed.connect(hp_callback)
 				if not entity.died.is_connected(_on_entity_died_signal):
 					entity.died.connect(_on_entity_died_signal)
 				if not entity.moved.is_connected(_on_entity_moved):
@@ -176,11 +187,12 @@ func unload_chunk_entities(chunk: Chunk) -> void:
 			var world_pos = entity.world_position
 
 			if entity_billboards.has(world_pos):
-				# Disconnect signals before cleanup
-				# hp_changed was connected with .bind(world_pos), so disconnect needs matching callable
-				var hp_callback = _on_entity_hp_changed.bind(world_pos)
-				if entity.hp_changed.is_connected(hp_callback):
-					entity.hp_changed.disconnect(hp_callback)
+				# Disconnect signals before cleanup using stored callback from metadata
+				if entity.has_meta("_hp_callback"):
+					var hp_callback = entity.get_meta("_hp_callback")
+					if entity.hp_changed.is_connected(hp_callback):
+						entity.hp_changed.disconnect(hp_callback)
+					entity.remove_meta("_hp_callback")
 				if entity.died.is_connected(_on_entity_died_signal):
 					entity.died.disconnect(_on_entity_died_signal)
 				if entity.moved.is_connected(_on_entity_moved):
@@ -190,6 +202,7 @@ func unload_chunk_entities(chunk: Chunk) -> void:
 				billboard.queue_free()
 				entity_billboards.erase(world_pos)
 				entity_cache.erase(world_pos)
+				entity_to_pos.erase(entity)
 
 				# Also remove health bar
 				if entity_health_bars.has(world_pos):
@@ -240,8 +253,13 @@ func add_entity_billboard(entity: WorldEntity) -> void:
 		entity_health_bars[world_pos] = health_bar
 		health_bar.visible = false  # Hidden at full HP
 
-		# Connect to WorldEntity signals (only if not already connected)
-		entity.hp_changed.connect(_on_entity_hp_changed.bind(world_pos))
+		# Add reverse lookup
+		entity_to_pos[entity] = world_pos
+
+		# Connect to WorldEntity signals using metadata to track callbacks
+		var hp_callback = _on_entity_hp_changed.bind(world_pos)
+		entity.set_meta("_hp_callback", hp_callback)
+		entity.hp_changed.connect(hp_callback)
 		if not entity.died.is_connected(_on_entity_died_signal):
 			entity.died.connect(_on_entity_died_signal)
 		if not entity.moved.is_connected(_on_entity_moved):
@@ -267,17 +285,21 @@ func _on_entity_moved(old_pos: Vector2i, new_pos: Vector2i) -> void:
 	var entity = entity_cache[old_pos]
 	var health_bar = entity_health_bars.get(old_pos, null)
 
-	# Reconnect hp_changed signal with new position (old binding is stale)
-	var old_hp_callback = _on_entity_hp_changed.bind(old_pos)
-	if entity.hp_changed.is_connected(old_hp_callback):
-		entity.hp_changed.disconnect(old_hp_callback)
-	entity.hp_changed.connect(_on_entity_hp_changed.bind(new_pos))
+	# Reconnect hp_changed signal with new position using metadata
+	if entity.has_meta("_hp_callback"):
+		var old_hp_callback = entity.get_meta("_hp_callback")
+		if entity.hp_changed.is_connected(old_hp_callback):
+			entity.hp_changed.disconnect(old_hp_callback)
+	var new_hp_callback = _on_entity_hp_changed.bind(new_pos)
+	entity.set_meta("_hp_callback", new_hp_callback)
+	entity.hp_changed.connect(new_hp_callback)
 
 	# Update cache keys
 	entity_billboards.erase(old_pos)
 	entity_billboards[new_pos] = billboard
 	entity_cache.erase(old_pos)
 	entity_cache[new_pos] = entity
+	entity_to_pos[entity] = new_pos  # Update reverse lookup
 	if health_bar:
 		entity_health_bars.erase(old_pos)
 		entity_health_bars[new_pos] = health_bar
@@ -565,9 +587,9 @@ func _on_entity_died_signal(entity: WorldEntity) -> void:
 	Args:
 		entity: WorldEntity that died
 	"""
-	# Find entity in cache by reference (not position - position can be stale)
+	# Find entity in cache using O(1) reverse lookup
 	var cache_pos = _find_entity_in_cache(entity)
-	if cache_pos == Vector2i(-999999, -999999):
+	if cache_pos == INVALID_POSITION:
 		# Entity not in cache - either already removed or in unloaded chunk
 		Log.msg(Log.Category.ENTITY, Log.Level.TRACE, "Entity died but not in cache (already processed?): %s" % entity.entity_type)
 		return
@@ -580,17 +602,26 @@ func _on_entity_died_signal(entity: WorldEntity) -> void:
 
 	# Remove billboard immediately (not delayed) to prevent ghost billboards
 	# The death VFX (skull emoji) floats independently, so billboard can go now
-	_remove_entity_immediately(cache_pos)
+	_remove_entity_immediately(cache_pos, entity)
+
+	# Remove dead entity from SubChunk to prevent memory leaks
+	_remove_dead_entity_from_subchunk(entity)
+
 	Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Entity died and removed at %s" % cache_pos)
 
-func _remove_entity_immediately(world_pos: Vector2i) -> void:
+func _remove_entity_immediately(world_pos: Vector2i, entity: WorldEntity = null) -> void:
 	"""Remove entity billboard immediately (no delay)
 
 	Args:
 		world_pos: Position to remove
+		entity: Optional entity reference for cleanup (avoids second lookup)
 	"""
 	if not entity_billboards.has(world_pos):
 		return
+
+	# Get entity if not provided
+	if entity == null:
+		entity = entity_cache.get(world_pos, null)
 
 	# Remove billboard
 	var billboard = entity_billboards[world_pos]
@@ -598,6 +629,10 @@ func _remove_entity_immediately(world_pos: Vector2i) -> void:
 		billboard.queue_free()
 	entity_billboards.erase(world_pos)
 	entity_cache.erase(world_pos)
+
+	# Remove from reverse lookup
+	if entity:
+		entity_to_pos.erase(entity)
 
 	# Remove health bar
 	if entity_health_bars.has(world_pos):
@@ -607,24 +642,37 @@ func _remove_entity_immediately(world_pos: Vector2i) -> void:
 		entity_health_bars.erase(world_pos)
 
 func _find_entity_in_cache(entity: WorldEntity) -> Vector2i:
-	"""Find entity's position in cache (handles moved entities)
+	"""Find entity's position in cache using O(1) reverse lookup
 
 	Args:
 		entity: WorldEntity to find
 
 	Returns:
-		Cache position, or Vector2i(-999999, -999999) if not found
+		Cache position, or INVALID_POSITION if not found
 	"""
-	# First try the entity's current position
-	if entity_cache.get(entity.world_position) == entity:
-		return entity.world_position
+	# Use O(1) reverse lookup instead of linear search
+	return entity_to_pos.get(entity, INVALID_POSITION)
 
-	# Search cache for this entity (in case of stale position)
-	for pos in entity_cache.keys():
-		if entity_cache[pos] == entity:
-			return pos
+func _remove_dead_entity_from_subchunk(entity: WorldEntity) -> void:
+	"""Remove dead entity from SubChunk storage to prevent memory leaks
 
-	return Vector2i(-999999, -999999)  # Not found sentinel
+	Args:
+		entity: Dead entity to remove from storage
+	"""
+	if not grid_3d:
+		return
+
+	var chunk_manager = grid_3d.get_node_or_null("ChunkManager")
+	if not chunk_manager:
+		return
+
+	var chunk = chunk_manager.get_chunk_at_tile(entity.world_position, 0)
+	if not chunk:
+		return
+
+	var subchunk = chunk.get_sub_chunk_at_tile(entity.world_position)
+	if subchunk:
+		subchunk.remove_world_entity(entity.world_position)
 
 # ============================================================================
 # VFX SPAWNING (called by AttackExecutor and EntityAI)
@@ -665,12 +713,19 @@ func remove_entity_at(world_pos: Vector2i) -> bool:
 		Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "remove_entity_at(%s): No billboard found (already removed?)" % world_pos)
 		return false
 
+	# Get entity for reverse lookup cleanup
+	var entity = entity_cache.get(world_pos, null)
+
 	# Remove billboard
 	var billboard = entity_billboards[world_pos]
 	if is_instance_valid(billboard):
 		billboard.queue_free()
 	entity_billboards.erase(world_pos)
 	entity_cache.erase(world_pos)
+
+	# Remove from reverse lookup
+	if entity:
+		entity_to_pos.erase(entity)
 
 	# Remove health bar
 	if entity_health_bars.has(world_pos):
@@ -946,6 +1001,7 @@ func clear_all_entities() -> void:
 	entity_billboards.clear()
 	entity_cache.clear()
 	entity_health_bars.clear()
+	entity_to_pos.clear()
 
 	Log.msg(Log.Category.ENTITY, Log.Level.INFO, "EntityRenderer: Cleared all entity billboards")
 

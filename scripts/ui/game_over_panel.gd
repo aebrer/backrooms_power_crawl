@@ -252,7 +252,7 @@ func _on_pause_toggled(is_paused: bool) -> void:
 		# from held buttons like RT when player dies)
 		_accepting_input = false
 		get_tree().create_timer(INPUT_ACCEPT_DELAY).timeout.connect(
-			func(): _accepting_input = true if visible else false
+			func(): _accepting_input = visible
 		)
 	else:
 		# Disable input acceptance when unpausing
