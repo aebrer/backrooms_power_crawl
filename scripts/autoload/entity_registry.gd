@@ -88,19 +88,19 @@ func _load_entities() -> void:
 	bacteria_spawn.threat_level = 1  # White (weakest) - common early, rarer later
 	_entities["bacteria_spawn"] = bacteria_spawn
 
-	# Bacteria Brood Mother (Level 0 dangerous enemy)
+	# Bacteria Motherload (Level 0 dangerous enemy)
 	# threat_level 3 matches level_00_config.gd entity_spawn_table
-	var bacteria_brood = EntityInfo.new()
-	bacteria_brood.entity_id = "bacteria_brood_mother"
-	bacteria_brood.entity_name = "Bacteria Brood Mother"
-	bacteria_brood.visual_description = "A massive purple-black organism. Internal bioluminescent glow pulses rhythmically. Much larger than its spawn."
-	bacteria_brood.clearance_info[0] = ""  # No additional info at clearance 0
-	bacteria_brood.clearance_info[1] = "Moves faster when it senses prey. Highly aggressive."
-	bacteria_brood.clearance_info[2] = "Periodically spawns Bacteria Spawn from its mass. The glow intensifies before spawning."
-	bacteria_brood.clearance_info[3] = "--- FIELD DATA ---\nDamage: 8 HP per attack\nSpeed: 2 moves per turn (when aware)\nSpawn cooldown: 10 turns\nSense range: 32 tiles"
-	bacteria_brood.object_class = "Keter"
-	bacteria_brood.threat_level = 3  # Dangerous (Yellow) - rare early, common later
-	_entities["bacteria_brood_mother"] = bacteria_brood
+	var bacteria_motherload = EntityInfo.new()
+	bacteria_motherload.entity_id = "bacteria_motherload"
+	bacteria_motherload.entity_name = "Bacteria Motherload"
+	bacteria_motherload.visual_description = "A massive greenish-black organism. Internal bioluminescent glow pulses rhythmically. Much larger than its spawn."
+	bacteria_motherload.clearance_info[0] = ""  # No additional info at clearance 0
+	bacteria_motherload.clearance_info[1] = "Moves faster when it senses prey. Highly aggressive."
+	bacteria_motherload.clearance_info[2] = "Periodically spawns Bacteria Spawn from its mass. The glow intensifies before spawning."
+	bacteria_motherload.clearance_info[3] = "--- FIELD DATA ---\nDamage: 8 HP per attack\nSpeed: 2 moves per turn (when aware)\nSpawn cooldown: 10 turns\nSense range: 32 tiles"
+	bacteria_motherload.object_class = "Keter"
+	bacteria_motherload.threat_level = 3  # Dangerous (Yellow) - rare early, common later
+	_entities["bacteria_motherload"] = bacteria_motherload
 
 	# Debug Enemy (testing entity)
 	var debug_enemy = EntityInfo.new()

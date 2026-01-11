@@ -67,24 +67,24 @@ const BILLBOARD_HEIGHT = 1.0
 const ENTITY_COLORS = {
 	"debug_enemy": Color(1.0, 0.0, 1.0),       # Magenta
 	"bacteria_spawn": Color(0.5, 1.0, 0.5),    # Light green
-	"bacteria_brood_mother": Color(0.0, 0.8, 0.0),  # Dark green
+	"bacteria_motherload": Color(0.0, 0.8, 0.0),  # Dark green
 }
 
 ## Entity textures (loaded on demand)
 const ENTITY_TEXTURES = {
 	"bacteria_spawn": "res://assets/textures/entities/bacteria_spawn.png",
-	"bacteria_brood_mother": "res://assets/textures/entities/bacteria_brood_mother.png",
+	"bacteria_motherload": "res://assets/textures/entities/bacteria_motherload.png",
 }
 
 ## Per-entity scale overrides (multiplier on BILLBOARD_SIZE)
 const ENTITY_SCALE_OVERRIDES = {
-	"bacteria_brood_mother": 2.0,  # Boss-sized
+	"bacteria_motherload": 2.0,  # Boss-sized
 }
 
 ## Per-entity height overrides (world units above floor)
 ## Larger entities need higher placement so their bottom doesn't clip floor
 const ENTITY_HEIGHT_OVERRIDES = {
-	"bacteria_brood_mother": 2.0,  # Raised to match 2x size scale
+	"bacteria_motherload": 2.0,  # Raised to match 2x size scale
 }
 
 ## Default entity color
@@ -212,7 +212,7 @@ func unload_chunk_entities(chunk: Chunk) -> void:
 func add_entity_billboard(entity: WorldEntity) -> void:
 	"""Add a billboard for a newly spawned entity (mid-game spawn)
 
-	Used when entities spawn during gameplay (e.g., Brood Mother spawning minions).
+	Used when entities spawn during gameplay (e.g., Motherload spawning minions).
 
 	Args:
 		entity: WorldEntity to create billboard for

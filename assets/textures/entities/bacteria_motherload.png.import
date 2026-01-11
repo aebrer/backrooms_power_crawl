@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cwdc15f76jtpa"
-path="res://.godot/imported/bacteria_brood_mother.png-0268f018a6bf4707f6f35db794943fa7.ctex"
+uid="uid://bmk350ma8owo1"
+path="res://.godot/imported/bacteria_motherload.png-bc09e5a76f2188186e18b6fb91db909e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/textures/entities/bacteria_brood_mother.png"
-dest_files=["res://.godot/imported/bacteria_brood_mother.png-0268f018a6bf4707f6f35db794943fa7.ctex"]
+source_file="res://assets/textures/entities/bacteria_motherload.png"
+dest_files=["res://.godot/imported/bacteria_motherload.png-bc09e5a76f2188186e18b6fb91db909e.ctex"]
 
 [params]
 

@@ -61,7 +61,7 @@ var attack_cooldown: int = 0
 ## Must wait this turn (post-attack wait, post-spawn wait, etc.)
 var must_wait: bool = false
 
-## Turns until can spawn minions again (Brood Mother only)
+## Turns until can spawn minions again (Motherload only)
 var spawn_cooldown: int = 0
 
 ## Last known player position (for pathfinding, null if never seen)

@@ -100,7 +100,7 @@ entity density: very low"""
 			"corruption_threshold": 0.0,
 		},
 		{
-			"entity_type": "bacteria_brood_mother",
+			"entity_type": "bacteria_motherload",
 			"weight": 0.5,  # Rare but possible from the start
 			"base_hp": 1000.0,
 			"hp_scale": 1.0,  # +100% HP per corruption point

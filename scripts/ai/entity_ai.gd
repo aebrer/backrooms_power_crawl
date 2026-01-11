@@ -21,18 +21,18 @@ class_name EntityAI extends RefCounted
 ## Entity type IDs
 const TYPE_DEBUG_ENEMY = "debug_enemy"
 const TYPE_BACTERIA_SPAWN = "bacteria_spawn"
-const TYPE_BACTERIA_BROOD_MOTHER = "bacteria_brood_mother"
+const TYPE_BACTERIA_MOTHERLOAD = "bacteria_motherload"
 
 ## Sensing ranges (tiles)
 const SENSE_RANGE_SPAWN = 80.0  # Bacteria Spawn can sense player from afar
-const SENSE_RANGE_MOTHER = 32.0  # Brood Mother sense range (triggers 2 moves/turn)
+const SENSE_RANGE_MOTHERLOAD = 32.0  # Motherload sense range (triggers 2 moves/turn)
 
 ## Attack ranges (tiles)
 const ATTACK_RANGE_SPAWN = 1.5  # Melee range
-const ATTACK_RANGE_MOTHER = 1.5  # Melee range
+const ATTACK_RANGE_MOTHERLOAD = 1.5  # Melee range
 
-## Spawn cooldown for Brood Mother
-const MOTHER_SPAWN_COOLDOWN = 10  # Turns between spawning minions
+## Spawn cooldown for Motherload
+const MOTHERLOAD_SPAWN_COOLDOWN = 10  # Turns between spawning minions
 
 ## Probability of holding position when in attack range (vs shuffling around)
 const HOLD_POSITION_CHANCE = 0.6  # 60% chance to stay put, 40% to shuffle
@@ -71,8 +71,8 @@ static func process_entity_turn(entity: WorldEntity, player_pos: Vector2i, grid)
 			_process_debug_enemy(entity, player_pos, grid)
 		TYPE_BACTERIA_SPAWN:
 			_process_bacteria_spawn(entity, player_pos, grid)
-		TYPE_BACTERIA_BROOD_MOTHER:
-			_process_bacteria_brood_mother(entity, player_pos, grid)
+		TYPE_BACTERIA_MOTHERLOAD:
+			_process_bacteria_motherload(entity, player_pos, grid)
 		_:
 			# Unknown type - do nothing (stationary)
 			pass
@@ -88,11 +88,11 @@ static func _reset_turn_state(entity: WorldEntity) -> void:
 			entity.moves_remaining = 1
 			entity.attack_damage = 1.0
 			entity.attack_range = ATTACK_RANGE_SPAWN
-		TYPE_BACTERIA_BROOD_MOTHER:
+		TYPE_BACTERIA_MOTHERLOAD:
 			# Will be set to 2 if player is nearby, otherwise 1
 			entity.moves_remaining = 1
 			entity.attack_damage = 8.0
-			entity.attack_range = ATTACK_RANGE_MOTHER
+			entity.attack_range = ATTACK_RANGE_MOTHERLOAD
 		_:
 			entity.moves_remaining = 0  # Debug enemies don't move
 
@@ -160,7 +160,7 @@ static func _process_bacteria_spawn(entity: WorldEntity, player_pos: Vector2i, g
 		_move_toward_target(entity, entity.last_seen_player_pos, grid)
 
 # ============================================================================
-# BACTERIA BROOD MOTHER AI
+# BACTERIA MOTHERLOAD AI
 # ============================================================================
 ## Behavior:
 ## - 2 moves per turn when player is nearby, 1 move otherwise
@@ -169,11 +169,11 @@ static func _process_bacteria_spawn(entity: WorldEntity, player_pos: Vector2i, g
 ## - Doesn't wait after attacking
 ## - Only 1 move post-attack
 
-static func _process_bacteria_brood_mother(entity: WorldEntity, player_pos: Vector2i, grid) -> void:
-	"""Process Bacteria Brood Mother turn"""
+static func _process_bacteria_motherload(entity: WorldEntity, player_pos: Vector2i, grid) -> void:
+	"""Process Bacteria Motherload turn"""
 	# SENSE: Can we see the player?
 	var distance_to_player = entity.world_position.distance_to(player_pos)
-	var can_sense_player = distance_to_player <= SENSE_RANGE_MOTHER
+	var can_sense_player = distance_to_player <= SENSE_RANGE_MOTHERLOAD
 
 	if can_sense_player:
 		entity.last_seen_player_pos = player_pos
@@ -194,20 +194,20 @@ static func _process_bacteria_brood_mother(entity: WorldEntity, player_pos: Vect
 			attacked = true
 			entity.attack_cooldown = 2  # 2 turn cooldown
 			entity.moves_remaining = 1  # Only 1 move post-attack
-			Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Brood Mother attacked, 1 move remaining")
+			Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Motherload attacked, 1 move remaining")
 
 	# Try to spawn minions (if not attacked and off cooldown)
 	if not attacked and entity.spawn_cooldown == 0 and can_sense_player:
 		_spawn_minion(entity, grid)
-		entity.spawn_cooldown = MOTHER_SPAWN_COOLDOWN
+		entity.spawn_cooldown = MOTHERLOAD_SPAWN_COOLDOWN
 		entity.must_wait = true  # Must wait after spawning
-		Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Brood Mother spawned minion, will wait next turn")
+		Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Motherload spawned minion, will wait next turn")
 		return  # Don't move after spawning
 
 	# If already in attack range, maybe hold position or shuffle around
 	if distance_to_player <= entity.attack_range:
 		if randf() < HOLD_POSITION_CHANCE:
-			Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Brood Mother holding position (in attack range)")
+			Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Motherload holding position (in attack range)")
 			return
 		else:
 			# Shuffle around the player
@@ -263,7 +263,7 @@ static func _get_attack_emoji(entity_type: String) -> String:
 	match entity_type:
 		TYPE_BACTERIA_SPAWN:
 			return "🦠"
-		TYPE_BACTERIA_BROOD_MOTHER:
+		TYPE_BACTERIA_MOTHERLOAD:
 			return "🧫"
 		_:
 			return "💥"
@@ -539,10 +539,10 @@ static func _can_move_to(pos: Vector2i, grid) -> bool:
 	return true
 
 static func _spawn_minion(entity: WorldEntity, grid) -> void:
-	"""Spawn a Bacteria Spawn adjacent to the Brood Mother
+	"""Spawn a Bacteria Spawn adjacent to the Motherload
 
 	Args:
-		entity: Brood Mother entity
+		entity: Motherload entity
 		grid: Grid3D for spawn position validation
 	"""
 	# Find adjacent empty tile
@@ -567,10 +567,10 @@ static func _spawn_minion(entity: WorldEntity, grid) -> void:
 			# Add to the appropriate subchunk
 			_add_entity_to_chunk(spawn, grid)
 
-			Log.msg(Log.Category.ENTITY, Log.Level.INFO, "Brood Mother spawned bacteria at %s" % spawn_pos)
+			Log.msg(Log.Category.ENTITY, Log.Level.INFO, "Motherload spawned bacteria at %s" % spawn_pos)
 			return
 
-	Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Brood Mother couldn't spawn - no adjacent empty tiles")
+	Log.msg(Log.Category.ENTITY, Log.Level.DEBUG, "Motherload couldn't spawn - no adjacent empty tiles")
 
 static func _add_entity_to_chunk(entity: WorldEntity, grid) -> void:
 	"""Add a newly spawned entity to the appropriate chunk/subchunk

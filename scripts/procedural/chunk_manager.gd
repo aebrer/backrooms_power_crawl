@@ -469,18 +469,18 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 	var spawned_count = 0
 	var occupied_positions: Array[Vector2i] = []
 
-	# TESTING: Force spawn a brood mother in chunk (0,0)
+	# TESTING: Force spawn a motherload in chunk (0,0)
 	if chunk.position == Vector2i(0, 0):
 		var test_spawn_pos = _find_random_walkable_in_chunk(chunk_world_pos, occupied_positions)
 		if test_spawn_pos != Vector2i(-99999, -99999):
 			occupied_positions.append(test_spawn_pos)
-			var test_entity = WorldEntity.new("bacteria_brood_mother", test_spawn_pos, 1000.0, 0)
+			var test_entity = WorldEntity.new("bacteria_motherload", test_spawn_pos, 1000.0, 0)
 			var local_pos = test_spawn_pos - chunk_world_pos
 			var subchunk = chunk.get_sub_chunk(Vector2i(local_pos.x / SubChunk.SIZE, local_pos.y / SubChunk.SIZE))
 			if subchunk:
 				subchunk.add_world_entity(test_entity)
 				spawned_count += 1
-				Log.system("TEST: Spawned brood mother at %s for testing" % test_spawn_pos)
+				Log.system("TEST: Spawned motherload at %s for testing" % test_spawn_pos)
 
 	# Get valid entity types for current corruption
 	var valid_entities = _get_valid_entities_for_corruption(level_config.entity_spawn_table, corruption)

@@ -1,5 +1,5 @@
 """
-Bacteria Brood Mother Sprite Generator
+Bacteria Motherload Sprite Generator
 Creates a 64x64 PSX-style sprite of the towering Kane Pixels Backrooms entity.
 
 Tall, spindly creature with long arm-like limbs reaching to the ground.
@@ -63,8 +63,8 @@ def draw_spindly_limb(draw, start_x, start_y, end_x, end_y, width_start, width_e
 
         draw.polygon(polygon_points, fill=color)
 
-def generate_brood_mother():
-    """Generate the Bacteria Brood Mother sprite"""
+def generate_motherload():
+    """Generate the Bacteria Motherload sprite"""
     # Create transparent canvas
     img = Image.new('RGBA', (SIZE, SIZE), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
@@ -189,15 +189,15 @@ def generate_brood_mother():
     return img
 
 def main():
-    """Generate and save the Brood Mother sprite"""
-    print("Generating Bacteria Brood Mother sprite...")
+    """Generate and save the Motherload sprite"""
+    print("Generating Bacteria Motherload sprite...")
 
-    img = generate_brood_mother()
+    img = generate_motherload()
 
     output_path = "output.png"
     img.save(output_path, "PNG")
 
-    print(f"✓ Brood Mother sprite saved to {output_path}")
+    print(f"✓ Motherload sprite saved to {output_path}")
     print(f"  Size: {SIZE}x{SIZE} pixels")
     print(f"  Style: PSX-aesthetic with dark greenish-black palette")
     print(f"  Features: Tall spindly limbs, small head, organic vine-like body")

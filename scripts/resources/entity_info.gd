@@ -47,7 +47,7 @@ const THREAT_LEVEL_NAMES = {
 	0: "○○○○○ Gimel",        # Environment/props - negligible threat
 	1: "●○○○○ Daleth",       # Weak - common early (bacteria_spawn)
 	2: "●●○○○ Epsilon",      # Moderate - stable distribution
-	3: "●●●○○ Keter",        # Dangerous - rare early, common later (brood_mother)
+	3: "●●●○○ Keter",        # Dangerous - rare early, common later (motherload)
 	4: "●●●●○ Aleph",        # Elite - very rare, severe threat
 	5: "●●●●● YOU WILL DIE", # Boss/Apex - certain death without preparation
 }
