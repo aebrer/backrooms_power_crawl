@@ -155,16 +155,17 @@ func _find_spawn_location(chunk, item: Item) -> Vector2i:
 	# Failed to find valid location
 	return Vector2i(-1, -1)
 
-func _is_area_clear(chunk, center: Vector2i, size: int) -> bool:
-	"""Check if NxN area around center is clear (non-wall)
+func _is_area_clear(chunk, center: Vector2i, size: int, occupied_positions: Array[Vector2i] = []) -> bool:
+	"""Check if NxN area around center is clear (non-wall, no items)
 
 	Args:
 		chunk: Chunk to check
 		center: Center tile position
 		size: Area size (e.g., 3 for 3x3)
+		occupied_positions: Additional positions to treat as occupied (for batch spawning)
 
 	Returns:
-		true if all tiles in area are non-wall
+		true if all tiles in area are non-wall and no items present
 	"""
 	var half = size / 2
 
@@ -178,6 +179,20 @@ func _is_area_clear(chunk, center: Vector2i, size: int) -> bool:
 			# Wall tiles have IDs >= 1 (0 = floor)
 			if tile == null or tile >= 1:
 				return false
+
+	# Check for existing items in chunk's subchunks
+	for subchunk in chunk.sub_chunks:
+		for item_data in subchunk.world_items:
+			var pos_data = item_data.get("world_position", {})
+			var item_pos = Vector2i(pos_data.get("x", 0), pos_data.get("y", 0))
+			# Check if item is within the spawn area
+			if abs(item_pos.x - center.x) <= half and abs(item_pos.y - center.y) <= half:
+				return false
+
+	# Check additional occupied positions (used during batch spawning)
+	for occupied_pos in occupied_positions:
+		if abs(occupied_pos.x - center.x) <= half and abs(occupied_pos.y - center.y) <= half:
+			return false
 
 	return true
 
@@ -267,6 +282,9 @@ func spawn_all_items_for_debug(
 		Log.system("[DEBUG] Could not find starting position for debug items")
 		return spawned_items
 
+	# Track positions already used during this spawn pass
+	var occupied_positions: Array[Vector2i] = []
+
 	# Spawn items in a grid pattern (spacing of 4 tiles)
 	var spacing = 4
 	var items_per_row = ceili(sqrt(available_items.size()))
@@ -277,8 +295,8 @@ func spawn_all_items_for_debug(
 		var grid_y = item_index / items_per_row
 		var spawn_pos = start_pos + Vector2i(grid_x * spacing, grid_y * spacing)
 
-		# Try to find a valid location near the target
-		var valid_pos = _find_nearby_valid_location(chunk, spawn_pos)
+		# Try to find a valid location near the target (passing already-occupied positions)
+		var valid_pos = _find_nearby_valid_location(chunk, spawn_pos, 20, occupied_positions)
 		if valid_pos != Vector2i(-1, -1):
 			var world_item = WorldItem.new(
 				item.duplicate_item(),
@@ -287,6 +305,7 @@ func spawn_all_items_for_debug(
 				turn_number
 			)
 			spawned_items.append(world_item)
+			occupied_positions.append(valid_pos)  # Mark this position as occupied
 			Log.system("[DEBUG] Spawned %s at %s" % [item.item_name, valid_pos])
 		else:
 			Log.system("[DEBUG] Failed to spawn %s - no valid location" % item.item_name)
@@ -296,19 +315,20 @@ func spawn_all_items_for_debug(
 	return spawned_items
 
 
-func _find_nearby_valid_location(chunk, target: Vector2i, max_attempts: int = 20) -> Vector2i:
+func _find_nearby_valid_location(chunk, target: Vector2i, max_attempts: int = 20, occupied_positions: Array[Vector2i] = []) -> Vector2i:
 	"""Find a valid spawn location near the target position
 
 	Args:
 		chunk: Chunk to search
 		target: Target position to spawn near
 		max_attempts: Maximum search attempts
+		occupied_positions: Additional positions to treat as occupied (for batch spawning)
 
 	Returns:
 		Valid world position or (-1, -1) if none found
 	"""
 	# First try the exact position
-	if _is_area_clear(chunk, target, DEFAULT_CLEAR_SIZE):
+	if _is_area_clear(chunk, target, DEFAULT_CLEAR_SIZE, occupied_positions):
 		return target
 
 	# Spiral outward from target
@@ -317,7 +337,7 @@ func _find_nearby_valid_location(chunk, target: Vector2i, max_attempts: int = 20
 			for dy in range(-attempt, attempt + 1):
 				if abs(dx) == attempt or abs(dy) == attempt:  # Only check perimeter
 					var check_pos = target + Vector2i(dx, dy)
-					if _is_area_clear(chunk, check_pos, DEFAULT_CLEAR_SIZE):
+					if _is_area_clear(chunk, check_pos, DEFAULT_CLEAR_SIZE, occupied_positions):
 						return check_pos
 
 	return Vector2i(-1, -1)

@@ -125,6 +125,8 @@ entity density: very low"""
 
 	# Permitted items for Level 0 (rarity-based spawning)
 	add_permitted_item(DebugItem.new())  # UNCOMMON rarity (2% spawn chance)
+	add_permitted_item(BrassKnuckles.new())  # COMMON rarity
+	add_permitted_item(BaseballBat.new())  # COMMON rarity
 
 	# ========================================================================
 	# EXIT CONFIGURATION

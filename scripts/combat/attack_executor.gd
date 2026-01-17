@@ -52,6 +52,7 @@ func execute_turn(player) -> void:
 	"""Execute all ready attacks for this turn.
 
 	Called during turn execution, after player action but before item on_turn().
+	Items can grant extra_attacks to make pools attack multiple times per turn.
 
 	Args:
 		player: Player3D reference (untyped to avoid circular dependency)
@@ -62,22 +63,42 @@ func execute_turn(player) -> void:
 			_cooldowns[type] -= 1
 
 	# Execute BODY attack (always available - base punch)
-	if _cooldowns[_AttackTypes.Type.BODY] <= 0:
-		var attack = _build_attack(player, player.body_pool, _AttackTypes.Type.BODY)
-		if attack and _execute_attack(player, attack):
-			_cooldowns[_AttackTypes.Type.BODY] = attack.cooldown
+	_execute_pool_attacks(player, player.body_pool, _AttackTypes.Type.BODY)
 
 	# Execute MIND attack (always available - base whistle)
-	if _cooldowns[_AttackTypes.Type.MIND] <= 0:
-		var attack = _build_attack(player, player.mind_pool, _AttackTypes.Type.MIND)
-		if attack and _execute_attack(player, attack):
-			_cooldowns[_AttackTypes.Type.MIND] = attack.cooldown
+	_execute_pool_attacks(player, player.mind_pool, _AttackTypes.Type.MIND)
 
 	# Execute NULL attack (only if player has mana)
-	if _cooldowns[_AttackTypes.Type.NULL] <= 0:
-		var attack = _build_attack(player, player.null_pool, _AttackTypes.Type.NULL)
-		if attack and _execute_attack(player, attack):
-			_cooldowns[_AttackTypes.Type.NULL] = attack.cooldown
+	_execute_pool_attacks(player, player.null_pool, _AttackTypes.Type.NULL)
+
+
+func _execute_pool_attacks(player, pool, attack_type: int) -> void:
+	"""Execute all attacks for a pool, including extra attacks from items.
+
+	Args:
+		player: Player3D reference
+		pool: ItemPool for this attack type
+		attack_type: AttackTypes.Type enum
+	"""
+	if _cooldowns[attack_type] > 0:
+		return
+
+	var attack = _build_attack(player, pool, attack_type)
+	if not attack:
+		return
+
+	# Calculate total attacks: 1 base + extra_attacks from items
+	var total_attacks = 1 + attack.extra_attacks
+
+	# Execute each attack
+	var any_hit = false
+	for i in range(total_attacks):
+		if _execute_attack(player, attack):
+			any_hit = true
+
+	# Reset cooldown if any attack connected
+	if any_hit:
+		_cooldowns[attack_type] = attack.cooldown
 
 # ============================================================================
 # ATTACK BUILDING
@@ -112,6 +133,7 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	var range_add: float = 0.0
 	var cooldown_add: int = 0
 	var mana_cost_multiply: float = 1.0
+	var extra_attacks: int = 0
 
 	if pool:
 		for i in range(pool.max_slots):
@@ -126,6 +148,7 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 				range_add += mods.get("range_add", 0.0)
 				cooldown_add += mods.get("cooldown_add", 0)
 				mana_cost_multiply *= mods.get("mana_cost_multiply", 1.0)
+				extra_attacks += mods.get("extra_attacks", 0)
 
 				# Attack name override (last one wins - most recently equipped item names the attack)
 				if mods.has("attack_name"):
@@ -148,6 +171,7 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	attack.range_tiles = attack.range_tiles + range_add
 	attack.cooldown = maxi(1, attack.cooldown + cooldown_add)  # Minimum 1 turn
 	attack.mana_cost = attack.mana_cost * mana_cost_multiply
+	attack.extra_attacks = extra_attacks  # Additional attacks per turn
 
 	# Apply stat scaling (STRENGTH/PERCEPTION/ANOMALY)
 	if player and player.stats:
@@ -468,6 +492,7 @@ func get_attack_preview(player, attack_type: int, from_position: Vector2i = Vect
 		"mana_cost": attack.mana_cost if attack else 0,
 		"current_mana": current_mana,
 		"mana_after_regen": mana_after_regen,
+		"extra_attacks": attack.extra_attacks if attack else 0,
 	}
 
 func _get_pool_for_type(player, attack_type: int) -> ItemPool:

@@ -247,13 +247,15 @@ func _add_attack_previews(actions: Array[Action], destination: Vector2i) -> void
 			continue
 
 		var attack_emoji = preview.get("attack_emoji", _AttackTypes.BASE_ATTACK_EMOJIS.get(attack_type, "⚔️"))
+		var extra_attacks = preview.get("extra_attacks", 0)
 		var attack_preview = AttackPreviewAction.new(
 			attack_type,
 			attack_name,
 			attack_emoji,
 			preview.get("damage", 0.0),
 			targets.size(),
-			preview.get("mana_cost", 0.0)
+			preview.get("mana_cost", 0.0),
+			extra_attacks
 		)
 		actions.append(attack_preview)
 

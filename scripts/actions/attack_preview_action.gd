@@ -3,7 +3,7 @@ extends Action
 ## Informational action for displaying attack previews in action preview UI
 ##
 ## This is not an executable action - it's only used for UI display purposes.
-## Shows attack type, damage, and target count for attacks that WILL fire.
+## Shows attack type, damage, target count, and extra attacks for attacks that WILL fire.
 
 const _AttackTypes = preload("res://scripts/combat/attack_types.gd")
 
@@ -13,8 +13,9 @@ var attack_emoji: String
 var damage: float
 var target_count: int
 var mana_cost: float
+var extra_attacks: int  # Additional attacks per turn (0 = single attack)
 
-func _init(type: int, name: String, emoji: String, dmg: float, targets: int, cost: float) -> void:
+func _init(type: int, name: String, emoji: String, dmg: float, targets: int, cost: float, extra: int = 0) -> void:
 	action_name = "AttackPreview"
 	attack_type = type
 	attack_name = name
@@ -22,6 +23,7 @@ func _init(type: int, name: String, emoji: String, dmg: float, targets: int, cos
 	damage = dmg
 	target_count = targets
 	mana_cost = cost
+	extra_attacks = extra
 
 func can_execute(_player) -> bool:
 	return false  # Never executable - display only
@@ -33,12 +35,24 @@ func get_preview_info(_player) -> Dictionary:
 	# Use attack emoji (may be customized by items)
 	var icon = attack_emoji if attack_emoji else "⚔️"
 
-	# Build target info: "X target(s) for Y dmg"
-	var target_str = "%d target%s for %.0f dmg" % [
-		target_count,
-		"s" if target_count > 1 else "",
-		damage
-	]
+	# Calculate total attacks (1 base + extra)
+	var total_attacks = 1 + extra_attacks
+
+	# Build target info with attack count: "Nx X target(s) for Y dmg"
+	var target_str: String
+	if total_attacks > 1:
+		target_str = "%dx %d target%s for %.0f dmg" % [
+			total_attacks,
+			target_count,
+			"s" if target_count > 1 else "",
+			damage
+		]
+	else:
+		target_str = "%d target%s for %.0f dmg" % [
+			target_count,
+			"s" if target_count > 1 else "",
+			damage
+		]
 
 	# Cost display for NULL attacks
 	var cost_str = ""
