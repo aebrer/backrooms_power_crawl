@@ -128,6 +128,7 @@ entity density: very low"""
 	add_permitted_item(BrassKnuckles.new())  # COMMON rarity
 	add_permitted_item(BaseballBat.new())  # COMMON rarity
 	add_permitted_item(WheatieOs.new())  # COMMON rarity
+	add_permitted_item(TrailMix.new())  # RARE rarity
 
 	# ========================================================================
 	# EXIT CONFIGURATION
