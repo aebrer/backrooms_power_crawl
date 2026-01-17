@@ -109,3 +109,11 @@ const BASE_ATTACK_EMOJIS = {
 	Type.MIND: "📢",  # Whistle/psychic
 	Type.NULL: "✨",  # Anomaly/magic
 }
+
+# Tags for each attack type (items can check these for conditional effects)
+# Tags describe the nature of the attack: "physical", "sound", "psychic", "anomaly", etc.
+const BASE_ATTACK_TAGS = {
+	Type.BODY: ["physical", "melee"],      # Physical melee attack
+	Type.MIND: ["sound", "psychic"],       # Sound-based psychic attack (whistle)
+	Type.NULL: ["anomaly", "ranged"],      # Anomalous ranged attack
+}

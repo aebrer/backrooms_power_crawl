@@ -207,6 +207,16 @@ func get_attack_modifiers() -> Dictionary:
 	- area: AttackTypes.Area (override attack pattern)
 	- mana_cost_multiply: float (mana cost modifier for NULL, default 1.0)
 	- special_effects: Array (effect objects with apply(player, targets) method)
+	- add_tags: Array[String] (tags to add to attack, e.g., ["sound"])
+	- remove_tags: Array[String] (tags to remove from attack)
+	- tag_damage_multiply: Dictionary (tag -> multiplier, e.g., {"sound": 2.0})
+
+	Tag system notes:
+	- Base attacks have tags defined in AttackTypes.BASE_ATTACK_TAGS
+	- Items can add/remove tags to transform attacks (e.g., make BODY attack sound-based)
+	- tag_damage_multiply applies to ANY attack with matching tag, across all pools
+	- Example: Coach's Whistle with {"sound": 1.5} boosts both MIND whistle AND
+	  a BODY punch transformed to sound by "Siren's Lungs" item
 
 	Returns:
 		Dictionary of modifiers (empty dict = no modifications)

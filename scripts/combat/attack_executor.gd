@@ -134,6 +134,9 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	var cooldown_add: int = 0
 	var mana_cost_multiply: float = 1.0
 	var extra_attacks: int = 0
+	var tag_damage_multipliers: Dictionary = {}  # tag -> multiplier
+	var tags_to_add: Array[String] = []
+	var tags_to_remove: Array[String] = []
 
 	if pool:
 		for i in range(pool.max_slots):
@@ -149,6 +152,28 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 				cooldown_add += mods.get("cooldown_add", 0)
 				mana_cost_multiply *= mods.get("mana_cost_multiply", 1.0)
 				extra_attacks += mods.get("extra_attacks", 0)
+
+				# Tag manipulation: add tags to attack (e.g., "Siren's Lungs" adds "sound")
+				if mods.has("add_tags"):
+					for tag in mods["add_tags"]:
+						if tag not in tags_to_add:
+							tags_to_add.append(tag)
+
+				# Tag manipulation: remove tags from attack (for transformative items)
+				if mods.has("remove_tags"):
+					for tag in mods["remove_tags"]:
+						if tag not in tags_to_remove:
+							tags_to_remove.append(tag)
+
+				# Tag-based damage multipliers (e.g., {"sound": 2.0} doubles sound damage)
+				# These apply to ANY attack with the tag, regardless of pool
+				if mods.has("tag_damage_multiply"):
+					var tag_mults = mods["tag_damage_multiply"]
+					for tag in tag_mults:
+						if tag_damage_multipliers.has(tag):
+							tag_damage_multipliers[tag] *= tag_mults[tag]
+						else:
+							tag_damage_multipliers[tag] = tag_mults[tag]
 
 				# Attack name override (last one wins - most recently equipped item names the attack)
 				if mods.has("attack_name"):
@@ -166,8 +191,20 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 				if mods.has("special_effects"):
 					attack.special_effects.append_array(mods["special_effects"])
 
+	# Apply tag modifications (remove first, then add)
+	for tag in tags_to_remove:
+		attack.tags.erase(tag)
+	for tag in tags_to_add:
+		if tag not in attack.tags:
+			attack.tags.append(tag)
+
 	# Apply modifiers to base stats
 	attack.damage = (attack.damage + damage_add) * damage_multiply
+
+	# Apply tag-based damage multipliers (after tag modifications!)
+	for tag in attack.tags:
+		if tag_damage_multipliers.has(tag):
+			attack.damage *= tag_damage_multipliers[tag]
 	attack.range_tiles = attack.range_tiles + range_add
 	attack.cooldown = maxi(1, attack.cooldown + cooldown_add)  # Minimum 1 turn
 	attack.mana_cost = attack.mana_cost * mana_cost_multiply

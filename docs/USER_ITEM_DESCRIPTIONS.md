@@ -36,6 +36,12 @@ Design specifications for items to implement. These are the source of truth for 
 - Need to add tags to attacks for this
 - Scales as it levels up
 
+### Siren's Lungs
+- Transforms BODY attacks to be sound-based (adds "sound" tag)
+- Changes attack to AOE_AROUND pattern like whistle
+- Synergizes with Coach's Whistle (sound damage multiplier applies!)
+- Example combo: Brass Knuckles + Siren's Lungs + Coach's Whistle = multiple sound-based AOE attacks per turn
+
 ### Telepathic Punching Item (TBD)
 - Something that turns the MIND attack from a whistle to telepathic punching
 - Design not finalized
