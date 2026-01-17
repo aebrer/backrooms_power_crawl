@@ -329,12 +329,23 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 	var level_config: LevelConfig = level_configs.get(level_id, null)
 
 	if level_config and item_spawner and not level_config.permitted_items.is_empty():
-		var spawned_items = item_spawner.spawn_items_for_chunk(
-			chunk,
-			0,  # Turn number (will be updated later with actual turn tracking)
-			level_config.permitted_items
-		)
+		var spawned_items: Array[WorldItem] = []
 
+		# DEBUG MODE: Spawn one of each item in the first chunk (player spawn chunk at 0,0)
+		var is_first_chunk := chunk_pos == Vector2i(0, 0)
+		if Utilities.DEBUG_SPAWN_ALL_ITEMS and is_first_chunk:
+			spawned_items = item_spawner.spawn_all_items_for_debug(
+				chunk,
+				0,
+				level_config.permitted_items
+			)
+		else:
+			# Normal spawning
+			spawned_items = item_spawner.spawn_items_for_chunk(
+				chunk,
+				0,  # Turn number (will be updated later with actual turn tracking)
+				level_config.permitted_items
+			)
 
 		# Store spawned items in subchunks for persistence
 		for world_item in spawned_items:

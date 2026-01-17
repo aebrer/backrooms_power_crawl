@@ -223,3 +223,101 @@ func _filter_by_rarity(items: Array[Item], rarity: ItemRarity.Tier) -> Array[Ite
 		if item.rarity == rarity:
 			filtered.append(item)
 	return filtered
+
+
+# ============================================================================
+# DEBUG SPAWNING
+# ============================================================================
+
+func spawn_all_items_for_debug(
+	chunk,
+	turn_number: int,
+	available_items: Array[Item]
+) -> Array[WorldItem]:
+	"""Spawn one of each item in the chunk (DEBUG MODE ONLY)
+
+	Used when Utilities.DEBUG_SPAWN_ALL_ITEMS is true.
+	Spawns all available items in a grid pattern near chunk center.
+
+	Args:
+		chunk: Chunk to spawn items in
+		turn_number: Current turn number
+		available_items: All items to spawn
+
+	Returns:
+		Array of WorldItem instances that were spawned
+	"""
+	var spawned_items: Array[WorldItem] = []
+
+	if available_items.is_empty():
+		return spawned_items
+
+	Log.system("[DEBUG] Spawning ALL %d items in first chunk" % available_items.size())
+
+	# Find a valid starting position (center-ish of first subchunk)
+	var start_pos = Vector2i(-1, -1)
+	if chunk.sub_chunks.size() > 0:
+		var subchunk = chunk.sub_chunks[0]
+		# Start near the middle of the subchunk
+		var center_x = subchunk.tile_data[0].size() / 2
+		var center_y = subchunk.tile_data.size() / 2
+		start_pos = subchunk.world_position + Vector2i(center_x, center_y)
+
+	if start_pos == Vector2i(-1, -1):
+		Log.system("[DEBUG] Could not find starting position for debug items")
+		return spawned_items
+
+	# Spawn items in a grid pattern (spacing of 4 tiles)
+	var spacing = 4
+	var items_per_row = ceili(sqrt(available_items.size()))
+	var item_index = 0
+
+	for item in available_items:
+		var grid_x = item_index % items_per_row
+		var grid_y = item_index / items_per_row
+		var spawn_pos = start_pos + Vector2i(grid_x * spacing, grid_y * spacing)
+
+		# Try to find a valid location near the target
+		var valid_pos = _find_nearby_valid_location(chunk, spawn_pos)
+		if valid_pos != Vector2i(-1, -1):
+			var world_item = WorldItem.new(
+				item.duplicate_item(),
+				valid_pos,
+				item.rarity,
+				turn_number
+			)
+			spawned_items.append(world_item)
+			Log.system("[DEBUG] Spawned %s at %s" % [item.item_name, valid_pos])
+		else:
+			Log.system("[DEBUG] Failed to spawn %s - no valid location" % item.item_name)
+
+		item_index += 1
+
+	return spawned_items
+
+
+func _find_nearby_valid_location(chunk, target: Vector2i, max_attempts: int = 20) -> Vector2i:
+	"""Find a valid spawn location near the target position
+
+	Args:
+		chunk: Chunk to search
+		target: Target position to spawn near
+		max_attempts: Maximum search attempts
+
+	Returns:
+		Valid world position or (-1, -1) if none found
+	"""
+	# First try the exact position
+	if _is_area_clear(chunk, target, DEFAULT_CLEAR_SIZE):
+		return target
+
+	# Spiral outward from target
+	for attempt in range(1, max_attempts):
+		for dx in range(-attempt, attempt + 1):
+			for dy in range(-attempt, attempt + 1):
+				if abs(dx) == attempt or abs(dy) == attempt:  # Only check perimeter
+					var check_pos = target + Vector2i(dx, dy)
+					if _is_area_clear(chunk, check_pos, DEFAULT_CLEAR_SIZE):
+						return check_pos
+
+	return Vector2i(-1, -1)

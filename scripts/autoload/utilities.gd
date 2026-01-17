@@ -5,6 +5,14 @@ extends Node
 ## Autoloaded as "Utilities" for global access.
 
 # ============================================================================
+# DEBUG FLAGS
+# ============================================================================
+
+## WARNING: Set to true to enable debug item spawning (one of each item in first chunk)
+## This should be FALSE for release builds!
+const DEBUG_SPAWN_ALL_ITEMS := true
+
+# ============================================================================
 # MATH UTILITIES
 # ============================================================================
 
