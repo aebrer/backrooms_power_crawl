@@ -294,7 +294,7 @@ func _on_new_chunk_entered(chunk_position: Vector3i) -> void:
 		Log.turn("Entered new chunk %s" % Vector2i(chunk_position.x, chunk_position.y))
 
 func _on_entity_died(entity: WorldEntity) -> void:
-	"""Called when an entity is killed - award EXP and track kill"""
+	"""Called when an entity is killed - award EXP, restore sanity, and track kill"""
 	if not stats:
 		return
 
@@ -304,8 +304,14 @@ func _on_entity_died(entity: WorldEntity) -> void:
 	# EXP reward based on entity max HP (no level scaling - kills become more frequent with corruption)
 	# Base: max_hp / 10, minimum 10 EXP
 	var exp_reward = max(10, int(entity.max_hp / 10.0))
-
 	stats.gain_exp(exp_reward)
+
+	# Restore sanity based on enemy threat level (same weights used for sanity damage)
+	# Killing enemies is the primary way to maintain sanity
+	var sanity_restore = _get_sanity_restore_for_entity(entity.entity_type)
+	if sanity_restore > 0:
+		stats.restore_sanity(sanity_restore)
+		Log.player("🧠 +%.1f sanity (killed %s)" % [sanity_restore, entity.entity_type])
 
 func _on_level_increased(old_level: int, new_level: int) -> void:
 	"""Called when Level increases - trigger perk selection"""
@@ -338,6 +344,28 @@ func _on_clearance_increased(old_level: int, new_level: int) -> void:
 	"""Called when Clearance increases (via perk choice) - sync with KnowledgeDB"""
 	KnowledgeDB.set_clearance_level(new_level)
 	Log.player("Player Clearance increased: %d → %d (knowledge unlocked)" % [old_level, new_level])
+
+func _get_sanity_restore_for_entity(entity_type: String) -> float:
+	"""Get sanity restore amount for killing an entity based on its threat level.
+
+	Uses the same threat weight system as sanity damage - killing enemies
+	restores sanity equal to how much they would contribute to sanity pressure.
+
+	Args:
+		entity_type: Entity type ID (e.g., "bacteria_spawn")
+
+	Returns:
+		Sanity restore amount (threat weight as float)
+	"""
+	var threat_level = 1  # Default to Daleth (weak)
+	if EntityRegistry:
+		var info = EntityRegistry.get_info(entity_type, 0)
+		if info and info.has("threat_level"):
+			threat_level = info["threat_level"]
+		return float(EntityRegistry.THREAT_WEIGHTS.get(threat_level, 1))
+
+	# Fallback if EntityRegistry not available
+	return 1.0
 
 func _on_resource_changed(resource_name: String, current: float, maximum: float) -> void:
 	"""Called when HP, Sanity, or Mana changes - update visual bars"""
@@ -445,6 +473,30 @@ func _update_bar(bar: MeshInstance3D, fill_percent: float) -> void:
 # ============================================================================
 # ITEM SYSTEM
 # ============================================================================
+
+func get_cooldown_multiply() -> float:
+	"""Calculate total cooldown multiplier from ALL equipped items.
+
+	Collects cooldown_multiply from passive modifiers of all items in all pools.
+	Used by items with internal cooldowns to apply global cooldown reduction.
+
+	Returns:
+		Multiplicative cooldown factor (e.g., 0.8 = 20% faster cooldowns)
+	"""
+	var multiplier: float = 1.0
+
+	for pool in [body_pool, mind_pool, null_pool]:
+		if not pool:
+			continue
+		for i in range(pool.max_slots):
+			var item = pool.items[i]
+			var is_enabled = pool.enabled[i]
+			if item and is_enabled:
+				var mods = item.get_passive_modifiers()
+				if mods:  # Defensive null check
+					multiplier *= mods.get("cooldown_multiply", 1.0)
+
+	return multiplier
 
 func execute_item_pools() -> void:
 	"""Execute attacks, then item effects (called each turn)

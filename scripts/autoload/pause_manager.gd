@@ -72,6 +72,23 @@ func toggle_pause():
 	else:
 		_exit_hud_mode()
 
+func set_pause(paused: bool) -> void:
+	"""Set pause state directly (safe for popups that need to ensure paused state).
+
+	Unlike toggle_pause(), this is idempotent - calling set_pause(true) when
+	already paused does nothing, which is the correct behavior for popups.
+	"""
+	if is_paused == paused:
+		return  # Already in desired state
+
+	is_paused = paused
+	emit_signal("pause_toggled", is_paused)
+
+	if is_paused:
+		_enter_hud_mode()
+	else:
+		_exit_hud_mode()
+
 func _enter_hud_mode():
 	"""Enable HUD interaction mode (turn-based games don't pause processing)."""
 	# For turn-based games, we DON'T disable Game3D processing

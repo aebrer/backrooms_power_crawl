@@ -30,6 +30,9 @@ const RARITY_TYPE = ItemRarity.Tier.UNCOMMON  # 2% spawn chance
 # Mana bonus per level
 const MANA_PER_LEVEL = 5
 
+# Texture path
+const TEXTURE_PATH = "res://assets/textures/debug_item.png"
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
@@ -47,10 +50,8 @@ func _init():
 	# Scaling hint (CONSTANT - always shown)
 	scaling_hint = "Effects intensify with level"
 
-	# Create simple red square placeholder sprite
-	var img = Image.create(16, 16, false, Image.FORMAT_RGBA8)
-	img.fill(Color(1.0, 0.0, 0.0, 1.0))  # Red
-	ground_sprite = ImageTexture.create_from_image(img)
+	# Load sprite texture
+	ground_sprite = load(TEXTURE_PATH)
 
 # ============================================================================
 # CORE METHODS (override)

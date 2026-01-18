@@ -6,6 +6,8 @@ extends PlayerInputState
 ## Turn progression is PAUSED during look mode.
 
 const _AttackTypes = preload("res://scripts/combat/attack_types.gd")
+const _ItemStatusAction = preload("res://scripts/actions/item_status_action.gd")
+const _SanityDamageAction = preload("res://scripts/actions/sanity_damage_action.gd")
 
 # NOTE: These will be initialized in enter() since they depend on player node
 var first_person_camera: FirstPersonCamera = null
@@ -197,8 +199,14 @@ func _update_action_preview() -> void:
 	# Add cooldown displays at the bottom
 	_add_cooldown_previews(actions)
 
+	# Add item status displays (ready shields, item cooldowns)
+	_add_item_status_previews(actions)
+
 	# Add mana-blocked item effects
 	_add_item_mana_blocked_previews(actions)
+
+	# Add sanity damage preview (shows when next sanity drain will occur)
+	_add_sanity_damage_preview(actions)
 
 	# Emit preview signal
 	player.action_preview_changed.emit(actions)
@@ -243,13 +251,15 @@ func _add_attack_previews(actions: Array[Action], destination: Vector2i) -> void
 			continue
 
 		var attack_emoji = preview.get("attack_emoji", _AttackTypes.BASE_ATTACK_EMOJIS.get(attack_type, "⚔️"))
+		var extra_attacks = preview.get("extra_attacks", 0)
 		var attack_preview = AttackPreviewAction.new(
 			attack_type,
 			attack_name,
 			attack_emoji,
 			preview.get("damage", 0.0),
 			targets.size(),
-			preview.get("mana_cost", 0.0)
+			preview.get("mana_cost", 0.0),
+			extra_attacks
 		)
 		actions.append(attack_preview)
 
@@ -324,5 +334,87 @@ func _add_item_mana_blocked_previews(actions: Array[Action]) -> void:
 				mana_after_regen
 			)
 			actions.append(mana_blocked)
+
+func _add_item_status_previews(actions: Array[Action]) -> void:
+	"""Add status displays for items with reactive effects or cooldowns.
+
+	Shows items that have get_status_display() returning show=true.
+	Examples:
+	- "🛡 Protective Ward READY (5 mana)" - shield ready to block damage
+	- "🕐 Lucky Reset 3 → 2" - item cooldown ticking down
+	"""
+	if not player:
+		return
+
+	# Check all equipped items in all pools
+	var pools = [player.body_pool, player.mind_pool, player.null_pool]
+
+	for pool in pools:
+		if not pool:
+			continue
+
+		for i in range(pool.max_slots):
+			var item = pool.items[i]
+			var is_enabled = pool.enabled[i]
+
+			if not item or not is_enabled:
+				continue
+
+			# Check if item has status to display
+			var status = item.get_status_display()
+			if status.is_empty() or not status.get("show", false):
+				continue
+
+			var status_type = status.get("type", "")
+
+			if status_type == "ready":
+				# Show ready status (e.g., shield ready to block)
+				var status_action = _ItemStatusAction.new(
+					item.item_name,
+					_ItemStatusAction.StatusType.READY,
+					0, 0,  # No cooldown values
+					status.get("mana_cost", 0.0),
+					status.get("description", "")
+				)
+				actions.append(status_action)
+
+			elif status_type == "cooldown":
+				# Show cooldown countdown
+				var cd_current = status.get("cooldown_current", 1)
+				var cd_after = status.get("cooldown_after", 0)
+				var status_action = _ItemStatusAction.new(
+					item.item_name,
+					_ItemStatusAction.StatusType.COOLDOWN,
+					cd_current, cd_after,
+					0.0,
+					status.get("description", "")
+				)
+				actions.append(status_action)
+
+func _add_sanity_damage_preview(actions: Array[Action]) -> void:
+	"""Add sanity damage preview showing when next sanity drain will occur.
+
+	Shows:
+	- "🧠 Sanity Drain → -X NOW" when damage happens this turn
+	- "🧠 Sanity Drain -X in N turns" as warning
+	"""
+	if not player or not player.grid:
+		return
+
+	# Calculate sanity damage info
+	var damage_info = _SanityDamageAction.calculate_sanity_damage(player, player.grid)
+
+	# Only show if damage is coming within 4 turns (turns_until uses 1-indexed: 1=next turn, 4=in 4 turns)
+	if damage_info["turns_until"] > 4:
+		return
+
+	var sanity_action = _SanityDamageAction.new(
+		damage_info["damage"],
+		damage_info["turns_until"],
+		damage_info["enemy_count"],
+		damage_info["weighted_count"],
+		damage_info["corruption"]
+	)
+	actions.append(sanity_action)
 
 # All target handling now unified - no special cases for grid tiles vs entities

@@ -348,10 +348,10 @@ func _draw_discovered_items(player_pos: Vector2i) -> void:
 	if not grid or not grid.item_renderer:
 		return
 
-	# Get perception range: base 10 tiles + 3 per PERCEPTION stat
-	var perception_range: float = 10.0
+	# Get perception range: base 15 tiles + 5 per PERCEPTION stat
+	var perception_range: float = 15.0
 	if player and player.stats:
-		perception_range = 10.0 + (player.stats.perception * 3.0)
+		perception_range = 15.0 + (player.stats.perception * 5.0)
 
 	# Get all discovered item positions from ItemRenderer
 	var discovered_items = grid.item_renderer.get_discovered_item_positions()
@@ -377,10 +377,10 @@ func _draw_entities(player_pos: Vector2i) -> void:
 	if not grid or not grid.entity_renderer:
 		return
 
-	# Get perception range: base 10 tiles + 3 per PERCEPTION stat
-	var perception_range: float = 10.0
+	# Get perception range: base 15 tiles + 5 per PERCEPTION stat
+	var perception_range: float = 15.0
 	if player and player.stats:
-		perception_range = 10.0 + (player.stats.perception * 3.0)
+		perception_range = 15.0 + (player.stats.perception * 5.0)
 
 	# Get all entity positions from renderer
 	var entity_positions = grid.entity_renderer.get_all_entity_positions()

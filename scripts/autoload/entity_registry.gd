@@ -10,6 +10,21 @@ extends Node
 ##   var info = EntityRegistry.get_info("skin_stealer", clearance)
 
 # ============================================================================
+# THREAT LEVEL CONSTANTS
+# ============================================================================
+
+## Threat level weights for sanity calculations and kill rewards
+## Higher threat enemies cause more sanity pressure / grant more sanity on kill
+const THREAT_WEIGHTS: Dictionary = {
+	0: 0,   # Gimel (environment) - no impact
+	1: 1,   # Daleth (weak)
+	2: 3,   # Epsilon (moderate)
+	3: 5,   # Keter (dangerous)
+	4: 13,  # Aleph (elite)
+	5: 25,  # Boss/Apex
+}
+
+# ============================================================================
 # ENTITY REGISTRY
 # ============================================================================
 
@@ -100,6 +115,36 @@ func _load_entities() -> void:
 	bacteria_motherload.object_class = "Keter"
 	bacteria_motherload.threat_level = 3  # Dangerous (Yellow) - rare early, common later
 	_entities["bacteria_motherload"] = bacteria_motherload
+
+	# Smiler (Level 0 psychological horror enemy)
+	# threat_level 2 (Epsilon) but contributes EXTRA sanity damage
+	var smiler = EntityInfo.new()
+	smiler.entity_id = "smiler"
+	smiler.entity_name = "Smiler"
+	smiler.visual_description = "Two glowing eyes and a wide, toothy grin float in the darkness. The smile never wavers. It watches."
+	smiler.clearance_info[0] = ""  # No additional info at clearance 0
+	smiler.clearance_info[1] = "Appears in darker areas. Does not attack directly but its presence erodes sanity rapidly."
+	smiler.clearance_info[2] = "VULNERABLE TO SOUND. Loud noises cause it to disperse instantly. The Whistle is particularly effective."
+	smiler.clearance_info[3] = "Maintains distance from prey. Teleports short distances every few turns. Looking directly at it accelerates sanity loss."
+	smiler.clearance_info[4] = "--- FIELD DATA ---\nDamage: None (psychological only)\nSpeed: 5 tiles every 4th turn\nWeakness: Sound-based attacks (instant kill)\nSense range: 20 tiles\nPreferred distance: ~5 tiles"
+	smiler.object_class = "Euclid"
+	smiler.threat_level = 2  # Epsilon (moderate) - but extra sanity contribution
+	_entities["smiler"] = smiler
+
+	# Bacteria Spreader (Level 0 support enemy)
+	# threat_level 2 (Epsilon) matches level_00_config.gd entity_spawn_table
+	var bacteria_spreader = EntityInfo.new()
+	bacteria_spreader.entity_id = "bacteria_spreader"
+	bacteria_spreader.entity_name = "Bacteria Spreader"
+	bacteria_spreader.visual_description = "A dark green bulbous mass with tendrils extending outward. A cloud of golden-green spores drifts lazily around it, occasionally settling on nearby surfaces."
+	bacteria_spreader.clearance_info[0] = ""  # No additional info at clearance 0
+	bacteria_spreader.clearance_info[1] = "The spore cloud appears to have a restorative effect on nearby bacterial organisms."
+	bacteria_spreader.clearance_info[2] = "SUPPORT ENTITY. Heals nearby bacteria each turn. Eliminating spreaders should be a priority to prevent swarm regeneration."
+	bacteria_spreader.clearance_info[3] = "Attacks in a burst pattern, damaging anything within close proximity. The healing aura scales with the entity's overall power."
+	bacteria_spreader.clearance_info[4] = "--- FIELD DATA ---\nDamage: 3 HP (AOE burst)\nSpeed: 1 move per turn\nHealing: [DAMAGE]% max HP to nearby bacteria (scales with corruption)\nHeal range: 3 tiles\nSense range: 40 tiles"
+	bacteria_spreader.object_class = "Euclid"
+	bacteria_spreader.threat_level = 2  # Epsilon (moderate) - support role
+	_entities["bacteria_spreader"] = bacteria_spreader
 
 	# Debug Enemy (testing entity)
 	var debug_enemy = EntityInfo.new()

@@ -242,6 +242,12 @@ func _process_generation_queue() -> void:
 			if has_all_chunks or (generation_thread and generation_thread.get_pending_count() == 0):
 				initial_load_complete = true
 				initial_load_completed.emit()
+				Log.system("Initial load complete - %d chunks loaded" % loaded_chunks.size())
+
+				# DEBUG: Spawn test entity near player after initial load
+				if Utilities.DEBUG_SPAWN_ENTITY != "":
+					Log.system("DEBUG: Attempting to spawn %s near player" % Utilities.DEBUG_SPAWN_ENTITY)
+					_spawn_debug_entity_near_player(Utilities.DEBUG_SPAWN_ENTITY)
 
 		return
 
@@ -329,12 +335,25 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 	var level_config: LevelConfig = level_configs.get(level_id, null)
 
 	if level_config and item_spawner and not level_config.permitted_items.is_empty():
-		var spawned_items = item_spawner.spawn_items_for_chunk(
-			chunk,
-			0,  # Turn number (will be updated later with actual turn tracking)
-			level_config.permitted_items
-		)
+		var spawned_items: Array[WorldItem] = []
 
+		# DEBUG MODE: Spawn one of each item in the first chunk (player spawn chunk at 0,0)
+		var is_first_chunk := chunk_pos == Vector2i(0, 0)
+		if Utilities.DEBUG_SPAWN_ALL_ITEMS and is_first_chunk:
+			spawned_items = item_spawner.spawn_all_items_for_debug(
+				chunk,
+				0,
+				level_config.permitted_items
+			)
+		else:
+			# Normal spawning (with player for spawn rate bonuses)
+			var player = _find_player()
+			spawned_items = item_spawner.spawn_items_for_chunk(
+				chunk,
+				0,  # Turn number (will be updated later with actual turn tracking)
+				level_config.permitted_items,
+				player
+			)
 
 		# Store spawned items in subchunks for persistence
 		for world_item in spawned_items:
@@ -407,9 +426,10 @@ const BASE_ENTITIES_PER_CHUNK = 3
 
 ## Additional entities per corruption point (unbounded scaling)
 ## Corruption is now an unbounded value (0.0, 0.01, 0.02, ..., 1.0, 2.0, ...)
-## At corruption 1.0: 3 + 2 = 5 per chunk
-## At corruption 5.0: 3 + 10 = 13 per chunk
-const ENTITIES_PER_CORRUPTION = 2
+## At corruption 0.5: 3 + 7 = 10 per chunk (swarm feels imminent)
+## At corruption 1.0: 3 + 14 = 17 per chunk (overwhelming)
+## At corruption 2.0: 3 + 28 = 31 per chunk (absolute chaos)
+const ENTITIES_PER_CORRUPTION = 14
 
 func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 	"""Spawn entities in chunk based on level config and corruption.
@@ -435,7 +455,8 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 	var corruption = get_corruption(chunk_key.z)
 
 	# Calculate entity count based on corruption
-	var entity_count = BASE_ENTITIES_PER_CHUNK + int(corruption * ENTITIES_PER_CORRUPTION)
+	# Using roundi() for smoother scaling (no truncation plateaus)
+	var entity_count = BASE_ENTITIES_PER_CHUNK + roundi(corruption * ENTITIES_PER_CORRUPTION)
 
 	var chunk_world_pos = chunk.position * CHUNK_SIZE
 	var spawned_count = 0
@@ -459,10 +480,19 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 		if entity_entry.is_empty():
 			continue
 
-		# Calculate HP with corruption scaling
+		# Calculate HP and damage with corruption scaling
+		# Scale factors are applied per 0.05 corruption ("corruption steps")
+		# Example: corruption=0.5 → 10 steps, hp_scale=0.1 → +100% HP
+		# Formula: final = base * (1 + corruption_steps * scale)
+		var corruption_steps = corruption / 0.05
+
 		var base_hp = entity_entry.get("base_hp", 50.0)
 		var hp_scale = entity_entry.get("hp_scale", 0.0)
-		var final_hp = base_hp * (1.0 + corruption * hp_scale)
+		var final_hp = base_hp * (1.0 + corruption_steps * hp_scale)
+
+		var base_damage = entity_entry.get("base_damage", 5.0)
+		var damage_scale = entity_entry.get("damage_scale", 0.0)
+		var final_damage = base_damage * (1.0 + corruption_steps * damage_scale)
 
 		# Create WorldEntity
 		var entity = WorldEntity.new(
@@ -471,6 +501,7 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 			final_hp,
 			0  # spawn_turn
 		)
+		entity.attack_damage = final_damage
 
 		# Find subchunk and add entity
 		var local_pos = spawn_pos - chunk_world_pos
@@ -485,6 +516,56 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 		Log.msg(Log.Category.ENTITY, Log.Level.INFO, "Spawned %d entities in chunk %s (corruption: %.2f)" % [
 			spawned_count, chunk.position, corruption
 		])
+
+
+func _spawn_debug_entity_near_player(entity_type: String) -> void:
+	"""Spawn a debug entity near the player (called after initial load).
+
+	Args:
+		entity_type: Entity type string to spawn
+	"""
+	# Get player position
+	var player_pos := _get_player_position()
+
+	# Find a walkable tile 3 tiles away from player
+	var spawn_pos := INVALID_POSITION
+	for offset in [Vector2i(3, 0), Vector2i(-3, 0), Vector2i(0, 3), Vector2i(0, -3),
+				   Vector2i(2, 2), Vector2i(-2, 2), Vector2i(2, -2), Vector2i(-2, -2)]:
+		var test_pos = player_pos + offset
+		if grid_3d and grid_3d.is_walkable(test_pos):
+			spawn_pos = test_pos
+			break
+
+	if spawn_pos == INVALID_POSITION:
+		Log.system("DEBUG: Could not find walkable tile near player for debug entity")
+		return
+
+	# Create entity with default stats
+	var entity = WorldEntity.new(
+		entity_type,
+		spawn_pos,
+		100.0,  # Default HP (doesn't matter for smiler)
+		0  # spawn_turn
+	)
+
+	# Find the correct chunk for this position
+	var target_chunk = get_chunk_at_tile(spawn_pos, 0)
+	if not target_chunk:
+		Log.system("DEBUG: No chunk loaded at %s for debug entity" % spawn_pos)
+		return
+
+	# Find subchunk and add entity
+	var chunk_world_pos = target_chunk.position * CHUNK_SIZE
+	var local_pos = spawn_pos - chunk_world_pos
+	var subchunk_x = local_pos.x / SubChunk.SIZE
+	var subchunk_y = local_pos.y / SubChunk.SIZE
+	var subchunk = target_chunk.get_sub_chunk(Vector2i(subchunk_x, subchunk_y))
+	if subchunk:
+		subchunk.add_world_entity(entity)
+		# Also render the entity immediately (entity renderer needs to know about it)
+		if grid_3d and grid_3d.entity_renderer:
+			grid_3d.entity_renderer.add_entity_billboard(entity)
+		Log.system("DEBUG: Spawned %s at %s for testing" % [entity_type, spawn_pos])
 
 func _get_valid_entities_for_corruption(spawn_table: Array, corruption: float) -> Array:
 	"""Filter spawn table to entities valid at current corruption level."""

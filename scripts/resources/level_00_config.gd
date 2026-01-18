@@ -85,17 +85,27 @@ entity density: very low"""
 	# Entity spawn table - uses entity_type strings (WorldEntity pattern)
 	# weight: spawn probability (higher = more common)
 	# base_hp: HP at 0 corruption
-	# hp_scale: HP multiplier per corruption point (corruption is unbounded: 0.0, 0.5, 1.0, 2.0, ...)
+	# hp_scale: HP multiplier per 0.05 corruption (e.g., 0.1 = +10% HP per 0.05 corruption)
+	# base_damage: damage dealt per attack at 0 corruption
+	# damage_scale: damage multiplier per 0.05 corruption (e.g., 0.05 = +5% damage per 0.05 corruption)
 	# threat_level: entity difficulty tier (1=weak, 2=moderate, 3=dangerous, 4=elite, 5=boss)
 	#   Higher threat entities become MORE common as corruption rises
 	#   Lower threat entities become LESS common as corruption rises
 	# corruption_threshold: minimum corruption to spawn (0.0 = always)
+	#
+	# SCALING FORMULA (per 0.05 corruption):
+	#   final_hp = base_hp * (1 + (corruption / 0.05) * hp_scale)
+	#   final_damage = base_damage * (1 + (corruption / 0.05) * damage_scale)
+	# Example at corruption 0.25 (5 steps of 0.05):
+	#   bacteria_spawn: HP = 100 * (1 + 5 * 0.1) = 150 HP, Damage = 3 * (1 + 5 * 0.05) = 3.75
 	entity_spawn_table = [
 		{
 			"entity_type": "bacteria_spawn",
 			"weight": 10.0,
 			"base_hp": 100.0,
-			"hp_scale": 0.5,  # +50% HP per corruption point
+			"hp_scale": 0.1,  # +10% HP per 0.05 corruption
+			"base_damage": 3.0,
+			"damage_scale": 0.05,  # +5% damage per 0.05 corruption
 			"threat_level": 1,  # Weak - common early, less common later
 			"corruption_threshold": 0.0,
 		},
@@ -103,8 +113,30 @@ entity density: very low"""
 			"entity_type": "bacteria_motherload",
 			"weight": 0.5,  # Rare but possible from the start
 			"base_hp": 1000.0,
-			"hp_scale": 1.0,  # +100% HP per corruption point
+			"hp_scale": 0.15,  # +15% HP per 0.05 corruption
+			"base_damage": 10.0,
+			"damage_scale": 0.1,  # +10% damage per 0.05 corruption
 			"threat_level": 3,  # Dangerous - rare early, more common later
+			"corruption_threshold": 0.0,  # Can spawn at any corruption
+		},
+		{
+			"entity_type": "smiler",
+			"weight": 1.0,  # Uncommon - psychological horror
+			"base_hp": 1.0,  # Dies instantly to sound, HP doesn't matter
+			"hp_scale": 0.0,  # No HP scaling (sound = instant kill)
+			"base_damage": 0.0,  # No direct damage (sanity drain only)
+			"damage_scale": 0.0,  # No damage scaling
+			"threat_level": 2,  # Epsilon - moderate threat (but extra sanity drain)
+			"corruption_threshold": 0.0,  # Can spawn at any corruption
+		},
+		{
+			"entity_type": "bacteria_spreader",
+			"weight": 2.0,  # Uncommon support enemy
+			"base_hp": 300.0,  # Tanky support
+			"hp_scale": 0.1,  # +10% HP per 0.05 corruption
+			"base_damage": 3.0,  # AOE attack damage
+			"damage_scale": 0.05,  # +5% damage per 0.05 corruption (also scales healing!)
+			"threat_level": 2,  # Epsilon - moderate threat
 			"corruption_threshold": 0.0,  # Can spawn at any corruption
 		},
 	]
@@ -125,6 +157,19 @@ entity density: very low"""
 
 	# Permitted items for Level 0 (rarity-based spawning)
 	add_permitted_item(DebugItem.new())  # UNCOMMON rarity (2% spawn chance)
+	add_permitted_item(BrassKnuckles.new())  # COMMON rarity
+	add_permitted_item(BaseballBat.new())  # COMMON rarity
+	add_permitted_item(WheatieOs.new())  # COMMON rarity
+	add_permitted_item(TrailMix.new())  # RARE rarity
+	add_permitted_item(Binoculars.new())  # UNCOMMON rarity
+	add_permitted_item(CoachsWhistle.new())  # UNCOMMON rarity
+	add_permitted_item(LuckyRabbitsFoot.new())  # UNCOMMON rarity
+	add_permitted_item(RomanCoin.new())  # COMMON rarity
+	add_permitted_item(AntigonousNotebook.new())  # LEGENDARY rarity
+	add_permitted_item(SirensCords.new())  # EPIC rarity
+	add_permitted_item(Shovel.new())  # UNCOMMON rarity
+	add_permitted_item(DrinkingBird.new())  # COMMON rarity
+	add_permitted_item(AlmondWater.new())  # RARE rarity
 
 	# ========================================================================
 	# EXIT CONFIGURATION

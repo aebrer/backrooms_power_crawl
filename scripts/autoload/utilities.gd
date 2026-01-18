@@ -5,6 +5,18 @@ extends Node
 ## Autoloaded as "Utilities" for global access.
 
 # ============================================================================
+# DEBUG FLAGS
+# ============================================================================
+
+## WARNING: Set to true to enable debug item spawning (one of each item in first chunk)
+## This should be FALSE for release builds!
+const DEBUG_SPAWN_ALL_ITEMS := false
+
+## WARNING: Set to an entity_type string to spawn that entity next to the player for testing
+## Set to "" (empty string) to disable. This should be "" for release builds!
+const DEBUG_SPAWN_ENTITY := ""
+
+# ============================================================================
 # MATH UTILITIES
 # ============================================================================
 

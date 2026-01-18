@@ -30,6 +30,8 @@ var cooldown: int = 1
 var area: int = 0  # _AttackTypes.Area.SINGLE (set in _init)
 var mana_cost: float = 0.0
 var special_effects: Array = []
+var extra_attacks: int = 0  # Additional attacks per turn (from items like brass knuckles)
+var tags: Array[String] = []  # Attack tags for item interactions (e.g., "sound", "physical")
 
 # ============================================================================
 # INITIALIZATION
@@ -51,6 +53,7 @@ func _init(type: int) -> void:
 	cooldown = _AttackTypes.BASE_COOLDOWN[type]
 	area = _AttackTypes.BASE_AREA[type]
 	mana_cost = _AttackTypes.BASE_MANA_COST[type]
+	tags.assign(_AttackTypes.BASE_ATTACK_TAGS[type])  # Copy to avoid shared reference
 
 # ============================================================================
 # COST CHECKS
@@ -92,11 +95,12 @@ func pay_cost(player_stats) -> bool:
 
 func _to_string() -> String:
 	var type_name = _AttackTypes.TYPE_NAMES.get(attack_type, "UNKNOWN")
-	return "PoolAttack(%s, dmg=%.1f, range=%.1f, cd=%d, area=%d, mana=%.1f)" % [
+	return "PoolAttack(%s, dmg=%.1f, range=%.1f, cd=%d, area=%d, mana=%.1f, extra=%d)" % [
 		type_name,
 		damage,
 		range_tiles,
 		cooldown,
 		area,
-		mana_cost
+		mana_cost,
+		extra_attacks
 	]

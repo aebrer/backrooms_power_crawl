@@ -52,6 +52,7 @@ func execute_turn(player) -> void:
 	"""Execute all ready attacks for this turn.
 
 	Called during turn execution, after player action but before item on_turn().
+	Items can grant extra_attacks to make pools attack multiple times per turn.
 
 	Args:
 		player: Player3D reference (untyped to avoid circular dependency)
@@ -62,22 +63,42 @@ func execute_turn(player) -> void:
 			_cooldowns[type] -= 1
 
 	# Execute BODY attack (always available - base punch)
-	if _cooldowns[_AttackTypes.Type.BODY] <= 0:
-		var attack = _build_attack(player, player.body_pool, _AttackTypes.Type.BODY)
-		if attack and _execute_attack(player, attack):
-			_cooldowns[_AttackTypes.Type.BODY] = attack.cooldown
+	_execute_pool_attacks(player, player.body_pool, _AttackTypes.Type.BODY)
 
 	# Execute MIND attack (always available - base whistle)
-	if _cooldowns[_AttackTypes.Type.MIND] <= 0:
-		var attack = _build_attack(player, player.mind_pool, _AttackTypes.Type.MIND)
-		if attack and _execute_attack(player, attack):
-			_cooldowns[_AttackTypes.Type.MIND] = attack.cooldown
+	_execute_pool_attacks(player, player.mind_pool, _AttackTypes.Type.MIND)
 
 	# Execute NULL attack (only if player has mana)
-	if _cooldowns[_AttackTypes.Type.NULL] <= 0:
-		var attack = _build_attack(player, player.null_pool, _AttackTypes.Type.NULL)
-		if attack and _execute_attack(player, attack):
-			_cooldowns[_AttackTypes.Type.NULL] = attack.cooldown
+	_execute_pool_attacks(player, player.null_pool, _AttackTypes.Type.NULL)
+
+
+func _execute_pool_attacks(player, pool, attack_type: int) -> void:
+	"""Execute all attacks for a pool, including extra attacks from items.
+
+	Args:
+		player: Player3D reference
+		pool: ItemPool for this attack type
+		attack_type: AttackTypes.Type enum
+	"""
+	if _cooldowns[attack_type] > 0:
+		return
+
+	var attack = _build_attack(player, pool, attack_type)
+	if not attack:
+		return
+
+	# Calculate total attacks: 1 base + extra_attacks from items
+	var total_attacks = 1 + attack.extra_attacks
+
+	# Execute each attack
+	var any_hit = false
+	for i in range(total_attacks):
+		if _execute_attack(player, attack):
+			any_hit = true
+
+	# Reset cooldown if any attack connected
+	if any_hit:
+		_cooldowns[attack_type] = attack.cooldown
 
 # ============================================================================
 # ATTACK BUILDING
@@ -111,8 +132,14 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	var damage_multiply: float = 1.0
 	var range_add: float = 0.0
 	var cooldown_add: int = 0
+	var cooldown_multiply: float = 1.0  # Collected from ALL pools (for global cooldown reduction)
 	var mana_cost_multiply: float = 1.0
+	var extra_attacks: int = 0
+	var tag_damage_multipliers: Dictionary = {}  # tag -> multiplier (collected from ALL pools!)
+	var tags_to_add: Array[String] = []
+	var tags_to_remove: Array[String] = []
 
+	# First pass: collect pool-specific modifiers from this attack's pool only
 	if pool:
 		for i in range(pool.max_slots):
 			var item = pool.items[i]
@@ -126,6 +153,21 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 				range_add += mods.get("range_add", 0.0)
 				cooldown_add += mods.get("cooldown_add", 0)
 				mana_cost_multiply *= mods.get("mana_cost_multiply", 1.0)
+				extra_attacks += mods.get("extra_attacks", 0)
+
+				# Tag manipulation: add tags to attack (e.g., "Siren's Lungs" adds "sound")
+				if mods.has("add_tags"):
+					for tag in mods["add_tags"]:
+						if tag not in tags_to_add:
+							tags_to_add.append(tag)
+
+				# Tag manipulation: remove tags from attack (for transformative items)
+				if mods.has("remove_tags"):
+					for tag in mods["remove_tags"]:
+						if tag not in tags_to_remove:
+							tags_to_remove.append(tag)
+
+				# NOTE: tag_damage_multiply is collected from ALL pools in second pass below
 
 				# Attack name override (last one wins - most recently equipped item names the attack)
 				if mods.has("attack_name"):
@@ -143,11 +185,51 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 				if mods.has("special_effects"):
 					attack.special_effects.append_array(mods["special_effects"])
 
+	# Apply tag modifications (remove first, then add)
+	for tag in tags_to_remove:
+		attack.tags.erase(tag)
+	for tag in tags_to_add:
+		if tag not in attack.tags:
+			attack.tags.append(tag)
+
+	# Second pass: collect cross-pool modifiers from ALL pools
+	# - tag_damage_multiply: enables Coach's Whistle (MIND) boosting Siren's Cords (BODY)
+	# - cooldown_multiply: enables Drinking Bird (MIND) reducing all pool cooldowns
+	if player:
+		var all_pools = [player.body_pool, player.mind_pool, player.null_pool]
+		for p in all_pools:
+			if not p:
+				continue
+			for i in range(p.max_slots):
+				var item = p.items[i]
+				var is_enabled = p.enabled[i]
+				if item and is_enabled:
+					# Tag-based damage multipliers from attack modifiers
+					var attack_mods = item.get_attack_modifiers()
+					if attack_mods.has("tag_damage_multiply"):
+						var tag_mults = attack_mods["tag_damage_multiply"]
+						for tag in tag_mults:
+							if tag_damage_multipliers.has(tag):
+								tag_damage_multipliers[tag] *= tag_mults[tag]
+							else:
+								tag_damage_multipliers[tag] = tag_mults[tag]
+					# Global cooldown reduction from PASSIVE modifiers (stacks multiplicatively)
+					var passive_mods = item.get_passive_modifiers()
+					cooldown_multiply *= passive_mods.get("cooldown_multiply", 1.0)
+
 	# Apply modifiers to base stats
 	attack.damage = (attack.damage + damage_add) * damage_multiply
+
+	# Apply tag-based damage multipliers (after tag modifications!)
+	for tag in attack.tags:
+		if tag_damage_multipliers.has(tag):
+			attack.damage *= tag_damage_multipliers[tag]
 	attack.range_tiles = attack.range_tiles + range_add
-	attack.cooldown = maxi(1, attack.cooldown + cooldown_add)  # Minimum 1 turn
+	# Cooldown: add flat modifier first, then multiply, then round (min 1 turn)
+	var modified_cooldown = float(attack.cooldown + cooldown_add) * cooldown_multiply
+	attack.cooldown = maxi(1, roundi(modified_cooldown))
 	attack.mana_cost = attack.mana_cost * mana_cost_multiply
+	attack.extra_attacks = extra_attacks  # Additional attacks per turn
 
 	# Apply stat scaling (STRENGTH/PERCEPTION/ANOMALY)
 	if player and player.stats:
@@ -206,8 +288,9 @@ func _execute_attack(player, attack) -> bool:
 	for target_pos in targets:
 		var entity = player.grid.get_entity_at(target_pos)
 		if entity and entity.is_alive():
-			# Apply damage to WorldEntity (emits signals for health bar / death VFX)
-			entity.take_damage(attack.damage)
+			# Apply damage to WorldEntity with attack tags (for immunities/vulnerabilities)
+			# Tags like "sound" trigger instant kill on Smiler, "physical" is blocked, etc.
+			entity.take_damage(attack.damage, attack.tags)
 
 			# Spawn hit VFX via renderer (render-only)
 			player.grid.entity_renderer.spawn_hit_vfx(target_pos, attack.attack_emoji, attack.damage)
@@ -267,6 +350,10 @@ func _find_targets(player, attack) -> Array[Vector2i]:
 		_AttackTypes.Area.CONE:
 			# Return enemies in a cone in player's facing direction
 			return _filter_cone_targets(player, candidates)
+
+		_AttackTypes.Area.SWEEP:
+			# Target nearest + perpendicular neighbors (shovel swing)
+			return _filter_sweep_targets(player.grid_position, candidates)
 
 		_:
 			# Default: nearest
@@ -328,6 +415,10 @@ func _find_targets_from_position(player, attack, from_pos: Vector2i) -> Array[Ve
 			# Return enemies in a cone aimed at nearest enemy
 			return _filter_cone_targets_from_position(candidates, from_pos)
 
+		_AttackTypes.Area.SWEEP:
+			# Target nearest + perpendicular neighbors (shovel swing)
+			return _filter_sweep_targets(from_pos, candidates)
+
 		_:
 			# Default: nearest
 			candidates.sort_custom(func(a, b):
@@ -386,6 +477,74 @@ func _filter_cone_targets_from_position(candidates: Array[Vector2i], from_pos: V
 			in_cone.append(pos)
 
 	return in_cone
+
+
+func _filter_sweep_targets(from_pos: Vector2i, candidates: Array[Vector2i]) -> Array[Vector2i]:
+	"""Filter candidates to those hit by a sweeping attack (target + perpendicular neighbors).
+
+	The shovel swing pattern:
+	1. Find the nearest enemy (primary target)
+	2. Calculate the direction from player to target
+	3. Include any enemies on the two tiles perpendicular to that direction
+
+	Example: If player is at (0,0) and target is at (1,0) (east):
+	- Primary target: (1,0)
+	- Perpendicular tiles: (1,-1) and (1,1) (north and south of target)
+
+	Args:
+		from_pos: Player position
+		candidates: Array of potential target positions (already filtered by range/LOS)
+
+	Returns:
+		Array of positions hit by the sweep (primary + perpendicular neighbors)
+	"""
+	if candidates.is_empty():
+		return []
+
+	# Find nearest enemy (primary target)
+	var nearest_pos = candidates[0]
+	var nearest_dist = from_pos.distance_to(nearest_pos)
+	for pos in candidates:
+		var dist = from_pos.distance_to(pos)
+		if dist < nearest_dist:
+			nearest_dist = dist
+			nearest_pos = pos
+
+	# Calculate direction from player to target
+	var delta = nearest_pos - from_pos
+	if delta == Vector2i.ZERO:
+		return [nearest_pos]  # Edge case: on same tile
+
+	# Perpendicular directions: rotate 90 degrees
+	# If delta is (dx, dy), perpendicular is (-dy, dx) and (dy, -dx)
+	var perp1 = Vector2i(-delta.y, delta.x)
+	var perp2 = Vector2i(delta.y, -delta.x)
+
+	# Normalize to unit length (for adjacent tile check)
+	if perp1.x != 0:
+		perp1.x = perp1.x / abs(perp1.x)
+	if perp1.y != 0:
+		perp1.y = perp1.y / abs(perp1.y)
+	if perp2.x != 0:
+		perp2.x = perp2.x / abs(perp2.x)
+	if perp2.y != 0:
+		perp2.y = perp2.y / abs(perp2.y)
+
+	# Perpendicular tile positions (adjacent to target, not player)
+	var sweep_pos1 = nearest_pos + perp1
+	var sweep_pos2 = nearest_pos + perp2
+
+	# Collect all positions that are hit
+	var hit_positions: Array[Vector2i] = [nearest_pos]
+
+	# Check if any candidates are on the perpendicular tiles
+	for pos in candidates:
+		if pos == nearest_pos:
+			continue
+		if pos == sweep_pos1 or pos == sweep_pos2:
+			hit_positions.append(pos)
+
+	return hit_positions
 
 
 func _filter_by_line_of_sight(grid, from_pos: Vector2i, candidates: Array[Vector2i]) -> Array[Vector2i]:
@@ -468,6 +627,7 @@ func get_attack_preview(player, attack_type: int, from_position: Vector2i = Vect
 		"mana_cost": attack.mana_cost if attack else 0,
 		"current_mana": current_mana,
 		"mana_after_regen": mana_after_regen,
+		"extra_attacks": attack.extra_attacks if attack else 0,
 	}
 
 func _get_pool_for_type(player, attack_type: int) -> ItemPool:
@@ -480,6 +640,30 @@ func _get_pool_for_type(player, attack_type: int) -> ItemPool:
 		_AttackTypes.Type.NULL:
 			return player.null_pool
 	return null
+
+# ============================================================================
+# PUBLIC COOLDOWN ACCESS
+# ============================================================================
+
+func get_cooldown(attack_type: int) -> int:
+	"""Get current cooldown for an attack type.
+
+	Args:
+		attack_type: AttackTypes.Type enum value
+
+	Returns:
+		Remaining cooldown turns (0 = ready)
+	"""
+	return _cooldowns.get(attack_type, 0)
+
+func reset_cooldown(attack_type: int) -> void:
+	"""Reset cooldown for an attack type to 0.
+
+	Args:
+		attack_type: AttackTypes.Type enum value
+	"""
+	if _cooldowns.has(attack_type):
+		_cooldowns[attack_type] = 0
 
 # ============================================================================
 # DEBUG

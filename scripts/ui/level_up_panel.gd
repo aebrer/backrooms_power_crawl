@@ -190,20 +190,31 @@ func _show_level_up_immediate(player: Player3D, level: int) -> void:
 	# Select 3 random perks
 	available_perks = _select_random_perks(3)
 
-	# Rebuild content
+	# Rebuild content (uses queue_free on old children)
 	_rebuild_content()
 
 	# Update panel position
 	_update_panel_position()
 
-	# Show panel and pause game
+	# Show panel IMMEDIATELY (before any awaits) so subsequent level-ups queue properly
 	visible = true
 	_accepting_input = false
 
+	# Wait for queue_free'd children to actually be removed before final sizing
 	await get_tree().process_frame
 
+	# Re-update position now that old content is truly gone
+	_update_panel_position()
+
+	await get_tree().process_frame
+
+	# Pause game (or stay paused for queued level-ups)
 	if PauseManager:
-		PauseManager.toggle_pause()
+		var was_already_paused = PauseManager.is_paused
+		PauseManager.set_pause(true)
+		# If already paused, set_pause won't emit signal, so manually trigger UI setup
+		if was_already_paused:
+			_on_pause_toggled(true)
 
 # ============================================================================
 # INTERNAL
@@ -444,7 +455,7 @@ func _close_panel() -> void:
 
 	# No more queued level-ups, unpause game
 	if PauseManager:
-		PauseManager.toggle_pause()
+		PauseManager.set_pause(false)
 
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Update button focus when pause state changes"""

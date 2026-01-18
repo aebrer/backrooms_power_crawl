@@ -54,7 +54,8 @@ func _init(p_corruption_tracker: CorruptionTracker, p_level_config) -> void:
 func spawn_items_for_chunk(
 	chunk,  # Chunk instance
 	turn_number: int,
-	available_items: Array[Item]
+	available_items: Array[Item],
+	player = null  # Optional: Player3D reference for item spawn rate bonuses
 ) -> Array[WorldItem]:
 	"""Spawn items in a chunk based on rarity and corruption
 
@@ -65,6 +66,7 @@ func spawn_items_for_chunk(
 		chunk: Chunk to spawn items in
 		turn_number: Current turn number
 		available_items: All items that could spawn (filtered by level allowlist)
+		player: Optional player reference for spawn rate bonuses from equipped items
 
 	Returns:
 		Array of WorldItem instances that were spawned
@@ -73,6 +75,9 @@ func spawn_items_for_chunk(
 
 	# Get current corruption level for this chunk's level
 	var corruption = corruption_tracker.get_corruption(chunk.level_id)
+
+	# Get item spawn rate bonus from player's equipped items
+	var spawn_rate_bonus = _get_player_spawn_rate_bonus(player)
 
 	# Roll for each rarity tier (highest to lowest)
 	var rarity_order = [
@@ -99,6 +104,9 @@ func spawn_items_for_chunk(
 			corruption_mult,
 			corruption
 		)
+
+		# Apply item spawn rate bonus from equipped items (additive)
+		final_prob = final_prob + spawn_rate_bonus
 
 		# Roll for spawn
 		if randf() < final_prob:
@@ -143,9 +151,13 @@ func _find_spawn_location(chunk, item: Item) -> Vector2i:
 		if not subchunk:
 			continue
 
+		# Skip empty tile data
+		if subchunk.tile_data.is_empty() or subchunk.tile_data[0].is_empty():
+			continue
+
 		# Pick random tile in subchunk
-		var local_x = randi() % subchunk.tile_data.size()
-		var local_y = randi() % subchunk.tile_data[0].size()
+		var local_y = randi() % subchunk.tile_data.size()
+		var local_x = randi() % subchunk.tile_data[0].size()
 
 		# Check if 3x3 area is clear (centered on this tile)
 		var center_world_pos = subchunk.world_position + Vector2i(local_x, local_y)
@@ -155,16 +167,17 @@ func _find_spawn_location(chunk, item: Item) -> Vector2i:
 	# Failed to find valid location
 	return Vector2i(-1, -1)
 
-func _is_area_clear(chunk, center: Vector2i, size: int) -> bool:
-	"""Check if NxN area around center is clear (non-wall)
+func _is_area_clear(chunk, center: Vector2i, size: int, occupied_positions: Array[Vector2i] = []) -> bool:
+	"""Check if NxN area around center is clear (non-wall, no items)
 
 	Args:
 		chunk: Chunk to check
 		center: Center tile position
 		size: Area size (e.g., 3 for 3x3)
+		occupied_positions: Additional positions to treat as occupied (for batch spawning)
 
 	Returns:
-		true if all tiles in area are non-wall
+		true if all tiles in area are non-wall and no items present
 	"""
 	var half = size / 2
 
@@ -178,6 +191,20 @@ func _is_area_clear(chunk, center: Vector2i, size: int) -> bool:
 			# Wall tiles have IDs >= 1 (0 = floor)
 			if tile == null or tile >= 1:
 				return false
+
+	# Check for existing items in chunk's subchunks
+	for subchunk in chunk.sub_chunks:
+		for item_data in subchunk.world_items:
+			var pos_data = item_data.get("world_position", {})
+			var item_pos = Vector2i(pos_data.get("x", 0), pos_data.get("y", 0))
+			# Check if item is within the spawn area
+			if abs(item_pos.x - center.x) <= half and abs(item_pos.y - center.y) <= half:
+				return false
+
+	# Check additional occupied positions (used during batch spawning)
+	for occupied_pos in occupied_positions:
+		if abs(occupied_pos.x - center.x) <= half and abs(occupied_pos.y - center.y) <= half:
+			return false
 
 	return true
 
@@ -196,13 +223,51 @@ func _get_tile_at_world_pos(chunk, world_pos: Vector2i):
 		var local_x = world_pos.x - subchunk.world_position.x
 		var local_y = world_pos.y - subchunk.world_position.y
 
+		# Skip empty tile data
+		if subchunk.tile_data.is_empty():
+			continue
+
 		# Check if position is in this subchunk
 		# CRITICAL: tile_data is stored as [y][x] (row-major), not [x][y]
 		if local_y >= 0 and local_y < subchunk.tile_data.size():
-			if local_x >= 0 and local_x < subchunk.tile_data[0].size():
+			if subchunk.tile_data[local_y].is_empty():
+				continue
+			if local_x >= 0 and local_x < subchunk.tile_data[local_y].size():
 				return subchunk.tile_data[local_y][local_x]
 
 	return null
+
+# ============================================================================
+# PLAYER MODIFIERS
+# ============================================================================
+
+func _get_player_spawn_rate_bonus(player) -> float:
+	"""Calculate total item spawn rate bonus from player's equipped items.
+
+	Args:
+		player: Player3D reference (or null)
+
+	Returns:
+		Total additive spawn rate bonus (e.g., 0.1 = +10% to spawn probability)
+	"""
+	if not player:
+		return 0.0
+
+	var total_bonus: float = 0.0
+	var pools = [player.body_pool, player.mind_pool, player.null_pool]
+
+	for pool in pools:
+		if not pool:
+			continue
+		for i in range(pool.max_slots):
+			var item = pool.items[i]
+			var is_enabled = pool.enabled[i]
+			if item and is_enabled:
+				var mods = item.get_passive_modifiers()
+				total_bonus += mods.get("item_spawn_rate_add", 0.0)
+
+	return total_bonus
+
 
 # ============================================================================
 # UTILITY
@@ -223,3 +288,106 @@ func _filter_by_rarity(items: Array[Item], rarity: ItemRarity.Tier) -> Array[Ite
 		if item.rarity == rarity:
 			filtered.append(item)
 	return filtered
+
+
+# ============================================================================
+# DEBUG SPAWNING
+# ============================================================================
+
+func spawn_all_items_for_debug(
+	chunk,
+	turn_number: int,
+	available_items: Array[Item]
+) -> Array[WorldItem]:
+	"""Spawn one of each item in the chunk (DEBUG MODE ONLY)
+
+	Used when Utilities.DEBUG_SPAWN_ALL_ITEMS is true.
+	Spawns all available items in a grid pattern near chunk center.
+
+	Args:
+		chunk: Chunk to spawn items in
+		turn_number: Current turn number
+		available_items: All items to spawn
+
+	Returns:
+		Array of WorldItem instances that were spawned
+	"""
+	var spawned_items: Array[WorldItem] = []
+
+	if available_items.is_empty():
+		return spawned_items
+
+	Log.system("[DEBUG] Spawning ALL %d items in first chunk" % available_items.size())
+
+	# Find a valid starting position (center-ish of first subchunk)
+	var start_pos = Vector2i(-1, -1)
+	if chunk.sub_chunks.size() > 0:
+		var subchunk = chunk.sub_chunks[0]
+		# Start near the middle of the subchunk
+		var center_x = subchunk.tile_data[0].size() / 2
+		var center_y = subchunk.tile_data.size() / 2
+		start_pos = subchunk.world_position + Vector2i(center_x, center_y)
+
+	if start_pos == Vector2i(-1, -1):
+		Log.system("[DEBUG] Could not find starting position for debug items")
+		return spawned_items
+
+	# Track positions already used during this spawn pass
+	var occupied_positions: Array[Vector2i] = []
+
+	# Spawn items in a grid pattern (spacing of 4 tiles)
+	var spacing = 4
+	var items_per_row = ceili(sqrt(available_items.size()))
+	var item_index = 0
+
+	for item in available_items:
+		var grid_x = item_index % items_per_row
+		var grid_y = item_index / items_per_row
+		var spawn_pos = start_pos + Vector2i(grid_x * spacing, grid_y * spacing)
+
+		# Try to find a valid location near the target (passing already-occupied positions)
+		var valid_pos = _find_nearby_valid_location(chunk, spawn_pos, 20, occupied_positions)
+		if valid_pos != Vector2i(-1, -1):
+			var world_item = WorldItem.new(
+				item.duplicate_item(),
+				valid_pos,
+				item.rarity,
+				turn_number
+			)
+			spawned_items.append(world_item)
+			occupied_positions.append(valid_pos)  # Mark this position as occupied
+			Log.system("[DEBUG] Spawned %s at %s" % [item.item_name, valid_pos])
+		else:
+			Log.system("[DEBUG] Failed to spawn %s - no valid location" % item.item_name)
+
+		item_index += 1
+
+	return spawned_items
+
+
+func _find_nearby_valid_location(chunk, target: Vector2i, max_attempts: int = 20, occupied_positions: Array[Vector2i] = []) -> Vector2i:
+	"""Find a valid spawn location near the target position
+
+	Args:
+		chunk: Chunk to search
+		target: Target position to spawn near
+		max_attempts: Maximum search attempts
+		occupied_positions: Additional positions to treat as occupied (for batch spawning)
+
+	Returns:
+		Valid world position or (-1, -1) if none found
+	"""
+	# First try the exact position
+	if _is_area_clear(chunk, target, DEFAULT_CLEAR_SIZE, occupied_positions):
+		return target
+
+	# Spiral outward from target
+	for attempt in range(1, max_attempts):
+		for dx in range(-attempt, attempt + 1):
+			for dy in range(-attempt, attempt + 1):
+				if abs(dx) == attempt or abs(dy) == attempt:  # Only check perimeter
+					var check_pos = target + Vector2i(dx, dy)
+					if _is_area_clear(chunk, check_pos, DEFAULT_CLEAR_SIZE, occupied_positions):
+						return check_pos
+
+	return Vector2i(-1, -1)

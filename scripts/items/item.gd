@@ -203,9 +203,21 @@ func get_attack_modifiers() -> Dictionary:
 	- damage_multiply: float (damage multiplier, default 1.0)
 	- range_add: float (extra range in tiles)
 	- cooldown_add: int (cooldown modifier, negative = faster attacks)
+	- cooldown_multiply: float (cooldown multiplier, collected from ALL pools, e.g., 0.8 = 20% faster)
+	- extra_attacks: int (additional attacks per turn, e.g., 1 = attack twice)
 	- area: AttackTypes.Area (override attack pattern)
 	- mana_cost_multiply: float (mana cost modifier for NULL, default 1.0)
 	- special_effects: Array (effect objects with apply(player, targets) method)
+	- add_tags: Array[String] (tags to add to attack, e.g., ["sound"])
+	- remove_tags: Array[String] (tags to remove from attack)
+	- tag_damage_multiply: Dictionary (tag -> multiplier, e.g., {"sound": 2.0})
+
+	Tag system notes:
+	- Base attacks have tags defined in AttackTypes.BASE_ATTACK_TAGS
+	- Items can add/remove tags to transform attacks (e.g., make BODY attack sound-based)
+	- tag_damage_multiply applies to ANY attack with matching tag, across all pools
+	- Example: Coach's Whistle with {"sound": 1.5} boosts both MIND whistle AND
+	  a BODY punch transformed to sound by "Siren's Lungs" item
 
 	Returns:
 		Dictionary of modifiers (empty dict = no modifications)
@@ -225,6 +237,70 @@ func get_turn_effect_info() -> Dictionary:
 		- description: String (brief effect description, optional)
 
 		Empty dict = no turn effect to preview
+	"""
+	return {}
+
+
+func get_passive_modifiers() -> Dictionary:
+	"""Return passive modifiers that affect gameplay systems beyond attacks.
+
+	Override in subclasses that provide non-attack bonuses.
+	These modifiers are queried by various game systems:
+
+	Supported modifiers:
+	- item_spawn_rate_add: float (additive bonus to item spawn probability, e.g., 0.1 = +10%)
+
+	Returns:
+		Dictionary of modifiers (empty dict = no modifications)
+	"""
+	return {}
+
+
+# ============================================================================
+# COOLDOWN INTERFACE (for items with internal cooldowns)
+# ============================================================================
+
+func has_cooldown() -> bool:
+	"""Return true if this item has an internal cooldown that can be reset.
+
+	Override in subclasses that have cooldowns (e.g., Lucky Rabbit's Foot).
+	Used by cooldown manipulation effects.
+	"""
+	return false
+
+func get_cooldown_remaining() -> int:
+	"""Return remaining turns on internal cooldown (0 = ready).
+
+	Override in subclasses with cooldowns.
+	"""
+	return 0
+
+func reset_cooldown() -> void:
+	"""Reset internal cooldown to 0 (ready to fire).
+
+	Override in subclasses with cooldowns.
+	Called by effects like Lucky Rabbit's Foot.
+	"""
+	pass
+
+func get_status_display() -> Dictionary:
+	"""Return info for action preview UI status display.
+
+	Override in subclasses with reactive effects or important cooldowns.
+	Used to show items in the action preview (e.g., shield ready, cooldown ticking).
+
+	Returns:
+		Dictionary with:
+		- show: bool (true to display in action preview)
+		- type: String ("ready" or "cooldown")
+		- mana_cost: float (mana required when triggered, for ready type)
+		- description: String (brief status description)
+
+		Empty dict or show=false = don't display in action preview
+
+	Example (Antigonous Notebook):
+		Ready: {"show": true, "type": "ready", "mana_cost": 5, "description": "Blocks next hit"}
+		Cooldown: {"show": true, "type": "cooldown", "description": "3 turns"}
 	"""
 	return {}
 
