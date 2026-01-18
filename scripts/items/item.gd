@@ -203,6 +203,7 @@ func get_attack_modifiers() -> Dictionary:
 	- damage_multiply: float (damage multiplier, default 1.0)
 	- range_add: float (extra range in tiles)
 	- cooldown_add: int (cooldown modifier, negative = faster attacks)
+	- cooldown_multiply: float (cooldown multiplier, collected from ALL pools, e.g., 0.8 = 20% faster)
 	- extra_attacks: int (additional attacks per turn, e.g., 1 = attack twice)
 	- area: AttackTypes.Area (override attack pattern)
 	- mana_cost_multiply: float (mana cost modifier for NULL, default 1.0)

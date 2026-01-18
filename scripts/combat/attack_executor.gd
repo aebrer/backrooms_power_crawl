@@ -132,6 +132,7 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 	var damage_multiply: float = 1.0
 	var range_add: float = 0.0
 	var cooldown_add: int = 0
+	var cooldown_multiply: float = 1.0  # Collected from ALL pools (for global cooldown reduction)
 	var mana_cost_multiply: float = 1.0
 	var extra_attacks: int = 0
 	var tag_damage_multipliers: Dictionary = {}  # tag -> multiplier (collected from ALL pools!)
@@ -191,9 +192,9 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 		if tag not in attack.tags:
 			attack.tags.append(tag)
 
-	# Second pass: collect tag_damage_multiply from ALL pools
-	# This enables cross-pool synergies like Coach's Whistle (MIND) boosting
-	# Siren's Cords (BODY) when it adds the "sound" tag
+	# Second pass: collect cross-pool modifiers from ALL pools
+	# - tag_damage_multiply: enables Coach's Whistle (MIND) boosting Siren's Cords (BODY)
+	# - cooldown_multiply: enables Drinking Bird (MIND) reducing all pool cooldowns
 	if player:
 		var all_pools = [player.body_pool, player.mind_pool, player.null_pool]
 		for p in all_pools:
@@ -203,14 +204,18 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 				var item = p.items[i]
 				var is_enabled = p.enabled[i]
 				if item and is_enabled:
-					var mods = item.get_attack_modifiers()
-					if mods.has("tag_damage_multiply"):
-						var tag_mults = mods["tag_damage_multiply"]
+					# Tag-based damage multipliers from attack modifiers
+					var attack_mods = item.get_attack_modifiers()
+					if attack_mods.has("tag_damage_multiply"):
+						var tag_mults = attack_mods["tag_damage_multiply"]
 						for tag in tag_mults:
 							if tag_damage_multipliers.has(tag):
 								tag_damage_multipliers[tag] *= tag_mults[tag]
 							else:
 								tag_damage_multipliers[tag] = tag_mults[tag]
+					# Global cooldown reduction from PASSIVE modifiers (stacks multiplicatively)
+					var passive_mods = item.get_passive_modifiers()
+					cooldown_multiply *= passive_mods.get("cooldown_multiply", 1.0)
 
 	# Apply modifiers to base stats
 	attack.damage = (attack.damage + damage_add) * damage_multiply
@@ -220,7 +225,9 @@ func _build_attack(player, pool: ItemPool, attack_type: int):
 		if tag_damage_multipliers.has(tag):
 			attack.damage *= tag_damage_multipliers[tag]
 	attack.range_tiles = attack.range_tiles + range_add
-	attack.cooldown = maxi(1, attack.cooldown + cooldown_add)  # Minimum 1 turn
+	# Cooldown: add flat modifier first, then multiply, then round (min 1 turn)
+	var modified_cooldown = float(attack.cooldown + cooldown_add) * cooldown_multiply
+	attack.cooldown = maxi(1, roundi(modified_cooldown))
 	attack.mana_cost = attack.mana_cost * mana_cost_multiply
 	attack.extra_attacks = extra_attacks  # Additional attacks per turn
 

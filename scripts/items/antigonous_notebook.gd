@@ -164,7 +164,10 @@ func _try_intercept_damage(amount: float) -> bool:
 
 	# We can block! Spend mana and trigger cooldown
 	_player_ref.stats.consume_mana(mana_cost)
-	_current_cooldown = SHIELD_COOLDOWN
+
+	# Apply global cooldown multiplier
+	var cooldown_mult = _player_ref.get_cooldown_multiply()
+	_current_cooldown = maxi(1, roundi(SHIELD_COOLDOWN * cooldown_mult))
 
 	Log.player("ANTIGONOUS NOTEBOOK: Damage blocked! (%.0f mana spent, %.0f damage negated)" % [mana_cost, amount])
 	return true  # Damage intercepted

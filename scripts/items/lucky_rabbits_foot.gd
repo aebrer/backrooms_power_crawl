@@ -119,8 +119,9 @@ func on_turn(player: Player3D, _turn_number: int) -> void:
 	# Pay mana cost
 	player.stats.consume_mana(MANA_COST)
 
-	# Reset internal cooldown
-	_current_cooldown = INTERNAL_COOLDOWN
+	# Reset internal cooldown (apply global cooldown multiplier)
+	var cooldown_mult = player.get_cooldown_multiply()
+	_current_cooldown = maxi(1, roundi(INTERNAL_COOLDOWN * cooldown_mult))
 
 	# Roll for reset chance
 	var reset_chance = BASE_RESET_CHANCE + (RESET_CHANCE_PER_LEVEL * level)

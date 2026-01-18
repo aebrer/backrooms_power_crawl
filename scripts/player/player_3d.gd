@@ -446,6 +446,29 @@ func _update_bar(bar: MeshInstance3D, fill_percent: float) -> void:
 # ITEM SYSTEM
 # ============================================================================
 
+func get_cooldown_multiply() -> float:
+	"""Calculate total cooldown multiplier from ALL equipped items.
+
+	Collects cooldown_multiply from passive modifiers of all items in all pools.
+	Used by items with internal cooldowns to apply global cooldown reduction.
+
+	Returns:
+		Multiplicative cooldown factor (e.g., 0.8 = 20% faster cooldowns)
+	"""
+	var multiplier: float = 1.0
+
+	for pool in [body_pool, mind_pool, null_pool]:
+		if not pool:
+			continue
+		for i in range(pool.max_slots):
+			var item = pool.items[i]
+			var is_enabled = pool.enabled[i]
+			if item and is_enabled:
+				var mods = item.get_passive_modifiers()
+				multiplier *= mods.get("cooldown_multiply", 1.0)
+
+	return multiplier
+
 func execute_item_pools() -> void:
 	"""Execute attacks, then item effects (called each turn)
 
