@@ -128,8 +128,9 @@ func show_slot_selection(item: Item, pool: ItemPool, player: Player3D, position:
 	# Even though we use free() instead of queue_free(), this provides extra safety
 	await get_tree().process_frame
 
+	# Use set_pause(true) - safe/idempotent in case already paused
 	if PauseManager:
-		PauseManager.toggle_pause()
+		PauseManager.set_pause(true)
 
 func _update_panel_position() -> void:
 	"""Update panel position to center it on game viewport (SubViewportContainer)"""
@@ -355,7 +356,7 @@ func _close_panel() -> void:
 	"""Hide panel and unpause game via PauseManager"""
 	visible = false
 	if PauseManager:
-		PauseManager.toggle_pause()
+		PauseManager.set_pause(false)
 
 func _on_pause_toggled(is_paused: bool) -> void:
 	"""Update button focus when pause state changes"""

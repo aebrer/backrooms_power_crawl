@@ -41,7 +41,7 @@ const NULL_BONUS_PER_LEVEL = 3
 const SHIELD_MANA_COST_PER_LEVEL = 5.0
 
 # Internal cooldown (turns between shield activations)
-const SHIELD_COOLDOWN = 5
+const SHIELD_COOLDOWN = 15
 
 # Texture path
 const TEXTURE_PATH = "res://assets/textures/items/antigonous_notebook.png"

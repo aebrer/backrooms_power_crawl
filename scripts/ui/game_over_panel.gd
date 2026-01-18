@@ -245,8 +245,9 @@ func show_game_over(cause: String, turns: int, level: int, total_exp: int, kills
 	_accepting_input = false  # Block input until after focus is set
 
 	# Pause game via PauseManager (this triggers _on_pause_toggled)
+	# Use set_pause(true) - safe/idempotent
 	if PauseManager:
-		PauseManager.toggle_pause()
+		PauseManager.set_pause(true)
 	else:
 		# Fallback if PauseManager not available
 		get_tree().paused = true
@@ -369,9 +370,9 @@ func _on_restart_pressed() -> void:
 	# Hide panel first
 	visible = false
 
-	# Unpause via PauseManager
-	if PauseManager and PauseManager.is_paused:
-		PauseManager.toggle_pause()
+	# Unpause via PauseManager - use set_pause(false) for safety
+	if PauseManager:
+		PauseManager.set_pause(false)
 	else:
 		get_tree().paused = false
 
