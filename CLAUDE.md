@@ -16,6 +16,7 @@
 **What this means**:
 - ✅ You CAN run `godot --headless --quit` to validate project loads without errors
 - ✅ You CAN run `godot --headless --script test_script.gd` for script validation
+- ✅ You CAN run `godot --headless --import` to trigger import of new scripts and textures
 - ✅ You CAN check that autoloads initialize correctly
 - ⚠️ User still handles all visual/interactive testing (GUI, controller, gameplay)
 - ✅ DO implement the code changes
@@ -964,7 +965,7 @@ python3 _claude_scripts/strip_mesh_library_previews.py
    ⬆️ This tells them it's a hazmat suit!
 
 ✅ CORRECT:
-"Look at the image at `/tmp/tmp.png` and describe what you see."
+"Look at the image at `/tmp/[random_hash].png` and describe what you see."
 ```
 
 **Problem 2: Filename Context Leakage**
@@ -975,8 +976,8 @@ python3 _claude_scripts/strip_mesh_library_previews.py
 
 ✅ CORRECT:
 Before spawning blind critic, copy to neutral location:
-`cp _claude_scripts/textures/hazmat_suit/output.png /tmp/tmp.png`
-Then tell critic: "Look at `/tmp/tmp.png`"
+`cp _claude_scripts/textures/hazmat_suit/output.png /tmp/[random_hash].png`
+Then tell critic: "Look at `/tmp/[random_hash].png`"
 ```
 
 **Rule**: Blind critic gets ZERO information except the image itself. No context, no filename hints, nothing.
@@ -986,17 +987,17 @@ Then tell critic: "Look at `/tmp/tmp.png`"
 **Iteration 1:**
 1. Spawn CREATOR agent with full requirements
 2. ⏸️ WAIT for creator to finish and report back
-3. Copy output to neutral location: `cp _claude_scripts/textures/NAME/output.png /tmp/tmp.png`
+3. Copy output to neutral location: `cp _claude_scripts/textures/NAME/output.png /tmp/[random_hash].png`
 4. Spawn COMPARISON CRITIC with requirements + original image path
-5. Spawn BLIND CRITIC with ONLY `/tmp/tmp.png` (NO context!)
+5. Spawn BLIND CRITIC with ONLY `/tmp/[random_hash].png` (NO context!)
 6. ⏸️ WAIT for both critics to report back
 7. YOU synthesize the feedback
 
 **Iteration 2+ (if revisions needed):**
 8. Spawn NEW CREATOR agent with: original requirements + critic feedback
 9. ⏸️ WAIT for creator to finish
-10. Copy output to `/tmp/tmp.png` again
-11. Spawn NEW CRITICS (comparison gets original path, blind gets `/tmp/tmp.png`)
+10. Copy output to `/tmp/[random_hash].png` again
+11. Spawn NEW CRITICS (comparison gets original path, blind gets `/tmp/[random_hash].png`)
 12. ⏸️ WAIT for reports
 13. YOU synthesize feedback
 14. Repeat until BOTH critics approve
@@ -1021,8 +1022,8 @@ Then tell critic: "Look at `/tmp/tmp.png`"
 CURRENT STATE: [AWAITING_CREATOR | AWAITING_CRITICS | SYNTHESIZING]
 
 ALLOWED ACTIONS:
-- AWAITING_CREATOR: Spawn creator with feedback, NO analysis
-- AWAITING_CRITICS: Copy to /tmp/tmp.png, spawn critics, READ NOTHING
+- AWAITING_CREATOR: Spawn creator with feedback, NO analysis, using TASK method
+- AWAITING_CRITICS: Copy to /tmp/[random_hash].png, spawn critics using TASK method, READ NOTHING
 - SYNTHESIZING: Read critic outputs, write revision notes, NO spawning
 
 FORBIDDEN: Anything not in "allowed actions" for current state
@@ -1034,6 +1035,7 @@ FORBIDDEN: Anything not in "allowed actions" for current state
 [ ] Am I spawning agents in parallel instead of waiting? → STOP
 [ ] Am I giving blind critic ANY context (including filename)? → STOP
 [ ] Am I analyzing/reading files instead of waiting for critics? → STOP
+[ ] Am I trying to use anything other than the TASK method to spawn the agents? -> STOP
 
 PROCEED ONLY IF ALL CHECKS PASS.
 ```
