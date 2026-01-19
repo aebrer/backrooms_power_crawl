@@ -1058,11 +1058,11 @@ func _set_tile_floor_with_ceiling(chunk: Chunk, world_pos: Vector2i, update_grid
 	Args:
 		chunk: The chunk to modify
 		world_pos: World tile position
-		update_gridmap: If true, also update the GridMap visuals (for already-loaded chunks)
+		update_gridmap: If true, also update the GridMap visuals AND pathfinder (for already-loaded chunks)
 	"""
 	# SubChunk tile types (for chunk data)
 	const SUBCHUNK_FLOOR := 0  # SubChunk.TileType.FLOOR
-	const SUBCHUNK_CEILING := 4  # SubChunk.TileType.CEILING
+	const SUBCHUNK_CEILING := 2  # SubChunk.TileType.CEILING
 
 	# Grid3D tile types (for GridMap visuals) - these are DIFFERENT!
 	const GRID_FLOOR := 0  # Grid3D.TileType.FLOOR
@@ -1071,12 +1071,19 @@ func _set_tile_floor_with_ceiling(chunk: Chunk, world_pos: Vector2i, update_grid
 	chunk.set_tile(world_pos, SUBCHUNK_FLOOR)
 	chunk.set_tile_at_layer(world_pos, 1, SUBCHUNK_CEILING)
 
-	# Update GridMap visuals if chunk is already rendered
+	# Update GridMap visuals AND pathfinder if chunk is already rendered
 	if update_gridmap:
 		if grid_3d:
 			grid_3d.update_tile(world_pos, GRID_FLOOR, GRID_CEILING)
 		else:
 			Log.warn(Log.Category.GRID, "Cannot update GridMap - grid_3d is null")
+
+		# Also add this tile to the pathfinding graph
+		# (Border hallway cutting creates floor tiles in already-loaded chunks
+		# whose pathfinding graphs were already built - we need to add them!)
+		var pathfinder = get_node_or_null("/root/Pathfinding")
+		if pathfinder:
+			pathfinder.add_walkable_tile(world_pos)
 
 
 # ============================================================================

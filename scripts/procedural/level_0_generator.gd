@@ -471,7 +471,7 @@ func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
 	If you think this looks "messy" compared to chunk.set_tile(world_pos),
 	remember: the "clean" version was 3x slower and caused frame hitches.
 	"""
-	const CEILING := 4  # SubChunk.TileType.CEILING
+	const CEILING := 2  # SubChunk.TileType.CEILING
 	const SUB_CHUNK_SIZE := 16
 	const SUB_CHUNKS_PER_SIDE := 8
 
