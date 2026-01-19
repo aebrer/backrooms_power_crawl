@@ -357,6 +357,9 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 			# Check if pity timer triggered (force spawn after PITY_TIMER_THRESHOLD empty chunks)
 			var force_spawn := chunks_without_items >= PITY_TIMER_THRESHOLD
 
+			# First chunk always guarantees at least one item
+			var guarantee_first_chunk := is_first_chunk
+
 			# Normal spawning (with player for spawn rate bonuses)
 			var player = _find_player()
 			spawned_items = item_spawner.spawn_items_for_chunk(
@@ -366,8 +369,8 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 				player
 			)
 
-			# If pity timer triggered and still no items, force spawn one
-			if force_spawn and spawned_items.is_empty():
+			# Force spawn if: pity timer triggered OR first chunk with no items
+			if spawned_items.is_empty() and (force_spawn or guarantee_first_chunk):
 				var forced_item = item_spawner.spawn_forced_item(
 					chunk,
 					0,
@@ -376,7 +379,10 @@ func _on_chunk_completed(chunk: Chunk, chunk_pos: Vector2i, level_id: int) -> vo
 				)
 				if forced_item:
 					spawned_items.append(forced_item)
-					Log.system("Pity timer: Forced item spawn after %d empty chunks" % chunks_without_items)
+					if guarantee_first_chunk:
+						Log.system("Guaranteed item spawn in first chunk")
+					else:
+						Log.system("Pity timer: Forced item spawn after %d empty chunks" % chunks_without_items)
 
 		# Update pity timer
 		if spawned_items.is_empty():

@@ -27,6 +27,7 @@ var current_layout: LayoutMode = LayoutMode.VERTICAL
 var player: Player3D = null
 var tooltip_slots: Array[Control] = []
 var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
+var slot_items: Dictionary = {}  # slot -> Item (for EXP bonus on examination)
 
 # Reorder state (persistent across focus changes)
 var reordering_slot: Control = null
@@ -170,9 +171,11 @@ func _update_slot(slot: HBoxContainer, pool: ItemPool, slot_index: int) -> void:
 	if not item:
 		icon.texture = null
 		label.text = "<empty>"
-		# Clear tooltip
+		# Clear tooltip and item reference
 		if slot in tooltip_texts:
 			tooltip_texts.erase(slot)
+		if slot in slot_items:
+			slot_items.erase(slot)
 	else:
 		# Set icon texture from item
 		icon.texture = item.ground_sprite
@@ -184,6 +187,9 @@ func _update_slot(slot: HBoxContainer, pool: ItemPool, slot_index: int) -> void:
 		# Store tooltip with clearance-based description
 		var clearance = player.stats.clearance_level if player.stats else 0
 		tooltip_texts[slot] = item.get_description(clearance)
+
+		# Store item reference for EXP bonus on examination
+		slot_items[slot] = item
 
 func _get_pool(pool_type: Item.PoolType) -> ItemPool:
 	"""Get ItemPool reference by type"""
@@ -408,13 +414,29 @@ func _highlight_slot(slot: Control) -> void:
 	# Get examination panel and show item description if slot has item
 	_get_examination_panel()
 	if examination_panel and slot in tooltip_texts:
+		# Get the item from the slot for rarity info and EXP bonus
+		var item: Item = slot_items.get(slot, null)
+
+		# Trigger first-look EXP bonus (same as examining item in world)
+		if item:
+			var rarity_name = ItemRarity.get_rarity_name(item.rarity)
+			KnowledgeDB.examine_item(item.item_id, rarity_name)
+
 		# Directly set examination panel content with item info
 		var item_name = label.text.split(" (")[0]  # Extract just the item name
 		examination_panel.header_label.text = "ITEM INFO"
 		examination_panel.header_label.visible = true
 		examination_panel.entity_name_label.text = item_name
 		examination_panel.entity_name_label.visible = true
-		examination_panel.threat_level_label.visible = false  # Hide threat for items
+
+		# Show rarity instead of threat level for items
+		if item:
+			examination_panel.threat_level_label.text = "Rarity: " + ItemRarity.get_rarity_name(item.rarity)
+			examination_panel.threat_level_label.add_theme_color_override("font_color", ItemRarity.get_color(item.rarity))
+			examination_panel.threat_level_label.visible = true
+		else:
+			examination_panel.threat_level_label.visible = false
+
 		examination_panel.description_label.text = tooltip_texts[slot]
 		examination_panel.description_label.visible = true
 		examination_panel.panel.visible = true

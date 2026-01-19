@@ -38,6 +38,7 @@ var portrait_overlay: PanelContainer = null
 var current_target: Examinable = null
 var _is_portrait_mode: bool = false
 var _is_repositioning: bool = false  ## Guard flag to prevent concurrent repositioning
+var _is_expanded_upward: bool = false  ## Track if panel is in "overflow" mode (expanded upward)
 
 func _ready() -> void:
 	# Load emoji font (project setting doesn't auto-apply to programmatic Labels)
@@ -70,14 +71,14 @@ func _build_panel() -> void:
 	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(panel)
 
-	# Style panel (SCP aesthetic - tight margins for embedded use)
+	# Style panel (Backrooms aesthetic - muted yellow border, slightly different background)
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.9)
-	style.border_color = Color(1, 1, 1, 1)
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
+	style.bg_color = Color(0.08, 0.07, 0.05, 0.95)  # Slightly warm/sepia tinted dark background
+	style.border_color = Color(0.76, 0.70, 0.50, 1.0)  # Muted yellow-brown (fluorescent/wallpaper theme)
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
 	style.content_margin_left = 6
 	style.content_margin_right = 6
 	style.content_margin_top = 4
@@ -153,35 +154,46 @@ func show_panel(target: Examinable) -> void:
 	# Get entity info
 	var info = KnowledgeDB.get_entity_info(target.entity_id)
 
+	# Check if this is an item (has rarity info)
+	var is_item = info.get("is_item", false)
+
 	# Get common values
-	var entity_name = "Entity: " + info.get("name", "Unknown")
-	var threat_name = info.get("threat_level_name", "")
-	if threat_name.is_empty():
-		print("[ExaminationPanel] WARNING: threat_level_name empty for entity_id: %s, info: %s" % [target.entity_id, info])
-		threat_name = _format_threat_level(info.get("threat_level", 0))
-	var threat_text = "Threat: " + threat_name
+	var entity_name = ("Item: " if is_item else "Entity: ") + info.get("name", "Unknown")
 	var description = info.get("description", "[DATA EXPUNGED]")
-	var threat = info.get("threat_level", 0)
+
+	# For items, show rarity instead of threat level
+	var info_line_text: String
+	var info_line_color: Color
+	if is_item:
+		var rarity_name = info.get("rarity_name", "Unknown")
+		info_line_text = "Rarity: " + rarity_name
+		info_line_color = info.get("rarity_color", Color.WHITE)
+	else:
+		var threat_name = info.get("threat_level_name", "")
+		if threat_name.is_empty():
+			threat_name = _format_threat_level(info.get("threat_level", 0))
+		info_line_text = "Threat: " + threat_name
+		info_line_color = _get_threat_color(info.get("threat_level", 0))
 
 	if _is_portrait_mode:
 		# Use overlay panel in portrait mode
-		_show_portrait_overlay(entity_name, threat_text, description, threat)
+		_show_portrait_overlay(entity_name, info_line_text, description, info_line_color)
 	else:
 		# Use embedded panel in landscape mode
-		_show_embedded_panel(entity_name, threat_text, description, threat)
+		_show_embedded_panel(entity_name, info_line_text, description, info_line_color)
 
-func _show_embedded_panel(entity_name: String, threat_text: String, description: String, threat: int) -> void:
+func _show_embedded_panel(entity_name: String, info_line_text: String, description: String, info_color: Color) -> void:
 	"""Show the embedded panel (landscape mode)"""
 	# Reset header to default (stats_panel may have changed it to "STAT INFO")
 	header_label.text = "OBJECT EXAMINATION REPORT"
 
 	# Update labels
 	entity_name_label.text = entity_name
-	threat_level_label.text = threat_text
+	threat_level_label.text = info_line_text
 	description_label.text = description
 
-	# Set colors based on threat
-	_set_threat_colors(threat)
+	# Set info line color (threat or rarity)
+	threat_level_label.add_theme_color_override("font_color", info_color)
 
 	# Ensure all labels are visible (defensive fix for intermittent visibility bug)
 	header_label.visible = true
@@ -192,7 +204,10 @@ func _show_embedded_panel(entity_name: String, threat_text: String, description:
 	# Show panel
 	panel.visible = true
 
-func _show_portrait_overlay(entity_name: String, threat_text: String, description: String, threat: int) -> void:
+	# Check for overflow and expand upward if needed (after a frame for layout)
+	_check_overflow_and_expand.call_deferred()
+
+func _show_portrait_overlay(entity_name: String, info_line_text: String, description: String, info_color: Color) -> void:
 	"""Show the overlay panel (portrait mode)"""
 	if not portrait_overlay:
 		_build_portrait_overlay()
@@ -215,8 +230,8 @@ func _show_portrait_overlay(entity_name: String, threat_text: String, descriptio
 	if entity_label:
 		entity_label.text = entity_name
 	if threat_label:
-		threat_label.text = threat_text
-		threat_label.add_theme_color_override("font_color", _get_threat_color(threat))
+		threat_label.text = info_line_text
+		threat_label.add_theme_color_override("font_color", info_color)
 	if desc_label:
 		desc_label.text = description
 
@@ -285,6 +300,10 @@ func hide_panel() -> void:
 	if portrait_overlay:
 		portrait_overlay.visible = false
 
+	# Restore normal layout if expanded
+	if _is_expanded_upward:
+		_restore_panel_normal()
+
 func set_portrait_mode(is_portrait: bool) -> void:
 	"""Switch between embedded panel (landscape) and overlay panel (portrait)"""
 	if _is_portrait_mode == is_portrait:
@@ -319,12 +338,12 @@ func _build_portrait_overlay() -> void:
 
 	# Style panel (SCP aesthetic - matching embedded style)
 	var style = StyleBoxFlat.new()
-	style.bg_color = Color(0, 0, 0, 0.95)
-	style.border_color = Color(1, 1, 1, 1)
-	style.border_width_left = 1
-	style.border_width_right = 1
-	style.border_width_top = 1
-	style.border_width_bottom = 1
+	style.bg_color = Color(0.08, 0.07, 0.05, 0.95)  # Slightly warm/sepia tinted dark background
+	style.border_color = Color(0.76, 0.70, 0.50, 1.0)  # Muted yellow-brown border
+	style.border_width_left = 2
+	style.border_width_right = 2
+	style.border_width_top = 2
+	style.border_width_bottom = 2
 	style.content_margin_left = 8
 	style.content_margin_right = 8
 	style.content_margin_top = 6
@@ -425,6 +444,9 @@ func _show_stat_info_embedded(stat_name: String, description: String) -> void:
 	description_label.visible = true
 	panel.visible = true
 
+	# Check for overflow and expand upward if needed (after a frame for layout)
+	_check_overflow_and_expand.call_deferred()
+
 func _show_stat_info_overlay(stat_name: String, description: String) -> void:
 	"""Show stat info in overlay panel (portrait mode)"""
 	if not portrait_overlay:
@@ -524,3 +546,84 @@ func _update_all_font_sizes() -> void:
 func _on_scale_changed(_scale: float) -> void:
 	"""Handle UI scale changes from UIScaleManager"""
 	_update_all_font_sizes()
+
+# ============================================================================
+# OVERFLOW EXPANSION (Expand Upward)
+# ============================================================================
+
+func _check_overflow_and_expand() -> void:
+	"""Check if panel content overflows available space and expand upward if needed.
+
+	When content is taller than the allocated container space, the panel
+	switches to absolute positioning and grows upward from its bottom edge,
+	overlapping content above it. This ensures all examination text is visible
+	regardless of screen size.
+	"""
+	if _is_portrait_mode:
+		return  # Portrait mode uses overlay, not embedded panel
+
+	if not panel or not panel.visible:
+		return
+
+	# Wait a frame for layout to settle
+	await get_tree().process_frame
+
+	if not panel or not is_instance_valid(panel):
+		return
+
+	# Get the content's minimum required size
+	var vbox = panel.get_node_or_null("ContentVBox")
+	if not vbox:
+		return
+
+	# Get the actual minimum size the content needs
+	var content_min_size = vbox.get_combined_minimum_size()
+	# Add panel padding/margins
+	var style = panel.get_theme_stylebox("panel")
+	if style:
+		content_min_size.y += style.content_margin_top + style.content_margin_bottom
+		content_min_size.x += style.content_margin_left + style.content_margin_right
+
+	# Get the space we actually have (the Control node's allocated size)
+	var available_size = self.size
+
+	# Check if content overflows vertically
+	var overflow = content_min_size.y > available_size.y
+
+	if overflow and not _is_expanded_upward:
+		# Need to expand upward - switch to absolute positioning
+		_expand_panel_upward(content_min_size)
+	elif not overflow and _is_expanded_upward:
+		# Content fits now - restore normal layout
+		_restore_panel_normal()
+
+
+func _expand_panel_upward(content_size: Vector2) -> void:
+	"""Switch panel to absolute positioning, growing upward from bottom edge."""
+	_is_expanded_upward = true
+
+	# Remove anchor preset (switch to manual positioning)
+	panel.set_anchors_preset(Control.PRESET_TOP_LEFT, false)
+
+	# Position panel at bottom of our container, extending upward
+	var bottom_y = self.size.y
+	var panel_height = content_size.y
+	var panel_top = bottom_y - panel_height
+
+	panel.position = Vector2(0, panel_top)
+	panel.size = Vector2(self.size.x, panel_height)
+
+	# Raise z_index so panel overlaps content above
+	panel.z_index = 10
+
+
+func _restore_panel_normal() -> void:
+	"""Restore panel to normal container-based layout."""
+	_is_expanded_upward = false
+
+	# Restore anchor preset to fill parent
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.position = Vector2.ZERO
+
+	# Reset z_index
+	panel.z_index = 0

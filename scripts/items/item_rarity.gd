@@ -74,7 +74,7 @@ static func get_color(rarity: Tier) -> Color:
 	"""Get display color for rarity tier"""
 	return RARITY_COLORS.get(rarity, Color.WHITE)
 
-static func get_name(rarity: Tier) -> String:
+static func get_rarity_name(rarity: Tier) -> String:
 	"""Get display name for rarity tier"""
 	return RARITY_NAMES.get(rarity, "Unknown")
 

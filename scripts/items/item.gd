@@ -147,13 +147,17 @@ func get_info(clearance_level: int) -> Dictionary:
 	Reuses existing get_description() for unified description system.
 
 	Returns:
-		Dictionary with name, description, object_class, threat_level
+		Dictionary with name, description, object_class, threat_level, rarity info
 	"""
 	return {
 		"name": "%s (Level %d)" % [item_name, level],
 		"description": get_description(clearance_level),
 		"object_class": "Item",
-		"threat_level": 0
+		"threat_level": 0,
+		"is_item": true,
+		"rarity": rarity,
+		"rarity_name": ItemRarity.get_rarity_name(rarity),
+		"rarity_color": ItemRarity.get_color(rarity)
 	}
 
 # ============================================================================
