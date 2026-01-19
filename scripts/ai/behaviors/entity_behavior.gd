@@ -82,23 +82,27 @@ func move_toward_target(entity: WorldEntity, target_pos: Vector2i, grid) -> bool
 	# Try pathfinding first
 	var pathfinder = grid.get_node_or_null("/root/Pathfinding")
 
-	if pathfinder and pathfinder.has_point(current_pos):
-		var path = pathfinder.find_path(current_pos, target_pos)
+	if not pathfinder or not pathfinder.has_point(current_pos):
+		return _move_toward_target_greedy(entity, target_pos, grid)
 
-		if path.size() > 1:
-			var next_pos = Vector2i(int(path[1].x), int(path[1].y))
+	var path = pathfinder.find_path(current_pos, target_pos)
 
-			if can_move_to(next_pos, grid):
-				entity.move_to(next_pos)
-				entity.moves_remaining -= 1
-				return true
+	if path.size() <= 1:
+		return _move_toward_target_greedy(entity, target_pos, grid)
 
-			# Try sidestepping
-			var sidestep_pos = _find_sidestep_toward_path(current_pos, path, grid)
-			if sidestep_pos != Vector2i(-1, -1):
-				entity.move_to(sidestep_pos)
-				entity.moves_remaining -= 1
-				return true
+	var next_pos = Vector2i(int(path[1].x), int(path[1].y))
+
+	if can_move_to(next_pos, grid):
+		entity.move_to(next_pos)
+		entity.moves_remaining -= 1
+		return true
+
+	# Try sidestepping if next A* position is blocked
+	var sidestep_pos = _find_sidestep_toward_path(current_pos, path, grid)
+	if sidestep_pos != Vector2i(-1, -1):
+		entity.move_to(sidestep_pos)
+		entity.moves_remaining -= 1
+		return true
 
 	# Fallback: greedy navigation
 	return _move_toward_target_greedy(entity, target_pos, grid)

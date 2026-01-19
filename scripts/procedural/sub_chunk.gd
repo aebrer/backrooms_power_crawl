@@ -11,9 +11,8 @@ const SIZE := 16
 enum TileType {
 	FLOOR = 0,
 	WALL = 1,
-	DOOR = 2,
+	CEILING = 2,  # For ceiling layer (Y=1)
 	EXIT_STAIRS = 3,
-	CEILING = 4,  # Added for multi-layer support (ceilings at layer Y=1)
 }
 
 # Position
@@ -98,9 +97,9 @@ func set_tile_at_layer(local_pos: Vector2i, layer: int, tile_type: int) -> void:
 		ceiling_data[local_pos.y][local_pos.x] = tile_type
 
 func is_walkable(local_pos: Vector2i) -> bool:
-	"""Check if tile is walkable (floor or door)"""
+	"""Check if tile is walkable (floor or exit stairs)"""
 	var tile := get_tile(local_pos)
-	return tile == TileType.FLOOR or tile == TileType.DOOR or tile == TileType.EXIT_STAIRS
+	return tile == TileType.FLOOR or tile == TileType.EXIT_STAIRS
 
 # ============================================================================
 # UTILITY

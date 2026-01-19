@@ -287,6 +287,25 @@ func has_point(pos: Vector2i) -> bool:
 	"""Check if a position is walkable and in the graph"""
 	return pos_to_id.has(pos)
 
+## Add a single walkable tile to the graph (for border hallway cutting)
+func add_walkable_tile(world_pos: Vector2i) -> void:
+	"""Add a single walkable tile to the navigation graph.
+
+	Called when border hallway cutting creates new floor tiles in already-loaded
+	chunks. This ensures entities spawned on those tiles can pathfind correctly.
+
+	Args:
+		world_pos: World grid position to add
+	"""
+	if pos_to_id.has(world_pos):
+		return  # Already in graph
+
+	_add_point(world_pos)
+
+	# Connect to neighbors (must happen after point is added)
+	if pos_to_id.has(world_pos):
+		_connect_neighbors(world_pos, pos_to_id[world_pos])
+
 # ============================================================================
 # INCREMENTAL GRAPH UPDATES (for chunk load/unload)
 # ============================================================================
@@ -304,9 +323,6 @@ func add_chunk(chunk: Chunk) -> void:
 		Log.warn(Log.Category.GRID, "PathfindingManager: No grid reference, cannot add chunk")
 		return
 
-	var start_time := Time.get_ticks_msec()
-	var added_count := 0
-
 	# Add all walkable tiles from this chunk
 	for subchunk in chunk.sub_chunks:
 		for y in range(subchunk.SIZE):
@@ -317,7 +333,6 @@ func add_chunk(chunk: Chunk) -> void:
 					var world_pos = chunk.position * Chunk.SIZE + subchunk.local_position * subchunk.SIZE + Vector2i(x, y)
 					if not pos_to_id.has(world_pos):
 						_add_point(world_pos)
-						added_count += 1
 
 	# Connect all new points to their neighbors (including cross-chunk connections)
 	# This must happen AFTER all points are added
@@ -329,8 +344,6 @@ func add_chunk(chunk: Chunk) -> void:
 					var world_pos = chunk.position * Chunk.SIZE + subchunk.local_position * subchunk.SIZE + Vector2i(x, y)
 					if pos_to_id.has(world_pos):
 						_connect_neighbors(world_pos, pos_to_id[world_pos])
-
-	var build_time := Time.get_ticks_msec() - start_time
 
 func remove_chunk(chunk: Chunk) -> void:
 	"""Remove all tiles from a chunk from the navigation graph

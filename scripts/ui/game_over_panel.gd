@@ -376,6 +376,11 @@ func _on_restart_pressed() -> void:
 	else:
 		get_tree().paused = false
 
+	# Reset knowledge tracking (clearance, examined items/entities)
+	# This is an autoload that persists across scene reloads
+	if KnowledgeDB:
+		KnowledgeDB.reset_knowledge()
+
 	# Emit signal for game.gd to handle
 	restart_requested.emit()
 

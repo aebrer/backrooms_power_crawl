@@ -94,17 +94,9 @@ func _ready() -> void:
 		await ChunkManager.initial_load_completed
 
 	if grid:
-		# Build navigation graph for starting chunk (0,0) AND adjacent chunks
-		# This allows spawn validation to check connectivity to neighboring chunks
+		# Use the navigation graph already built by ChunkManager during initial load
+		# ChunkManager.add_chunk() incrementally adds each chunk's walkable tiles
 		var starting_chunk := Vector2i(0, 0)
-		var chunks_to_load := [
-			starting_chunk,
-			starting_chunk + Vector2i(0, -1),  # North
-			starting_chunk + Vector2i(0, 1),   # South
-			starting_chunk + Vector2i(-1, 0),  # West
-			starting_chunk + Vector2i(1, 0)    # East
-		]
-		Pathfinding.build_navigation_graph(chunks_to_load, grid)
 
 		# Find a spawn point that can reach at least 2/4 adjacent chunks
 		# This ensures player isn't stuck in a dead-end or isolated area
