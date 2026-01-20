@@ -31,14 +31,16 @@ func _input(event):
 	# MMB (middle mouse button) toggles pause - check in _input before scene tree consumes it
 	# This is useful on web where ESC in fullscreen exits fullscreen first
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_MIDDLE:
-		toggle_pause()
+		toggle_pause(false)  # Mouse triggered
 		get_viewport().set_input_as_handled()
 		return
 
 func _unhandled_input(event):
 	# ESC (keyboard via ui_cancel) or START (controller via pause action) toggles pause
 	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("pause"):
-		toggle_pause()
+		# Check if this was triggered by a gamepad button
+		var from_gamepad = event is InputEventJoypadButton
+		toggle_pause(from_gamepad)
 		get_viewport().set_input_as_handled()
 		return
 
@@ -62,13 +64,17 @@ func _unhandled_input(event):
 				navigate_hud(Vector2i(1, 0))
 				get_viewport().set_input_as_handled()
 
-func toggle_pause():
-	"""Toggle pause state."""
+func toggle_pause(from_gamepad: bool = false):
+	"""Toggle pause state.
+
+	Args:
+		from_gamepad: True if triggered by a gamepad button (for focus grabbing)
+	"""
 	is_paused = not is_paused
 	emit_signal("pause_toggled", is_paused)
 
 	if is_paused:
-		_enter_hud_mode()
+		_enter_hud_mode(from_gamepad)
 	else:
 		_exit_hud_mode()
 
@@ -89,8 +95,12 @@ func set_pause(paused: bool) -> void:
 	else:
 		_exit_hud_mode()
 
-func _enter_hud_mode():
-	"""Enable HUD interaction mode (turn-based games don't pause processing)."""
+func _enter_hud_mode(from_gamepad: bool = false):
+	"""Enable HUD interaction mode (turn-based games don't pause processing).
+
+	Args:
+		from_gamepad: True if pause was triggered by a gamepad button
+	"""
 	# For turn-based games, we DON'T disable Game3D processing
 	# The game world only advances on player actions, so "pause" just means:
 	# - Mouse visible for UI interaction
@@ -105,7 +115,8 @@ func _enter_hud_mode():
 
 	# Auto-grab focus for controller users on manual pause (not popup-triggered)
 	# Popups (LevelUpPanel, ItemSlotSelectionPanel) handle their own focus
-	if InputManager and InputManager.current_input_device == InputManager.InputDevice.GAMEPAD:
+	# Use from_gamepad (the actual trigger) rather than current_input_device (can be stale)
+	if from_gamepad:
 		if not _is_popup_visible():
 			_grab_hud_focus()
 
@@ -165,7 +176,7 @@ func _refresh_focusable_elements():
 
 	# Find all nodes in "hud_focusable" group
 	for node in get_tree().get_nodes_in_group("hud_focusable"):
-		if node is Control and node.visible:
+		if node is Control and _is_truly_visible(node):
 			focusable_elements.append(node)
 			# Connect to focus_entered to track focus changes from Godot's built-in navigation
 			if not node.focus_entered.is_connected(_on_element_focus_entered):
@@ -173,6 +184,18 @@ func _refresh_focusable_elements():
 
 	# Sort by position (top to bottom, left to right)
 	focusable_elements.sort_custom(_sort_by_position)
+
+func _is_truly_visible(node: Control) -> bool:
+	"""Check if a node and all its ancestors are visible.
+
+	A node can have visible=true but still be hidden if any parent is invisible.
+	"""
+	var current = node
+	while current:
+		if current is CanvasItem and not current.visible:
+			return false
+		current = current.get_parent()
+	return true
 
 func _on_element_focus_entered(element: Control):
 	"""Called when any focusable element gains focus (from Godot's built-in navigation)."""

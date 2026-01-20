@@ -65,6 +65,11 @@ func _ready() -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 func _process(delta: float) -> void:
+	# Block camera movement when paused (UI navigation takes over)
+	if PauseManager and PauseManager.is_paused:
+		mouse_motion_accumulator = Vector2.ZERO  # Clear any accumulated motion
+		return
+
 	# Apply accumulated mouse motion (from _unhandled_input)
 	# Averaging across events filters Firefox's systematic rounding drift
 	if mouse_motion_accumulator.length_squared() > MOTION_SAMPLE_THRESHOLD:

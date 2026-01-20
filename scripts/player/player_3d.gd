@@ -162,6 +162,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		state_machine.handle_input(event)
 
 func _process(delta: float) -> void:
+	# Block gameplay processing when paused (UI navigation takes over)
+	if PauseManager and PauseManager.is_paused:
+		return
+
 	# Delegate to state machine
 	if state_machine:
 		state_machine.process_frame(delta)
