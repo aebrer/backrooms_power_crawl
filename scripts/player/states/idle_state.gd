@@ -221,8 +221,8 @@ func process_frame(delta: float) -> void:
 	# Update action preview
 	_update_action_preview()
 
-	# Check for camera toggle via InputManager
-	if InputManager.is_action_just_pressed("toggle_camera"):
+	# Check for camera toggle (use Godot's native check - doesn't need InputManager synthesis)
+	if Input.is_action_just_pressed("toggle_camera"):
 		_toggle_camera()
 		return
 

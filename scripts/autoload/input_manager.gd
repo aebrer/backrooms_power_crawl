@@ -106,24 +106,6 @@ func _input(event: InputEvent) -> void:
 	# Detect input device from event type (use _input so we catch all events, even consumed ones)
 	_detect_input_device(event)
 
-func _unhandled_input(event: InputEvent) -> void:
-	# Track action presses for this frame
-	# Note: This runs AFTER scene input handlers, so it won't interfere
-	var tracked_actions := [
-		"move_confirm",
-		"toggle_ability_1",
-		"toggle_ability_2",
-		"toggle_ability_3",
-		"toggle_ability_4",
-		"wait_action",
-		"toggle_camera",
-		"pause"
-	]
-
-	for action in tracked_actions:
-		if event.is_action_pressed(action):
-			_actions_this_frame[action] = true
-
 func _detect_input_device(event: InputEvent) -> void:
 	"""Auto-detect which input device is being used based on event type"""
 	var new_device: InputDevice
