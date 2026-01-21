@@ -170,6 +170,10 @@ func _enter_fpv_mode() -> void:
 	if examination_crosshair:
 		examination_crosshair.show_crosshair()
 
+	# Disable proximity fade (see-through-walls breaks FPV immersion)
+	if player and player.grid:
+		player.grid.set_proximity_fade_enabled(false)
+
 func _enter_tactical_mode() -> void:
 	"""Switch to tactical (third-person) view mode"""
 	# Keep mouse captured for tactical camera control
@@ -194,6 +198,10 @@ func _enter_tactical_mode() -> void:
 
 	# Clear examination target
 	current_target = null
+
+	# Enable proximity fade (see-through-walls is useful in tactical view)
+	if player and player.grid:
+		player.grid.set_proximity_fade_enabled(true)
 
 # ============================================================================
 # INPUT HANDLING
