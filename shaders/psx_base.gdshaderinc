@@ -129,7 +129,7 @@ void vertex()
 #endif
 
 	POSITION = get_snapped_pos(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));  // snap position to grid
-	POSITION /= abs(POSITION.w);  // discard depth for affine mapping
+	//POSITION /= abs(POSITION.w);  // discard depth for affine mapping (disabled: causes severe texture distortion near camera)
 
 #ifdef ALPHA_SCISSOR
 	if (y_billboard)
