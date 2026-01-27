@@ -33,7 +33,7 @@ Utilities="*res://scripts/autoload/utilities.gd"
 
 window/size/viewport_width=1600
 window/size/viewport_height=900
-window/size/mode=2
+window/size/mode=3
 window/stretch/aspect="ignore"
 
 [gui]

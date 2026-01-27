@@ -21,6 +21,9 @@ extends Control
 ## Game over panel (created dynamically)
 var game_over_panel: GameOverPanel = null
 
+## Settings panel (created dynamically, shown when paused)
+var settings_panel: SettingsPanel = null
+
 ## Access to player in 3D scene
 var player: Node3D
 
@@ -74,6 +77,9 @@ func _ready() -> void:
 
 	# Create game over panel (hidden until needed)
 	_create_game_over_panel()
+
+	# Create settings panel (shown when paused)
+	_create_settings_panel()
 
 	# Wire up stats panel to player
 	if stats_panel:
@@ -478,6 +484,17 @@ func _create_game_over_panel() -> void:
 	game_over_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	game_over_panel.process_mode = Node.PROCESS_MODE_ALWAYS  # Work even when paused
 	add_child(game_over_panel)
+
+func _create_settings_panel() -> void:
+	"""Create the settings panel (shown when paused)"""
+	settings_panel = SettingsPanel.new()
+	settings_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	settings_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(settings_panel)
+
+	# Wire up player reference for camera settings
+	if player:
+		settings_panel.set_player(player)
 
 func _on_player_died(cause: String) -> void:
 	"""Handle player death - show game over screen"""

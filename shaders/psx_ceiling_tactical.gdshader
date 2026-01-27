@@ -70,7 +70,7 @@ void vertex() {
 
 	// PSX vertex snapping
 	POSITION = get_snapped_pos(PROJECTION_MATRIX * MODELVIEW_MATRIX * vec4(VERTEX, 1.0));
-	POSITION /= abs(POSITION.w);
+	//POSITION /= abs(POSITION.w);  // disabled: causes severe texture distortion near camera
 
 	// CRITICAL: Required for shader to work (from working psx_base.gdshaderinc)
 	VERTEX = VERTEX;  // it breaks without this - not sure why

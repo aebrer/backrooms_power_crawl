@@ -140,8 +140,8 @@ func generate_chunk(chunk: Chunk, world_seed: int) -> void:
 
 	var time_after_floor_pct := Time.get_ticks_usec()
 
-	# Apply to chunk
-	_apply_grid_to_chunk(grid, chunk)
+	# Apply to chunk (with variant placement)
+	_apply_grid_to_chunk(grid, chunk, rng)
 
 	var time_after_apply := Time.get_ticks_usec()
 
@@ -450,7 +450,16 @@ func _ensure_floor_percentage_range(grid: Array, rng: RandomNumberGenerator) -> 
 # GRID APPLICATION
 # ============================================================================
 
-func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
+## Variant placement probabilities
+const FLOOR_PUDDLE_CHANCE := 0.001
+const FLOOR_CARDBOARD_CHANCE := 0.0005
+const WALL_CRACKED_CHANCE := 0.002
+const WALL_HOLE_CHANCE := 0.0003
+const WALL_MOULDY_CHANCE := 0.001
+const CEILING_STAIN_CHANCE := 0.001
+const CEILING_HOLE_CHANCE := 0.0003
+
+func _apply_grid_to_chunk(grid: Array, chunk: Chunk, rng: RandomNumberGenerator) -> void:
 	"""Apply generated grid to chunk tiles (layer 0 = floor/wall, layer 1 = ceiling)
 
 	⚠️ PERFORMANCE CRITICAL - DO NOT "REFACTOR" WITHOUT BENCHMARKING ⚠️
@@ -471,7 +480,16 @@ func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
 	If you think this looks "messy" compared to chunk.set_tile(world_pos),
 	remember: the "clean" version was 3x slower and caused frame hitches.
 	"""
+	const FLOOR := 0
+	const WALL := 1
 	const CEILING := 2  # SubChunk.TileType.CEILING
+	const FLOOR_PUDDLE := 10  # SubChunk.TileType.FLOOR_PUDDLE
+	const FLOOR_CARDBOARD := 11
+	const WALL_CRACKED := 20
+	const WALL_HOLE := 21
+	const WALL_MOULDY := 22
+	const CEILING_STAIN := 30
+	const CEILING_HOLE := 31
 	const SUB_CHUNK_SIZE := 16
 	const SUB_CHUNKS_PER_SIDE := 8
 
@@ -488,10 +506,32 @@ func _apply_grid_to_chunk(grid: Array, chunk: Chunk) -> void:
 					var grid_y := sub_y * SUB_CHUNK_SIZE + tile_y
 					var tile_type: int = grid[grid_y][grid_x]
 
+					# Randomly replace some tiles with variants
+					if tile_type == FLOOR:
+						var roll := rng.randf()
+						if roll < FLOOR_PUDDLE_CHANCE:
+							tile_type = FLOOR_PUDDLE
+						elif roll < FLOOR_PUDDLE_CHANCE + FLOOR_CARDBOARD_CHANCE:
+							tile_type = FLOOR_CARDBOARD
+					elif tile_type == WALL:
+						var roll := rng.randf()
+						if roll < WALL_CRACKED_CHANCE:
+							tile_type = WALL_CRACKED
+						elif roll < WALL_CRACKED_CHANCE + WALL_HOLE_CHANCE:
+							tile_type = WALL_HOLE
+						elif roll < WALL_CRACKED_CHANCE + WALL_HOLE_CHANCE + WALL_MOULDY_CHANCE:
+							tile_type = WALL_MOULDY
+
 					# Direct sub-chunk tile access (no coordinate conversion!)
 					var sub_local := Vector2i(tile_x, tile_y)
 					sub_chunk.set_tile(sub_local, tile_type)
 
-					# Set ceiling above floor tiles
-					if tile_type == FLOOR:
-						sub_chunk.set_tile_at_layer(sub_local, 1, CEILING)
+					# Set ceiling above floor tiles (all floor variants get ceilings)
+					if tile_type == FLOOR or (tile_type >= 10 and tile_type <= 19):
+						var ceiling_type := CEILING
+						var ceil_roll := rng.randf()
+						if ceil_roll < CEILING_STAIN_CHANCE:
+							ceiling_type = CEILING_STAIN
+						elif ceil_roll < CEILING_STAIN_CHANCE + CEILING_HOLE_CHANCE:
+							ceiling_type = CEILING_HOLE
+						sub_chunk.set_tile_at_layer(sub_local, 1, ceiling_type)

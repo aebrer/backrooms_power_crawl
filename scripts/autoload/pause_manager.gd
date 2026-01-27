@@ -252,7 +252,7 @@ func _is_popup_visible() -> bool:
 				var script = parent.get_script()
 				if script:
 					var script_path = script.resource_path
-					if "level_up_panel" in script_path or "item_slot_selection_panel" in script_path:
+					if "level_up_panel" in script_path or "item_slot_selection_panel" in script_path or "settings_panel" in script_path:
 						if parent.visible:
 							return true
 			parent = parent.get_parent()
@@ -280,7 +280,7 @@ func _update_last_hud_focus(element: Control):
 		var script = parent.get_script()
 		if script:
 			var script_path = script.resource_path
-			if "level_up_panel" in script_path or "item_slot_selection_panel" in script_path:
+			if "level_up_panel" in script_path or "item_slot_selection_panel" in script_path or "settings_panel" in script_path:
 				# This is a popup button, don't remember it
 				return
 		parent = parent.get_parent()
