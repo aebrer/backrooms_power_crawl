@@ -22,7 +22,7 @@ signal resolution_scale_changed(scale_factor: int)
 
 const MAP_SIZE := 256  # Pixels (image size)
 const TRAIL_LENGTH := 10000  # Steps to remember
-const MIN_ZOOM := 1  # 1 tile = 1 pixel (256×256 tile view)
+const MIN_ZOOM := 0  # 2 tiles = 1 pixel (512×512 tile view, sampled)
 const MAX_ZOOM := 4  # 1 tile = 4 pixels (64×64 tile view)
 
 ## Colorblind-safe colors (light floor, dark walls)
@@ -76,7 +76,7 @@ var current_scale_factor: int = 0
 ## Last player position for incremental rendering
 var last_player_pos: Vector2i = Vector2i(-99999, -99999)
 
-## Zoom level: 1 = 1 tile/pixel, 4 = 4 pixels/tile
+## Zoom level: 0 = 2 tiles/pixel, 1 = 1 tile/pixel (default), 2-4 = N pixels/tile
 var zoom_level: int = 1
 
 # ============================================================================
@@ -248,7 +248,8 @@ func _render_map() -> void:
 	_render_full_map(player_pos)
 
 func _render_full_map(player_pos: Vector2i) -> void:
-	"""Full render of minimap. At zoom N, each tile = N×N pixels."""
+	"""Full render of minimap. At zoom >= 1, each tile = N×N pixels.
+	At zoom 0, 2×2 tiles map to 1 pixel (zoomed out overview)."""
 	# Clear to unloaded color
 	map_image.fill(COLOR_UNLOADED)
 
@@ -258,33 +259,66 @@ func _render_full_map(player_pos: Vector2i) -> void:
 		Log.warn(Log.Category.SYSTEM, "Minimap: No GridMap found on grid node")
 		return
 
-	# At zoom N, we show MAP_SIZE/N tiles per axis
-	var view_radius := MAP_SIZE / (2 * zoom_level)
-	var min_tile := player_pos - Vector2i(view_radius, view_radius)
-	var max_tile := player_pos + Vector2i(view_radius, view_radius)
+	if zoom_level == 0:
+		# ZOOMED OUT: 2 tiles per pixel, check 2×2 area per pixel
+		# Shows 512×512 tiles in 256×256 pixels
+		var view_radius := MAP_SIZE  # 256 tiles each direction = 512 total
+		var min_tile := player_pos - Vector2i(view_radius, view_radius)
 
-	# Render all tiles in visible area
-	for y in range(min_tile.y, max_tile.y):
-		for x in range(min_tile.x, max_tile.x):
-			# Query GridMap directly
-			var cell_item := grid_map.get_cell_item(Vector3i(x, 0, y))
+		for py in range(MAP_SIZE):
+			for px in range(MAP_SIZE):
+				# Map pixel to 2×2 tile area
+				var world_x := min_tile.x + px * 2
+				var world_y := min_tile.y + py * 2
 
-			var color: Color
-			if cell_item == -1:
-				color = COLOR_UNLOADED  # Unloaded/empty cell
-			elif Grid3D.is_wall_tile(cell_item):
-				color = COLOR_WALL  # Wall (base + all variants)
-			else:
-				color = COLOR_WALKABLE  # Floor or other walkable
+				# Check all 4 tiles in the 2×2 area — use best info available
+				# Priority: wall > floor > unloaded (prevents blank chunk artifacts)
+				var has_wall := false
+				var has_floor := false
+				for ty in range(2):
+					for tx in range(2):
+						var cell := grid_map.get_cell_item(Vector3i(world_x + tx, 0, world_y + ty))
+						if cell != -1:
+							if Grid3D.is_wall_tile(cell):
+								has_wall = true
+							else:
+								has_floor = true
 
-			# At zoom N, fill N×N pixel block for this tile
-			var tile_pos := Vector2i(x, y)
-			var screen_origin := _world_to_screen(tile_pos, player_pos)
-			for py in range(zoom_level):
-				for px in range(zoom_level):
-					var pixel := screen_origin + Vector2i(px, py)
-					if _is_valid_screen_pos(pixel):
-						map_image.set_pixelv(pixel, color)
+				var color: Color
+				if has_wall:
+					color = COLOR_WALL
+				elif has_floor:
+					color = COLOR_WALKABLE
+				else:
+					color = COLOR_UNLOADED
+
+				map_image.set_pixelv(Vector2i(px, py), color)
+	else:
+		# NORMAL/ZOOMED IN: At zoom N, show MAP_SIZE/N tiles per axis
+		var view_radius := MAP_SIZE / (2 * zoom_level)
+		var min_tile := player_pos - Vector2i(view_radius, view_radius)
+		var max_tile := player_pos + Vector2i(view_radius, view_radius)
+
+		for y in range(min_tile.y, max_tile.y):
+			for x in range(min_tile.x, max_tile.x):
+				var cell_item := grid_map.get_cell_item(Vector3i(x, 0, y))
+
+				var color: Color
+				if cell_item == -1:
+					color = COLOR_UNLOADED
+				elif Grid3D.is_wall_tile(cell_item):
+					color = COLOR_WALL
+				else:
+					color = COLOR_WALKABLE
+
+				# Fill N×N pixel block for this tile
+				var tile_pos := Vector2i(x, y)
+				var screen_origin := _world_to_screen(tile_pos, player_pos)
+				for ppy in range(zoom_level):
+					for ppx in range(zoom_level):
+						var pixel := screen_origin + Vector2i(ppx, ppy)
+						if _is_valid_screen_pos(pixel):
+							map_image.set_pixelv(pixel, color)
 
 	# Draw dynamic elements (trail + player)
 	_update_dynamic_elements(player_pos)
@@ -347,7 +381,11 @@ func _draw_chunk_boundaries(player_pos: Vector2i) -> void:
 func _draw_trail(player_pos: Vector2i) -> void:
 	"""Draw player movement trail with fading (optimized with spatial culling)"""
 	# Pre-calculate visible bounds for spatial culling (zoom-aware)
-	var view_radius := MAP_SIZE / (2 * zoom_level)
+	var view_radius: int
+	if zoom_level == 0:
+		view_radius = MAP_SIZE  # 512 tiles visible at zoom 0
+	else:
+		view_radius = MAP_SIZE / (2 * zoom_level)
 	var min_visible := player_pos - Vector2i(view_radius, view_radius)
 	var max_visible := player_pos + Vector2i(view_radius, view_radius)
 
@@ -453,6 +491,9 @@ func _world_to_screen(world_pos: Vector2i, player_pos: Vector2i) -> Vector2i:
 	"""Convert world tile position to screen pixel (zoom-aware, before rotation)"""
 	var half_size := MAP_SIZE / 2
 	var relative := world_pos - player_pos
+	if zoom_level == 0:
+		# Zoomed out: 2 tiles per pixel, so divide offset by 2
+		return Vector2i(half_size + relative.x / 2, half_size + relative.y / 2)
 	return Vector2i(half_size + relative.x * zoom_level, half_size + relative.y * zoom_level)
 
 func _rotate_screen_pos(screen_pos: Vector2i, angle: float) -> Vector2i:
