@@ -28,13 +28,24 @@ const MAX_ZOOM := 4  # 1 tile = 4 pixels (64×64 tile view)
 ## Colorblind-safe colors (light floor, dark walls)
 const COLOR_WALKABLE := Color("#8a8a8a")  # Light gray
 const COLOR_WALL := Color("#1a3a52")  # Dark blue-gray
-const COLOR_PLAYER := Color("#00d9ff")  # Bright cyan
+const COLOR_PLAYER := Color("#00d9ff")  # Bright cyan (fallback)
 const COLOR_TRAIL_START := Color(0.9, 0.0, 1.0, 0.3)  # Faint purple
 const COLOR_TRAIL_END := Color(0.9, 0.0, 1.0, 1.0)  # Bright purple
 const COLOR_CHUNK_BOUNDARY := Color("#404040")  # Subtle gray
 const COLOR_UNLOADED := Color("#000000")  # Black
 const COLOR_ITEM := Color("#ffff00")  # Bright yellow (discovered items)
 const COLOR_ENTITY := Color("#ff00ff")  # Magenta (entities/enemies)
+
+## Aura colors (semi-transparent glow behind minimap sprites)
+const COLOR_AURA_ENTITY := Color(1.0, 0.0, 0.0, 0.45)  # Red, semi-transparent
+const COLOR_AURA_ITEM := Color(1.0, 1.0, 0.0, 0.45)  # Yellow, semi-transparent
+
+## Sprite icon sizes per zoom level (pixels)
+## Zoom 0: 5px, Zoom 1: 7px, Zoom 2: 11px, Zoom 3: 15px, Zoom 4: 21px
+const SPRITE_SIZES := {0: 5, 1: 7, 2: 11, 3: 15, 4: 21}
+
+## Texture paths for minimap sprites
+const PLAYER_SPRITE_PATH := "res://assets/sprites/player/hazmat_suit.png"
 
 # ============================================================================
 # NODES
@@ -46,8 +57,11 @@ const COLOR_ENTITY := Color("#ff00ff")  # Magenta (entities/enemies)
 # STATE
 # ============================================================================
 
-## Dynamic image for minimap rendering
+## Dynamic image for minimap rendering (final composited output)
 var map_image: Image
+
+## Base map image (tiles + trail, no sprites) — rendered once per turn
+var base_map_image: Image
 
 ## Texture displayed on screen
 var map_texture: ImageTexture
@@ -67,8 +81,11 @@ var player: Node = null
 var camera_rotation: float = 0.0
 var last_camera_rotation: float = 0.0
 
-## Dirty flag - needs content redraw
+## Dirty flag - needs full content redraw (tiles + trail + sprites)
 var content_dirty: bool = true
+
+## Cached player position for sprite overlay (updated per turn)
+var cached_player_pos: Vector2i = Vector2i(-99999, -99999)
 
 ## Current scale factor (for resolution-based UI scaling)
 var current_scale_factor: int = 0
@@ -79,13 +96,19 @@ var last_player_pos: Vector2i = Vector2i(-99999, -99999)
 ## Zoom level: 0 = 2 tiles/pixel, 1 = 1 tile/pixel (default), 2-4 = N pixels/tile
 var zoom_level: int = 1
 
+## Pre-cached sprite icons at each zoom size {zoom_level: Image}
+var player_sprite_cache: Dictionary = {}
+var entity_sprite_cache: Dictionary = {}  # {entity_type: {zoom_level: Image}}
+var item_sprite_cache: Dictionary = {}  # {item_id: {zoom_level: Image}}
+
 # ============================================================================
 # LIFECYCLE
 # ============================================================================
 
 func _ready() -> void:
-	# Create image and texture
+	# Create images and texture
 	map_image = Image.create(MAP_SIZE, MAP_SIZE, false, Image.FORMAT_RGBA8)
+	base_map_image = Image.create(MAP_SIZE, MAP_SIZE, false, Image.FORMAT_RGBA8)
 	map_texture = ImageTexture.create_from_image(map_image)
 	map_texture_rect.texture = map_texture
 
@@ -93,6 +116,10 @@ func _ready() -> void:
 	player_trail.resize(TRAIL_LENGTH)
 	for i in range(TRAIL_LENGTH):
 		player_trail[i] = Vector2i(-99999, -99999)  # Invalid position
+
+	# Pre-cache minimap sprite icons
+	_cache_player_sprite()
+	_cache_entity_sprites()
 
 	# Clear cache when initial chunks finish loading
 	if ChunkManager:
@@ -133,10 +160,14 @@ func _process(_delta: float) -> void:
 		# Much faster - just a transform, not 65k pixel operations
 		map_texture_rect.rotation = camera_rotation
 
-	# Only redraw content when it actually changes (on turn, chunk load, etc)
+	# Full redraw when content changes (on turn, chunk load, etc)
 	if content_dirty:
 		_render_map()
 		content_dirty = false
+
+	# Composite sprites every frame (cheap — just a few small sprite blits)
+	# This keeps sprites upright as the minimap TextureRect rotates
+	_composite_sprites()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("minimap_zoom_in"):
@@ -320,16 +351,26 @@ func _render_full_map(player_pos: Vector2i) -> void:
 						if _is_valid_screen_pos(pixel):
 							map_image.set_pixelv(pixel, color)
 
-	# Draw dynamic elements (trail + player)
-	_update_dynamic_elements(player_pos)
-
-	# Update texture
-	map_texture.update(map_image)
-
-func _update_dynamic_elements(player_pos: Vector2i) -> void:
-	"""Redraw only trail and player marker (tiles unchanged)"""
-	# Draw player trail
+	# Draw trail onto base map
 	_draw_trail(player_pos)
+
+	# Save base map (tiles + trail) for per-frame sprite compositing
+	base_map_image.copy_from(map_image)
+	cached_player_pos = player_pos
+
+func _composite_sprites() -> void:
+	"""Composite rotated sprites onto base map every frame.
+
+	Copies base_map_image → map_image, then blits counter-rotated sprites on top.
+	This is cheap: just a memcpy + a few small sprite blits per frame.
+	"""
+	if not grid or not player:
+		return
+
+	# Start from clean base map (tiles + trail)
+	map_image.copy_from(base_map_image)
+
+	var player_pos := cached_player_pos
 
 	# Draw discovered items
 	_draw_discovered_items(player_pos)
@@ -337,15 +378,22 @@ func _update_dynamic_elements(player_pos: Vector2i) -> void:
 	# Draw entities
 	_draw_entities(player_pos)
 
-	# Draw player position (centered, scales with zoom)
+	# Draw player position (sprite icon, centered, scales with zoom)
 	var player_screen := _world_to_screen(player_pos, player_pos)
 	if _is_valid_screen_pos(player_screen):
-		var marker_radius := maxi(1, zoom_level)
-		for dy in range(-marker_radius, marker_radius + 1):
-			for dx in range(-marker_radius, marker_radius + 1):
-				var pixel := player_screen + Vector2i(dx, dy)
-				if _is_valid_screen_pos(pixel):
-					map_image.set_pixelv(pixel, COLOR_PLAYER)
+		if player_sprite_cache.has(zoom_level):
+			_blit_sprite(player_sprite_cache[zoom_level], player_screen)
+		else:
+			# Fallback: cyan pixel if sprite not loaded
+			var marker_radius := maxi(1, zoom_level)
+			for dy in range(-marker_radius, marker_radius + 1):
+				for dx in range(-marker_radius, marker_radius + 1):
+					var pixel := player_screen + Vector2i(dx, dy)
+					if _is_valid_screen_pos(pixel):
+						map_image.set_pixelv(pixel, COLOR_PLAYER)
+
+	# Update texture
+	map_texture.update(map_image)
 
 func _draw_chunk_boundaries(player_pos: Vector2i) -> void:
 	"""Draw chunk boundary lines (every 128 tiles)"""
@@ -418,7 +466,11 @@ func _draw_trail(player_pos: Vector2i) -> void:
 		map_image.set_pixelv(screen_pos, color)
 
 func _draw_discovered_items(player_pos: Vector2i) -> void:
-	"""Draw discovered items as yellow pixels on minimap (within PERCEPTION range)"""
+	"""Draw discovered items on minimap using sprite icons (within PERCEPTION range).
+
+	Lazily caches item sprites on first encounter. Falls back to colored
+	pixels for items without textures.
+	"""
 	if not grid or not grid.item_renderer:
 		return
 
@@ -430,17 +482,29 @@ func _draw_discovered_items(player_pos: Vector2i) -> void:
 	# Get all discovered item positions from ItemRenderer
 	var discovered_items = grid.item_renderer.get_discovered_item_positions()
 
-	# Draw each discovered item as a yellow pixel (if within perception range)
 	for item_pos in discovered_items:
-		# Check if within perception range
 		var distance: float = Vector2(item_pos).distance_to(Vector2(player_pos))
 		if distance > perception_range:
 			continue
 
 		var screen_pos := _world_to_screen(item_pos, player_pos)
+		if not _is_valid_screen_pos(screen_pos):
+			continue
 
-		if _is_valid_screen_pos(screen_pos):
-			# Draw item marker (scales with zoom)
+		# Try to get item_id and blit sprite
+		var drew_sprite := false
+		var item_data = grid.item_renderer.get_item_at(item_pos)
+		if item_data:
+			var item_id: String = item_data.get("item_id", "")
+			if item_id != "":
+				# Lazy-cache this item's sprite if not already done
+				_cache_item_sprite(item_id)
+				if item_sprite_cache.has(item_id) and item_sprite_cache[item_id].has(zoom_level):
+					_blit_sprite(item_sprite_cache[item_id][zoom_level], screen_pos, COLOR_AURA_ITEM)
+					drew_sprite = true
+
+		if not drew_sprite:
+			# Fallback: yellow pixel marker
 			var marker_size := maxi(1, zoom_level)
 			for dy in range(marker_size):
 				for dx in range(marker_size):
@@ -449,11 +513,11 @@ func _draw_discovered_items(player_pos: Vector2i) -> void:
 						map_image.set_pixelv(pixel, COLOR_ITEM)
 
 func _draw_entities(player_pos: Vector2i) -> void:
-	"""Draw entities as magenta pixels on minimap (within PERCEPTION range)
+	"""Draw entities on minimap using sprite icons (within PERCEPTION range).
 
-	Uses EntityRenderer to get entity positions (data-driven, like items).
+	Uses EntityRenderer to get entity positions and types. Falls back to
+	colored pixels for entities without cached sprites.
 	"""
-	# Get EntityRenderer from Grid3D
 	if not grid or not grid.entity_renderer:
 		return
 
@@ -465,17 +529,26 @@ func _draw_entities(player_pos: Vector2i) -> void:
 	# Get all entity positions from renderer
 	var entity_positions = grid.entity_renderer.get_all_entity_positions()
 
-	# Draw each entity as a magenta pixel (if within perception range)
 	for entity_pos in entity_positions:
-		# Check if within perception range
 		var distance: float = Vector2(entity_pos).distance_to(Vector2(player_pos))
 		if distance > perception_range:
 			continue
 
 		var screen_pos := _world_to_screen(entity_pos, player_pos)
+		if not _is_valid_screen_pos(screen_pos):
+			continue
 
-		if _is_valid_screen_pos(screen_pos):
-			# Draw entity marker (scales with zoom: 2px at zoom 1, bigger when zoomed in)
+		# Try to blit sprite icon
+		var entity = grid.entity_renderer.get_entity_at(entity_pos)
+		var drew_sprite := false
+		if entity:
+			var etype: String = entity.entity_type
+			if entity_sprite_cache.has(etype) and entity_sprite_cache[etype].has(zoom_level):
+				_blit_sprite(entity_sprite_cache[etype][zoom_level], screen_pos, COLOR_AURA_ENTITY)
+				drew_sprite = true
+
+		if not drew_sprite:
+			# Fallback: colored pixel marker
 			var marker_size := maxi(2, zoom_level + 1)
 			for dy in range(marker_size):
 				for dx in range(marker_size):
@@ -515,3 +588,133 @@ func _rotate_screen_pos(screen_pos: Vector2i, angle: float) -> Vector2i:
 func _is_valid_screen_pos(pos: Vector2i) -> bool:
 	"""Check if screen position is within bounds"""
 	return pos.x >= 0 and pos.x < MAP_SIZE and pos.y >= 0 and pos.y < MAP_SIZE
+
+# ============================================================================
+# SPRITE CACHING
+# ============================================================================
+
+func _cache_player_sprite() -> void:
+	"""Load player sprite and pre-cache resized versions for each zoom level."""
+	if not ResourceLoader.exists(PLAYER_SPRITE_PATH):
+		Log.warn(Log.Category.SYSTEM, "Minimap: Player sprite not found: %s" % PLAYER_SPRITE_PATH)
+		return
+
+	var texture = load(PLAYER_SPRITE_PATH) as Texture2D
+	if not texture:
+		return
+
+	var source_image := texture.get_image()
+	if not source_image:
+		return
+	# Decompress VRAM-compressed images so resize() works
+	if source_image.is_compressed():
+		source_image.decompress()
+
+	# Cache resized version for each zoom level
+	for zoom in SPRITE_SIZES:
+		var icon_size: int = SPRITE_SIZES[zoom]
+		var resized := source_image.duplicate()
+		resized.resize(icon_size, icon_size, Image.INTERPOLATE_NEAREST)
+		player_sprite_cache[zoom] = resized
+
+func _cache_entity_sprites() -> void:
+	"""Load entity textures and pre-cache resized versions for each zoom level."""
+	var entity_textures := {
+		"bacteria_spawn": "res://assets/textures/entities/bacteria_spawn.png",
+		"bacteria_motherload": "res://assets/textures/entities/bacteria_motherload.png",
+		"bacteria_spreader": "res://assets/textures/entities/bacteria_spreader.png",
+		"smiler": "res://assets/textures/entities/smiler.png",
+	}
+
+	for entity_type in entity_textures:
+		var path: String = entity_textures[entity_type]
+		if not ResourceLoader.exists(path):
+			continue
+
+		var texture = load(path) as Texture2D
+		if not texture:
+			continue
+
+		var source_image := texture.get_image()
+		if not source_image:
+			continue
+		if source_image.is_compressed():
+			source_image.decompress()
+
+		entity_sprite_cache[entity_type] = {}
+		for zoom in SPRITE_SIZES:
+			var icon_size: int = SPRITE_SIZES[zoom]
+			var resized := source_image.duplicate()
+			resized.resize(icon_size, icon_size, Image.INTERPOLATE_NEAREST)
+			entity_sprite_cache[entity_type][zoom] = resized
+
+func _cache_item_sprite(item_id: String) -> void:
+	"""Lazily cache an item sprite when first encountered on minimap."""
+	if item_sprite_cache.has(item_id):
+		return  # Already cached
+
+	if not grid or not grid.item_renderer:
+		return
+
+	# Get item texture from ItemRenderer's item_data_cache → item resource
+	var item_resource = grid.item_renderer._get_item_by_id(item_id)
+	if not item_resource or not item_resource.ground_sprite:
+		return
+
+	var source_image: Image = item_resource.ground_sprite.get_image()
+	if not source_image:
+		return
+	if source_image.is_compressed():
+		source_image.decompress()
+
+	item_sprite_cache[item_id] = {}
+	for zoom in SPRITE_SIZES:
+		var icon_size: int = SPRITE_SIZES[zoom]
+		var resized: Image = source_image.duplicate() as Image
+		resized.resize(icon_size, icon_size, Image.INTERPOLATE_NEAREST)
+		item_sprite_cache[item_id][zoom] = resized
+
+func _blit_sprite(sprite_image: Image, center: Vector2i, aura_color: Color = Color.TRANSPARENT) -> void:
+	"""Blit a sprite image onto the minimap, counter-rotated to stay upright.
+
+	The minimap TextureRect rotates by camera_rotation, so we rotate each
+	sprite by -camera_rotation to cancel it out. Uses inverse sampling to
+	avoid gaps. Only copies non-transparent pixels (alpha > 0.1).
+
+	If aura_color is non-transparent, draws a circular glow behind the sprite
+	(2px larger radius) to help it stand out against the map.
+	"""
+	var size := sprite_image.get_width()
+	var half := size / 2.0
+	var angle := -camera_rotation  # Counter-rotate against minimap rotation
+
+	var cos_a := cos(angle)
+	var sin_a := sin(angle)
+
+	# Draw aura behind sprite (slightly larger circle)
+	if aura_color.a > 0.0:
+		var aura_radius := half + 2.0
+		var aura_radius_sq := aura_radius * aura_radius
+		for dy in range(int(-aura_radius), int(aura_radius) + 1):
+			for dx in range(int(-aura_radius), int(aura_radius) + 1):
+				if dx * dx + dy * dy <= aura_radius_sq:
+					var dest := center + Vector2i(dx, dy)
+					if _is_valid_screen_pos(dest):
+						# Blend aura with existing pixel
+						var existing := map_image.get_pixelv(dest)
+						var blended := existing.lerp(Color(aura_color, 1.0), aura_color.a)
+						map_image.set_pixelv(dest, blended)
+
+	# Iterate over destination pixels in the bounding square
+	for dy in range(-half, half + 1):
+		for dx in range(-half, half + 1):
+			# Inverse rotate: find which source pixel maps to this destination
+			var src_x := int(round(dx * cos_a + dy * sin_a + half))
+			var src_y := int(round(-dx * sin_a + dy * cos_a + half))
+
+			if src_x >= 0 and src_x < size and src_y >= 0 and src_y < size:
+				var pixel_color := sprite_image.get_pixel(src_x, src_y)
+				if pixel_color.a > 0.1:
+					var dest := center + Vector2i(dx, dy)
+					if _is_valid_screen_pos(dest):
+						map_image.set_pixelv(dest, pixel_color)
