@@ -22,6 +22,8 @@ signal resolution_scale_changed(scale_factor: int)
 
 const MAP_SIZE := 256  # Pixels (image size)
 const TRAIL_LENGTH := 10000  # Steps to remember
+const MIN_ZOOM := 1  # 1 tile = 1 pixel (256×256 tile view)
+const MAX_ZOOM := 4  # 1 tile = 4 pixels (64×64 tile view)
 
 ## Colorblind-safe colors (light floor, dark walls)
 const COLOR_WALKABLE := Color("#8a8a8a")  # Light gray
@@ -73,6 +75,9 @@ var current_scale_factor: int = 0
 
 ## Last player position for incremental rendering
 var last_player_pos: Vector2i = Vector2i(-99999, -99999)
+
+## Zoom level: 1 = 1 tile/pixel, 4 = 4 pixels/tile
+var zoom_level: int = 1
 
 # ============================================================================
 # LIFECYCLE
@@ -132,6 +137,21 @@ func _process(_delta: float) -> void:
 	if content_dirty:
 		_render_map()
 		content_dirty = false
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("minimap_zoom_in"):
+		_change_zoom(1)
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("minimap_zoom_out"):
+		_change_zoom(-1)
+		get_viewport().set_input_as_handled()
+
+func _change_zoom(direction: int) -> void:
+	"""Change zoom level by direction (+1 or -1), clamped to MIN/MAX"""
+	var new_zoom := clampi(zoom_level + direction, MIN_ZOOM, MAX_ZOOM)
+	if new_zoom != zoom_level:
+		zoom_level = new_zoom
+		content_dirty = true
 
 # ============================================================================
 # PUBLIC API
@@ -228,7 +248,7 @@ func _render_map() -> void:
 	_render_full_map(player_pos)
 
 func _render_full_map(player_pos: Vector2i) -> void:
-	"""Full render of 256×256 tile area (used for first render or teleports)"""
+	"""Full render of minimap. At zoom N, each tile = N×N pixels."""
 	# Clear to unloaded color
 	map_image.fill(COLOR_UNLOADED)
 
@@ -238,31 +258,33 @@ func _render_full_map(player_pos: Vector2i) -> void:
 		Log.warn(Log.Category.SYSTEM, "Minimap: No GridMap found on grid node")
 		return
 
-	var half_size := MAP_SIZE / 2
-	var min_tile := player_pos - Vector2i(half_size, half_size)
-	var max_tile := player_pos + Vector2i(half_size, half_size)
+	# At zoom N, we show MAP_SIZE/N tiles per axis
+	var view_radius := MAP_SIZE / (2 * zoom_level)
+	var min_tile := player_pos - Vector2i(view_radius, view_radius)
+	var max_tile := player_pos + Vector2i(view_radius, view_radius)
 
 	# Render all tiles in visible area
 	for y in range(min_tile.y, max_tile.y):
 		for x in range(min_tile.x, max_tile.x):
-			var tile_pos := Vector2i(x, y)
-			var screen_pos := _world_to_screen(tile_pos, player_pos)
-
-			if not _is_valid_screen_pos(screen_pos):
-				continue
-
-			# Query GridMap directly (WALL = 1, FLOOR = 0, INVALID = -1)
+			# Query GridMap directly
 			var cell_item := grid_map.get_cell_item(Vector3i(x, 0, y))
 
 			var color: Color
 			if cell_item == -1:
 				color = COLOR_UNLOADED  # Unloaded/empty cell
-			elif cell_item == 1:
-				color = COLOR_WALL  # Wall
+			elif Grid3D.is_wall_tile(cell_item):
+				color = COLOR_WALL  # Wall (base + all variants)
 			else:
 				color = COLOR_WALKABLE  # Floor or other walkable
 
-			map_image.set_pixelv(screen_pos, color)
+			# At zoom N, fill N×N pixel block for this tile
+			var tile_pos := Vector2i(x, y)
+			var screen_origin := _world_to_screen(tile_pos, player_pos)
+			for py in range(zoom_level):
+				for px in range(zoom_level):
+					var pixel := screen_origin + Vector2i(px, py)
+					if _is_valid_screen_pos(pixel):
+						map_image.set_pixelv(pixel, color)
 
 	# Draw dynamic elements (trail + player)
 	_update_dynamic_elements(player_pos)
@@ -281,12 +303,12 @@ func _update_dynamic_elements(player_pos: Vector2i) -> void:
 	# Draw entities
 	_draw_entities(player_pos)
 
-	# Draw player position (centered)
+	# Draw player position (centered, scales with zoom)
 	var player_screen := _world_to_screen(player_pos, player_pos)
 	if _is_valid_screen_pos(player_screen):
-		# Draw 3x3 player marker
-		for dy in range(-1, 2):
-			for dx in range(-1, 2):
+		var marker_radius := maxi(1, zoom_level)
+		for dy in range(-marker_radius, marker_radius + 1):
+			for dx in range(-marker_radius, marker_radius + 1):
 				var pixel := player_screen + Vector2i(dx, dy)
 				if _is_valid_screen_pos(pixel):
 					map_image.set_pixelv(pixel, COLOR_PLAYER)
@@ -324,10 +346,10 @@ func _draw_chunk_boundaries(player_pos: Vector2i) -> void:
 
 func _draw_trail(player_pos: Vector2i) -> void:
 	"""Draw player movement trail with fading (optimized with spatial culling)"""
-	# Pre-calculate visible bounds for spatial culling
-	var half_size := MAP_SIZE / 2
-	var min_visible := player_pos - Vector2i(half_size, half_size)
-	var max_visible := player_pos + Vector2i(half_size, half_size)
+	# Pre-calculate visible bounds for spatial culling (zoom-aware)
+	var view_radius := MAP_SIZE / (2 * zoom_level)
+	var min_visible := player_pos - Vector2i(view_radius, view_radius)
+	var max_visible := player_pos + Vector2i(view_radius, view_radius)
 
 	# Early exit if no trail positions yet
 	if trail_valid_count == 0:
@@ -380,7 +402,13 @@ func _draw_discovered_items(player_pos: Vector2i) -> void:
 		var screen_pos := _world_to_screen(item_pos, player_pos)
 
 		if _is_valid_screen_pos(screen_pos):
-			map_image.set_pixelv(screen_pos, COLOR_ITEM)
+			# Draw item marker (scales with zoom)
+			var marker_size := maxi(1, zoom_level)
+			for dy in range(marker_size):
+				for dx in range(marker_size):
+					var pixel := screen_pos + Vector2i(dx, dy)
+					if _is_valid_screen_pos(pixel):
+						map_image.set_pixelv(pixel, COLOR_ITEM)
 
 func _draw_entities(player_pos: Vector2i) -> void:
 	"""Draw entities as magenta pixels on minimap (within PERCEPTION range)
@@ -409,9 +437,10 @@ func _draw_entities(player_pos: Vector2i) -> void:
 		var screen_pos := _world_to_screen(entity_pos, player_pos)
 
 		if _is_valid_screen_pos(screen_pos):
-			# Draw 2x2 entity marker (slightly larger than items)
-			for dy in range(0, 2):
-				for dx in range(0, 2):
+			# Draw entity marker (scales with zoom: 2px at zoom 1, bigger when zoomed in)
+			var marker_size := maxi(2, zoom_level + 1)
+			for dy in range(marker_size):
+				for dx in range(marker_size):
 					var pixel := screen_pos + Vector2i(dx, dy)
 					if _is_valid_screen_pos(pixel):
 						map_image.set_pixelv(pixel, COLOR_ENTITY)
@@ -421,10 +450,10 @@ func _draw_entities(player_pos: Vector2i) -> void:
 # ============================================================================
 
 func _world_to_screen(world_pos: Vector2i, player_pos: Vector2i) -> Vector2i:
-	"""Convert world tile position to screen pixel (before rotation)"""
+	"""Convert world tile position to screen pixel (zoom-aware, before rotation)"""
 	var half_size := MAP_SIZE / 2
 	var relative := world_pos - player_pos
-	return Vector2i(half_size + relative.x, half_size + relative.y)
+	return Vector2i(half_size + relative.x * zoom_level, half_size + relative.y * zoom_level)
 
 func _rotate_screen_pos(screen_pos: Vector2i, angle: float) -> Vector2i:
 	"""Rotate screen position around center by angle (radians)"""
