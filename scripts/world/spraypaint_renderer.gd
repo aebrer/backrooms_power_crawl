@@ -21,8 +21,8 @@ class_name SpraypaintRenderer extends Node3D
 # DEPENDENCIES
 # ============================================================================
 
-## Font for spraypaint text (uses default font with emoji fallback)
-const _SPRAYPAINT_FONT = preload("res://assets/fonts/default_font.tres")
+## Font for spraypaint text (Rubik Spray Paint — OFL licensed, with emoji fallback)
+const _SPRAYPAINT_FONT = preload("res://assets/fonts/spraypaint_font.tres")
 
 @onready var grid_3d: Grid3D = get_parent()
 

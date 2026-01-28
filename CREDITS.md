@@ -43,6 +43,31 @@ This project uses assets and code from various sources. All external content is 
 
 ---
 
+## Fonts
+
+### Rubik Spray Paint
+- **Source**: [Google Fonts](https://fonts.google.com/specimen/Rubik+Spray+Paint) / [GitHub](https://github.com/NaN-xyz/Rubik-Filtered)
+- **Authors**: NaN (Rubik Filtered Project Authors)
+- **License**: SIL Open Font License, Version 1.1
+- **Location**: `assets/fonts/RubikSprayPaint/`
+- **Usage**: Spraypaint/graffiti text rendered on floors and walls in-game
+
+### IBM Plex Mono
+- **Source**: [GitHub](https://github.com/IBM/plex)
+- **Authors**: IBM Corp.
+- **License**: SIL Open Font License, Version 1.1
+- **Location**: `assets/fonts/IBMPlexMono/`
+- **Usage**: Primary UI and game text font
+
+### Noto Color Emoji
+- **Source**: [Google Fonts](https://fonts.google.com/noto/specimen/Noto+Color+Emoji) / [GitHub](https://github.com/googlefonts/noto-emoji)
+- **Authors**: Google Inc.
+- **License**: SIL Open Font License, Version 1.1
+- **Location**: `assets/fonts/NotoEmoji/`
+- **Usage**: Emoji fallback for text rendering
+
+---
+
 ## Level Design References
 
 ### Backrooms Lore and Aesthetics
@@ -87,4 +112,4 @@ All code not listed above is original work created specifically for this project
 
 As new assets are added to the project, they will be documented here with proper attribution.
 
-**Last Updated**: 2025-01-14
+**Last Updated**: 2026-01-27
