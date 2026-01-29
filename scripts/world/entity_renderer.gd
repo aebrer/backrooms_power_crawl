@@ -76,6 +76,7 @@ const ENTITY_COLORS = {
 	"bacteria_spreader": Color(0.3, 0.6, 0.2),   # Darker green with yellow tint
 	"smiler": Color(1.0, 1.0, 0.8),             # Pale yellow/white (eerie glow)
 	"tutorial_mannequin": Color(0.85, 0.75, 0.65),  # Pale beige plastic
+	"vending_machine": Color(0.6, 0.6, 0.7),        # Metallic gray-blue
 }
 
 ## Entity textures (loaded on demand)
@@ -92,6 +93,7 @@ const ENTITY_SCALE_OVERRIDES = {
 	"bacteria_motherload": 2.0,  # Boss-sized
 	"smiler": 2.0,  # Large, imposing presence
 	"tutorial_mannequin": 2.0,  # Life-sized mannequin
+	"vending_machine": 2.5,    # Tall vending machine
 }
 
 ## Per-entity height overrides (world units above floor)
@@ -100,6 +102,7 @@ const ENTITY_HEIGHT_OVERRIDES = {
 	"bacteria_motherload": 2.0,  # Raised to match 2x size scale
 	"smiler": 3.0,  # Floats ominously above the floor
 	"tutorial_mannequin": 2.0,  # Raised to match 2x size scale
+	"vending_machine": 2.5,    # Tall machine, raised to match scale
 }
 
 ## Default entity color

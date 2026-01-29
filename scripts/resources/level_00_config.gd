@@ -155,6 +155,16 @@ entity density: very low"""
 			"threat_level": 2,  # Epsilon - moderate threat
 			"corruption_threshold": 0.0,  # Can spawn at any corruption
 		},
+		{
+			"entity_type": "vending_machine",
+			"weight": 1.5,  # Uncommon interactable
+			"base_hp": 99999.0,  # Indestructible
+			"hp_scale": 0.0,  # No HP scaling
+			"base_damage": 0.0,  # No damage
+			"damage_scale": 0.0,  # No damage scaling
+			"threat_level": 0,  # Gimel (environment) - not a threat
+			"corruption_threshold": 0.0,  # Can spawn at any corruption
+		},
 	]
 
 	# ========================================================================

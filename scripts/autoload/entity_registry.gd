@@ -208,6 +208,19 @@ func _load_entities() -> void:
 	mannequin.threat_level = 0
 	_entities["tutorial_mannequin"] = mannequin
 
+	# Vending Machine (interactable item dispenser)
+	var vending = EntityInfo.new()
+	vending.entity_id = "vending_machine"
+	vending.entity_name = "Vending Machine"
+	vending.visual_description = "A battered vending machine humming faintly. The fluorescent display flickers, illuminating rows of unfamiliar items behind scratched plexiglass."
+	vending.clearance_info[0] = ""
+	vending.clearance_info[1] = "Accepts no currency you recognize. The payment mechanism appears to extract something... else."
+	vending.clearance_info[2] = "Transaction costs are paid in biological capacity. Subjects report permanent reduction in physical or mental resilience after each purchase."
+	vending.clearance_info[3] = "--- FIELD DATA ---\nCost: Permanent max stat reduction (HP, Sanity, or Mana)\nCost scales with item rarity and local corruption\nItems restocked: Never"
+	vending.object_class = "Safe"
+	vending.threat_level = 0
+	_entities["vending_machine"] = vending
+
 	# Exit Hole (visual marker for EXIT_STAIRS tiles)
 	var exit_hole = EntityInfo.new()
 	exit_hole.entity_id = "exit_hole"

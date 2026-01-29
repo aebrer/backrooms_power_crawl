@@ -12,6 +12,7 @@ const _BacteriaMotherloadBehavior = preload("res://scripts/ai/behaviors/bacteria
 const _SmilerBehavior = preload("res://scripts/ai/behaviors/smiler_behavior.gd")
 const _BacteriaSpreaderBehavior = preload("res://scripts/ai/behaviors/bacteria_spreader_behavior.gd")
 const _TutorialMannequinBehavior = preload("res://scripts/ai/behaviors/tutorial_mannequin_behavior.gd")
+const _VendingMachineBehavior = preload("res://scripts/ai/behaviors/vending_machine_behavior.gd")
 
 # Singleton instance
 static var _instance: BehaviorRegistry = null
@@ -35,6 +36,7 @@ func _init_behaviors() -> void:
 		"bacteria_spreader": _BacteriaSpreaderBehavior.new(),
 		"smiler": _SmilerBehavior.new(),
 		"tutorial_mannequin": _TutorialMannequinBehavior.new(),
+		"vending_machine": _VendingMachineBehavior.new(),
 	}
 
 static func get_behavior(entity_type: String) -> EntityBehavior:

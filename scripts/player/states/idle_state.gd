@@ -378,9 +378,17 @@ func _move_forward() -> void:
 	if forward_direction == Vector2i.ZERO:
 		return
 
-	# Check if there's an item at the target position
+	# Check if there's an item or vending machine at the target position
 	var target_position = player.grid_position + forward_direction
 	var item_at_target = _get_item_at_position(target_position)
+	var entity_at_target = _get_vending_machine_at_position(target_position)
+
+	# Check for vending machine first (blocks movement, opens UI without consuming a turn)
+	if entity_at_target:
+		var vm_action = VendingMachineAction.new(target_position, entity_at_target)
+		if vm_action.can_execute(player):
+			vm_action.execute(player)
+			return
 
 	# Create appropriate action (pickup or movement)
 	var action: Action
@@ -429,13 +437,17 @@ func _update_action_preview() -> void:
 		player.action_preview_changed.emit(empty_actions)
 		return
 
-	# Check if there's an item at the target position
+	# Check if there's a vending machine or item at the target position
 	var target_position = player.grid_position + forward_direction
 	var item_at_target = _get_item_at_position(target_position)
+	var entity_at_target = _get_vending_machine_at_position(target_position)
 
 	var preview_action: Action
 
-	if item_at_target:
+	if entity_at_target:
+		# Show vending machine action
+		preview_action = VendingMachineAction.new(target_position, entity_at_target)
+	elif item_at_target:
 		# Show pickup action
 		preview_action = PickupItemAction.new(target_position, item_at_target)
 	else:
@@ -661,3 +673,13 @@ func _get_item_at_position(grid_pos: Vector2i) -> Dictionary:
 		return {}
 
 	return player.grid.item_renderer.get_item_at(grid_pos)
+
+func _get_vending_machine_at_position(grid_pos: Vector2i) -> WorldEntity:
+	"""Check if there's a vending machine entity at the given grid position"""
+	if not player or not player.grid:
+		return null
+
+	var entity = player.grid.get_entity_at(grid_pos)
+	if entity and entity.entity_type == "vending_machine" and entity.is_alive():
+		return entity
+	return null
