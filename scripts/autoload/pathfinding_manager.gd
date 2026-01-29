@@ -82,9 +82,9 @@ func _add_chunk_to_graph(chunk_pos: Vector2i) -> void:
 			var local_pos := Vector2i(x, y)
 			var world_pos := chunk_world_offset + local_pos
 
-			# Check if tile is walkable (FLOOR = 0)
+			# Check if tile is walkable (any floor type)
 			if grid.has_method("get_tile_type"):
-				if grid.get_tile_type(world_pos) == 0:  # FLOOR
+				if SubChunk.is_floor_type(grid.get_tile_type(world_pos)):
 					_add_point(world_pos)
 			elif grid.has_method("is_walkable"):
 				if grid.is_walkable(world_pos):
@@ -122,15 +122,24 @@ const NEIGHBOR_OFFSETS: Array[Vector2i] = [
 
 ## Connect a point to its walkable neighbors (8-directional)
 func _connect_neighbors(pos: Vector2i, point_id: int) -> void:
-	"""Connect a point to its 8-directional neighbors (diagonals have same cost)"""
-	# Use pre-allocated offsets to avoid creating 8 Vector2i per call
+	"""Connect a point to its 8-directional neighbors (diagonals have same cost).
+	Diagonal connections blocked only when BOTH adjacent cardinal tiles are walls
+	(at least one must be a floor tile to allow diagonal movement)."""
 	for offset in NEIGHBOR_OFFSETS:
 		var neighbor_pos := pos + offset
-		if pos_to_id.has(neighbor_pos):
-			var neighbor_id: int = pos_to_id[neighbor_pos]
-			# Bidirectional connection with cost 1.0 (uniform - diagonals same as cardinals)
-			if not astar.are_points_connected(point_id, neighbor_id):
-				astar.connect_points(point_id, neighbor_id, true)
+		if not pos_to_id.has(neighbor_pos):
+			continue
+
+		# Diagonal wall gap check: block when both adjacent cardinals are walls
+		if abs(offset.x) == 1 and abs(offset.y) == 1:
+			var has_x_floor := pos_to_id.has(pos + Vector2i(offset.x, 0))
+			var has_y_floor := pos_to_id.has(pos + Vector2i(0, offset.y))
+			if not has_x_floor and not has_y_floor:
+				continue
+
+		var neighbor_id: int = pos_to_id[neighbor_pos]
+		if not astar.are_points_connected(point_id, neighbor_id):
+			astar.connect_points(point_id, neighbor_id, true)
 
 ## Find path from start to goal
 func find_path(from: Vector2i, to: Vector2i) -> PackedVector2Array:
@@ -361,7 +370,7 @@ func add_chunk(chunk: Chunk) -> void:
 		for y in range(subchunk.SIZE):
 			for x in range(subchunk.SIZE):
 				var tile_type = subchunk.get_tile(Vector2i(x, y))
-				if tile_type == subchunk.TileType.FLOOR:
+				if SubChunk.is_floor_type(tile_type):
 					var world_pos: Vector2i = subchunk_offset + Vector2i(x, y)
 					if not pos_to_id.has(world_pos):
 						_add_point(world_pos)

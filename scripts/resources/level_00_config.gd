@@ -34,6 +34,22 @@ entity density: very low"""
 	# Level 0 specific mesh library (yellow wallpaper, brown carpet, grey ceiling)
 	mesh_library_path = "res://assets/level_00_mesh_library.tres"
 
+	# Tile type → MeshLibrary item ID mapping
+	# SubChunk.TileType values → MeshLibrary item indices
+	tile_mapping = {
+		0: 0,   # FLOOR → Floor
+		1: 1,   # WALL → Wall
+		2: 2,   # CEILING → Ceiling
+		3: 0,   # EXIT_STAIRS → Floor (renders as floor)
+		10: 3,  # FLOOR_PUDDLE → FloorPuddle
+		11: 4,  # FLOOR_CARDBOARD → FloorCardboard
+		20: 5,  # WALL_CRACKED → WallCracked
+		21: 6,  # WALL_HOLE → WallHole
+		22: 7,  # WALL_MOULDY → WallMouldy
+		30: 8,  # CEILING_STAIN → CeilingStain
+		31: 9,  # CEILING_HOLE → CeilingHole
+	}
+
 	# Yellow office aesthetic
 	ambient_light_color = Color(1.0, 0.95, 0.7, 1.0)  # Warm yellow
 	ambient_light_intensity = 0.5
@@ -139,6 +155,16 @@ entity density: very low"""
 			"threat_level": 2,  # Epsilon - moderate threat
 			"corruption_threshold": 0.0,  # Can spawn at any corruption
 		},
+		{
+			"entity_type": "vending_machine",
+			"weight": 0.8,  # Between rare and uncommon frequency
+			"base_hp": 99999.0,  # Indestructible
+			"hp_scale": 0.0,  # No HP scaling
+			"base_damage": 0.0,  # No damage
+			"damage_scale": 0.0,  # No damage scaling
+			"threat_level": 0,  # Gimel (environment) - not a threat
+			"corruption_threshold": 0.0,  # Can spawn at any corruption
+		},
 	]
 
 	# ========================================================================
@@ -200,24 +226,28 @@ entity density: very low"""
 	vignette_inner_radius = 0.2
 	vignette_outer_radius = 0.8
 
+	# ========================================================================
+	# SPAWN SPRAYPAINT
+	# ========================================================================
+	spawn_spraypaint = [
+		{"text": "there's an item nearby", "color": Color(1.0, 0.4, 0.1), "font_size": 64, "surface": "floor"},
+	]
+
 # ========================================================================
 # LIFECYCLE HOOKS
 # ========================================================================
 
 func on_load() -> void:
 	super.on_load()
+
+func on_enter() -> void:
+	super.on_enter()
 	# Defer welcome messages so they appear after UI log panel is ready
-	# (on_load runs during Game3D._ready, before Game._ready connects log signal)
 	_show_welcome_messages.call_deferred()
 
 func _show_welcome_messages() -> void:
 	Log.player("welcome to the backrooms. you are in the lobby.")
 	Log.player("the fluorescent lights buzz overhead. the air smells of mold.")
-
-func on_enter() -> void:
-	super.on_enter()
-	# Future: Play noclip sound effect
-	# Future: Show tutorial hints if first time
 
 func on_exit() -> void:
 	super.on_exit()

@@ -46,6 +46,14 @@ class_name LevelConfig
 ## MeshLibrary contains all tile meshes with materials baked in (walls, floors, ceilings)
 @export_file("*.tres") var mesh_library_path: String = ""
 
+## Maps SubChunk.TileType values to MeshLibrary item IDs for this level.
+## Each level defines which MeshLibrary items correspond to which tile types.
+## Keys: SubChunk.TileType int values (0=FLOOR, 1=WALL, 2=CEILING, 3=EXIT_STAIRS,
+##        10-19=floor variants, 20-29=wall variants, 30-39=ceiling variants)
+## Values: MeshLibrary item IDs (0, 1, 2, etc.)
+## Unmapped variant types fall back to their base type (e.g., FLOOR_PUDDLE → FLOOR).
+var tile_mapping: Dictionary = {}
+
 ## Ambient light color for this level
 @export var ambient_light_color: Color = Color(1.0, 1.0, 1.0, 1.0)
 
@@ -178,10 +186,6 @@ class_name LevelConfig
 ## ItemSpawner uses this list + rarity + corruption to determine spawns
 var permitted_items: Array[Item] = []
 
-## Item spawn rules: [{"item_scene": path, "weight": float}]
-## DEPRECATED: Use permitted_items instead for new rarity-based system
-@export var item_spawn_table: Array[Dictionary] = []
-
 ## Item density (0.0 = rare, 1.0 = common)
 @export_range(0.0, 1.0) var item_density: float = 0.1
 
@@ -246,6 +250,23 @@ var permitted_items: Array[Item] = []
 ## Ceiling vignette outer radius (0.0 - 1.0, edge opaque)
 @export_range(0.0, 1.0) var vignette_outer_radius: float = 0.8
 
+## Enable snowfall particle effect (for outdoor/snowy levels)
+@export var enable_snowfall: bool = false
+
+## Fixed player spawn position (Vector2i(-1, -1) = use random spawn logic)
+## Set to a specific position for hand-crafted levels like tutorials
+@export var player_spawn_position: Vector2i = Vector2i(-1, -1)
+
+## Initial camera yaw (horizontal rotation) in degrees when spawning
+## Only used when player_spawn_position is set (hand-crafted levels)
+## 0 = default direction, 180 = face toward +Y in grid space
+@export var player_spawn_camera_yaw: float = 0.0
+
+## Spraypaint messages placed near the player's spawn point on level entry
+## Each entry: {"text": String, "color": Color, "font_size": int, "surface": String}
+## Placed on adjacent walkable tiles in order. Empty array = no spawn spraypaint.
+var spawn_spraypaint: Array[Dictionary] = []
+
 # ============================================================================
 # LIFECYCLE HOOKS (Override in subclasses)
 # ============================================================================
@@ -293,24 +314,6 @@ func get_random_entity() -> String:
 
 	return ""
 
-## Get a random item scene path based on spawn weights
-func get_random_item() -> String:
-	if item_spawn_table.is_empty():
-		return ""
-
-	var total_weight := 0.0
-	for entry in item_spawn_table:
-		total_weight += entry.get("weight", 1.0)
-
-	var roll := randf() * total_weight
-	var cumulative := 0.0
-
-	for entry in item_spawn_table:
-		cumulative += entry.get("weight", 1.0)
-		if roll <= cumulative:
-			return entry.get("item_scene", "")
-
-	return ""
 
 ## Add an item to the permitted items list
 func add_permitted_item(item: Item) -> void:
@@ -331,9 +334,7 @@ func get_random_exit_destination() -> int:
 func validate() -> bool:
 	var valid := true
 
-	if level_id < 0:
-		push_error("[LevelConfig] Invalid level_id: %d" % level_id)
-		valid = false
+	# level_id can be negative (e.g., -1 for tutorial level)
 
 	if display_name.is_empty():
 		push_warning("[LevelConfig] Missing display_name for level %d" % level_id)
@@ -346,5 +347,12 @@ func validate() -> bool:
 	# 1. It doesn't work reliably in web builds (packed filesystem)
 	# 2. The actual load() in grid_3d.gd will fail with a clear error if file is missing
 	# 3. Validation should check data correctness, not file system state
+
+	if tile_mapping.is_empty():
+		push_warning("[LevelConfig] Empty tile_mapping for level %d — grid rendering may fail" % level_id)
+
+	for entry in entity_spawn_table:
+		if not entry.has("entity_type"):
+			push_warning("[LevelConfig] Entity spawn entry missing 'entity_type' in level %d" % level_id)
 
 	return valid

@@ -44,25 +44,21 @@ func _unhandled_input(event):
 		get_viewport().set_input_as_handled()
 		return
 
-	# Handle controller UI navigation when paused (use just_pressed for debouncing)
-	if is_paused:
-		if event.is_action_pressed("ui_up") and not Input.is_action_pressed("ui_down"):
-			# Only navigate if this is a fresh press (use InputManager for debouncing)
-			if InputManager and InputManager.is_action_just_pressed("ui_up"):
-				navigate_hud(Vector2i(0, -1))
-				get_viewport().set_input_as_handled()
-		elif event.is_action_pressed("ui_down") and not Input.is_action_pressed("ui_up"):
-			if InputManager and InputManager.is_action_just_pressed("ui_down"):
-				navigate_hud(Vector2i(0, 1))
-				get_viewport().set_input_as_handled()
-		elif event.is_action_pressed("ui_left") and not Input.is_action_pressed("ui_right"):
-			if InputManager and InputManager.is_action_just_pressed("ui_left"):
-				navigate_hud(Vector2i(-1, 0))
-				get_viewport().set_input_as_handled()
-		elif event.is_action_pressed("ui_right") and not Input.is_action_pressed("ui_left"):
-			if InputManager and InputManager.is_action_just_pressed("ui_right"):
-				navigate_hud(Vector2i(1, 0))
-				get_viewport().set_input_as_handled()
+	# Left stick (ui_up/down/left/right) handling:
+	# - When paused: used for HUD navigation (vertical only, horizontal via mouse)
+	# - When unpaused: consume to prevent Godot's built-in focus system from firing
+	if event.is_action_pressed("ui_up") or event.is_action_pressed("ui_down") \
+			or event.is_action_pressed("ui_left") or event.is_action_pressed("ui_right"):
+		if is_paused:
+			# Vertical HUD navigation with left stick
+			if event.is_action_pressed("ui_up") and not Input.is_action_pressed("ui_down"):
+				if InputManager and InputManager.is_action_just_pressed("ui_up"):
+					navigate_hud(Vector2i(0, -1))
+			elif event.is_action_pressed("ui_down") and not Input.is_action_pressed("ui_up"):
+				if InputManager and InputManager.is_action_just_pressed("ui_down"):
+					navigate_hud(Vector2i(0, 1))
+		# Always consume left stick input to block Godot's built-in focus navigation
+		get_viewport().set_input_as_handled()
 
 func toggle_pause(from_gamepad: bool = false):
 	"""Toggle pause state.

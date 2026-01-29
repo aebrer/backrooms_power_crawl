@@ -68,8 +68,8 @@ func _heal_nearby_bacteria(entity: WorldEntity, grid) -> void:
 		if other_entity == entity or other_entity.is_dead:
 			continue
 
-		# Only heal bacteria types, but NOT other spreaders (no self-sustaining spreader blob)
-		if not other_entity.entity_type.begins_with("bacteria"):
+		# Only heal same-faction entities, but NOT other spreaders (no self-sustaining spreader blob)
+		if other_entity.faction != entity.faction or other_entity.faction.is_empty():
 			continue
 		if other_entity.entity_type == "bacteria_spreader":
 			continue

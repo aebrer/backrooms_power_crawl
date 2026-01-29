@@ -340,9 +340,7 @@ func _update_examination_target() -> void:
 		if new_target:
 			# Examine the target - route to correct examination function based on entity_type
 			if new_target.entity_type == Examinable.EntityType.ENVIRONMENT:
-				# Extract simple type from "level_0_floor" → "floor"
-				var env_type = new_target.entity_id.replace("level_0_", "")
-				KnowledgeDB.examine_environment(env_type)
+				KnowledgeDB.examine_environment(new_target.entity_id)
 			elif new_target.entity_type == Examinable.EntityType.ITEM:
 				# Items - need to get rarity for correct EXP reward
 				var item = KnowledgeDB._get_item_by_id(new_target.entity_id)
@@ -353,8 +351,9 @@ func _update_examination_target() -> void:
 					# Fallback if item not found
 					KnowledgeDB.examine_item(new_target.entity_id, "common")
 			else:
-				# Entities, hazards
-				KnowledgeDB.examine_entity(new_target.entity_id)
+				# Entities, hazards, objects
+				var is_object = new_target.entity_type == Examinable.EntityType.ENTITY_NEUTRAL
+				KnowledgeDB.examine_entity(new_target.entity_id, is_object)
 
 			if examination_panel:
 				examination_panel.show_panel(new_target)
@@ -380,9 +379,17 @@ func _move_forward() -> void:
 	if forward_direction == Vector2i.ZERO:
 		return
 
-	# Check if there's an item at the target position
+	# Check if there's an item or vending machine at the target position
 	var target_position = player.grid_position + forward_direction
 	var item_at_target = _get_item_at_position(target_position)
+	var entity_at_target = _get_vending_machine_at_position(target_position)
+
+	# Check for vending machine first (blocks movement, opens UI without consuming a turn)
+	if entity_at_target:
+		var vm_action = VendingMachineAction.new(target_position, entity_at_target)
+		if vm_action.can_execute(player):
+			vm_action.execute(player)
+			return
 
 	# Create appropriate action (pickup or movement)
 	var action: Action
@@ -431,13 +438,17 @@ func _update_action_preview() -> void:
 		player.action_preview_changed.emit(empty_actions)
 		return
 
-	# Check if there's an item at the target position
+	# Check if there's a vending machine or item at the target position
 	var target_position = player.grid_position + forward_direction
 	var item_at_target = _get_item_at_position(target_position)
+	var entity_at_target = _get_vending_machine_at_position(target_position)
 
 	var preview_action: Action
 
-	if item_at_target:
+	if entity_at_target:
+		# Show vending machine action
+		preview_action = VendingMachineAction.new(target_position, entity_at_target)
+	elif item_at_target:
 		# Show pickup action
 		preview_action = PickupItemAction.new(target_position, item_at_target)
 	else:
@@ -663,3 +674,13 @@ func _get_item_at_position(grid_pos: Vector2i) -> Dictionary:
 		return {}
 
 	return player.grid.item_renderer.get_item_at(grid_pos)
+
+func _get_vending_machine_at_position(grid_pos: Vector2i) -> WorldEntity:
+	"""Check if there's a vending machine entity at the given grid position"""
+	if not player or not player.grid:
+		return null
+
+	var entity = player.grid.get_entity_at(grid_pos)
+	if entity and entity.entity_type == "vending_machine" and entity.is_alive():
+		return entity
+	return null

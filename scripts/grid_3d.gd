@@ -20,6 +20,9 @@ var item_renderer: ItemRenderer = null
 # Entity rendering
 var entity_renderer: EntityRenderer = null
 
+# Spraypaint text rendering
+var spraypaint_renderer: SpraypaintRenderer = null
+
 # Grid data (same as 2D version)
 var grid_size: Vector2i = GRID_SIZE
 var walkable_cells: Dictionary = {}  # Vector2i -> bool (using Dictionary for O(1) erase instead of O(n))
@@ -37,52 +40,66 @@ var use_procedural_generation: bool = false
 var wall_materials: Array[ShaderMaterial] = []
 var ceiling_materials: Array[ShaderMaterial] = []
 
-# MeshLibrary item IDs (base types only - variants map to these or their own items)
-enum TileType {
-	FLOOR = 0,
-	WALL = 1,
-	CEILING = 2,
-	# Variant items (added to MeshLibrary as separate items)
-	FLOOR_PUDDLE = 3,
-	FLOOR_CARDBOARD = 4,
-	WALL_CRACKED = 5,
-	WALL_HOLE = 6,
-	WALL_MOULDY = 7,
-	CEILING_STAIN = 8,
-	CEILING_HOLE = 9,
-}
+# Exit tile positions: tracked for minimap rendering
+var exit_tile_positions: Dictionary = {}  # Vector2i -> true (world positions of EXIT_STAIRS)
+
+# ============================================================================
+# TILE TYPE SYSTEM (Data-Driven)
+# ============================================================================
+# Tile categories are determined by the current level's tile_mapping dictionary.
+# Each level maps SubChunk.TileType values to MeshLibrary item IDs.
+# These static caches are rebuilt when configure_from_level() is called.
+
+# Cached sets of MeshLibrary item IDs by category (rebuilt per level)
+static var _floor_items: Dictionary = {}  # {item_id: true}
+static var _wall_items: Dictionary = {}   # {item_id: true}
+static var _ceiling_items: Dictionary = {} # {item_id: true}
+# Cached tile_mapping from current level
+static var _tile_mapping: Dictionary = {}
+
+static func _rebuild_tile_category_cache(tile_mapping: Dictionary) -> void:
+	"""Rebuild category caches from a level's tile_mapping dictionary"""
+	_floor_items.clear()
+	_wall_items.clear()
+	_ceiling_items.clear()
+	_tile_mapping = tile_mapping
+	for subchunk_type in tile_mapping:
+		var item_id: int = tile_mapping[subchunk_type]
+		if SubChunk.is_floor_type(subchunk_type):
+			_floor_items[item_id] = true
+		elif SubChunk.is_wall_type(subchunk_type):
+			_wall_items[item_id] = true
+		elif SubChunk.is_ceiling_type(subchunk_type):
+			_ceiling_items[item_id] = true
 
 # ============================================================================
 # TILE TYPE HELPERS
 # ============================================================================
 
 static func is_floor_tile(item_id: int) -> bool:
-	"""Check if a GridMap cell item is any floor variant"""
-	return item_id == TileType.FLOOR or item_id == TileType.FLOOR_PUDDLE or item_id == TileType.FLOOR_CARDBOARD
+	"""Check if a GridMap cell item is any floor variant in the current level"""
+	return _floor_items.has(item_id)
 
 static func is_wall_tile(item_id: int) -> bool:
-	"""Check if a GridMap cell item is any wall variant"""
-	return item_id == TileType.WALL or item_id == TileType.WALL_CRACKED or item_id == TileType.WALL_HOLE or item_id == TileType.WALL_MOULDY
+	"""Check if a GridMap cell item is any wall variant in the current level"""
+	return _wall_items.has(item_id)
 
 static func is_ceiling_tile(item_id: int) -> bool:
-	"""Check if a GridMap cell item is any ceiling variant"""
-	return item_id == TileType.CEILING or item_id == TileType.CEILING_STAIN or item_id == TileType.CEILING_HOLE
+	"""Check if a GridMap cell item is any ceiling variant in the current level"""
+	return _ceiling_items.has(item_id)
 
 static func subchunk_to_gridmap_item(tile_type: int) -> int:
-	"""Convert SubChunk.TileType to Grid3D.TileType (MeshLibrary item ID)"""
-	match tile_type:
-		SubChunk.TileType.FLOOR: return TileType.FLOOR
-		SubChunk.TileType.WALL: return TileType.WALL
-		SubChunk.TileType.CEILING: return TileType.CEILING
-		SubChunk.TileType.EXIT_STAIRS: return TileType.FLOOR  # Stairs render as floor
-		SubChunk.TileType.FLOOR_PUDDLE: return TileType.FLOOR_PUDDLE
-		SubChunk.TileType.FLOOR_CARDBOARD: return TileType.FLOOR_CARDBOARD
-		SubChunk.TileType.WALL_CRACKED: return TileType.WALL_CRACKED
-		SubChunk.TileType.WALL_HOLE: return TileType.WALL_HOLE
-		SubChunk.TileType.WALL_MOULDY: return TileType.WALL_MOULDY
-		SubChunk.TileType.CEILING_STAIN: return TileType.CEILING_STAIN
-		SubChunk.TileType.CEILING_HOLE: return TileType.CEILING_HOLE
-		_: return tile_type  # Fallback: pass through
+	"""Convert SubChunk.TileType to MeshLibrary item ID using current level's mapping"""
+	if _tile_mapping.has(tile_type):
+		return _tile_mapping[tile_type]
+	# Fallback: map variant to its base type
+	if SubChunk.is_floor_type(tile_type):
+		return _tile_mapping.get(0, 0)  # Fall back to base floor
+	elif SubChunk.is_wall_type(tile_type):
+		return _tile_mapping.get(1, 1)  # Fall back to base wall
+	elif SubChunk.is_ceiling_type(tile_type):
+		return _tile_mapping.get(2, 2)  # Fall back to base ceiling
+	return tile_type  # Last resort passthrough
 
 # ============================================================================
 # LIFECYCLE
@@ -104,6 +121,10 @@ func _ready() -> void:
 	entity_renderer = EntityRenderer.new()
 	add_child(entity_renderer)
 
+	# Create spraypaint renderer
+	spraypaint_renderer = SpraypaintRenderer.new()
+	add_child(spraypaint_renderer)
+
 	print("[Grid3D] Initialized: %d x %d (octant size: %d)" % [grid_size.x, grid_size.y, grid_map.cell_octant_size])
 
 func configure_from_level(level_config: LevelConfig) -> void:
@@ -115,6 +136,11 @@ func configure_from_level(level_config: LevelConfig) -> void:
 	current_level = level_config
 	grid_size = level_config.grid_size
 
+	# Build tile category caches from level's tile_mapping
+	if not level_config.tile_mapping.is_empty():
+		Grid3D._rebuild_tile_category_cache(level_config.tile_mapping)
+	else:
+		push_warning("[Grid3D] Level %d has empty tile_mapping — tile category checks may fail" % level_config.level_id)
 
 	# Check if ChunkManager exists (indicates procedural generation mode)
 	if has_node("/root/ChunkManager"):
@@ -168,11 +194,20 @@ func _apply_level_visuals(config: LevelConfig) -> void:
 			env.background_mode = Environment.BG_COLOR
 			env.background_color = config.background_color
 
-			# Fog settings (future: enable when fog system is ready)
-			# Will create depth and atmosphere, hide distant geometry
-			# env.fog_enabled = true
-			# env.fog_light_color = config.fog_color
-			# env.fog_density = ...
+			# Ambient light — fills shadowed areas so geometry isn't pitch black
+			env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+			env.ambient_light_color = config.ambient_light_color
+			env.ambient_light_energy = config.ambient_light_intensity
+
+			# Fog settings (distance-based)
+			if config.fog_start > 0.0 and config.fog_end > 0.0:
+				env.fog_enabled = true
+				env.fog_light_color = config.fog_color
+				env.fog_depth_begin = config.fog_start
+				env.fog_depth_end = config.fog_end
+				env.fog_density = 0.001  # Near-zero density, rely on depth range
+			else:
+				env.fog_enabled = false
 	else:
 		push_warning("[Grid3D] WorldEnvironment node not found - cannot apply background color")
 
@@ -275,11 +310,18 @@ func load_chunk(chunk: Chunk) -> void:
 						var ceiling_item: int = Grid3D.subchunk_to_gridmap_item(ceiling_tile_type)
 						grid_map.set_cell_item(Vector3i(world_tile_pos.x, 1, world_tile_pos.y), ceiling_item)
 
+	# Scan for EXIT_STAIRS tiles and spawn exit_hole entities (rendered by EntityRenderer)
+	_scan_exit_stairs_for_chunk(chunk)
+
 	var load_time := (Time.get_ticks_usec() - load_start) / 1000.0
 
 	# Render items in chunk (items are already in chunk data from _on_chunk_completed)
 	if item_renderer:
 		item_renderer.render_chunk_items(chunk)
+
+	# Render spraypaint text in chunk
+	if spraypaint_renderer:
+		spraypaint_renderer.render_chunk_spraypaint(chunk)
 
 	# NOTE: Entity rendering is handled by ChunkManager AFTER entity spawning
 	# because entities need is_walkable() which requires GridMap to be populated first
@@ -319,6 +361,71 @@ func unload_chunk(chunk: Chunk) -> void:
 	if entity_renderer:
 		entity_renderer.unload_chunk_entities(chunk)
 
+	# Unload spraypaint labels
+	if spraypaint_renderer:
+		spraypaint_renderer.unload_chunk_spraypaint(chunk)
+
+	# Unload exit hole position tracking for chunk
+	_unload_exit_positions_for_chunk(chunk)
+
+
+# ============================================================================
+# EXIT HOLE TRACKING (EXIT_STAIRS tiles → WorldEntity objects)
+# ============================================================================
+
+func _scan_exit_stairs_for_chunk(chunk: Chunk) -> void:
+	"""Scan chunk for EXIT_STAIRS tiles and spawn exit_hole entities.
+
+	Creates WorldEntity objects for each EXIT_STAIRS tile found and adds them
+	to the subchunk. EntityRenderer handles visual rendering (floor decal mode).
+	Also tracks positions in exit_tile_positions for the minimap.
+	"""
+	var chunk_world_offset := chunk.position * Chunk.SIZE
+
+	for sub_y in range(Chunk.SUB_CHUNKS_PER_SIDE):
+		for sub_x in range(Chunk.SUB_CHUNKS_PER_SIDE):
+			var sub_chunk := chunk.get_sub_chunk(Vector2i(sub_x, sub_y))
+			if not sub_chunk:
+				continue
+
+			var sub_world_offset := chunk_world_offset + Vector2i(sub_x, sub_y) * SubChunk.SIZE
+
+			for tile_y in range(SubChunk.SIZE):
+				for tile_x in range(SubChunk.SIZE):
+					var tile_type: int = sub_chunk.get_tile(Vector2i(tile_x, tile_y))
+					if tile_type == SubChunk.TileType.EXIT_STAIRS:
+						var world_tile_pos := sub_world_offset + Vector2i(tile_x, tile_y)
+						exit_tile_positions[world_tile_pos] = true
+
+						# Spawn exit_hole entity if not already present
+						var existing = false
+						for entity in sub_chunk.world_entities:
+							if entity.world_position == world_tile_pos and entity.entity_type == "exit_hole":
+								existing = true
+								break
+						if not existing:
+							var exit_entity := WorldEntity.new("exit_hole", world_tile_pos, 99999.0, 0)
+							EntityRegistry.apply_defaults(exit_entity)
+							sub_chunk.add_world_entity(exit_entity)
+
+func _unload_exit_positions_for_chunk(chunk: Chunk) -> void:
+	"""Remove exit tile position tracking for a chunk (entity cleanup handled by EntityRenderer)"""
+	var chunk_world_offset := chunk.position * Chunk.SIZE
+	for sub_y in range(Chunk.SUB_CHUNKS_PER_SIDE):
+		for sub_x in range(Chunk.SUB_CHUNKS_PER_SIDE):
+			var sub_world_offset := chunk_world_offset + Vector2i(sub_x, sub_y) * SubChunk.SIZE
+			for tile_y in range(SubChunk.SIZE):
+				for tile_x in range(SubChunk.SIZE):
+					var pos := sub_world_offset + Vector2i(tile_x, tile_y)
+					exit_tile_positions.erase(pos)
+
+func clear_exit_holes() -> void:
+	"""Clear exit hole position tracking (used during level transitions)"""
+	exit_tile_positions.clear()
+
+# ============================================================================
+# TILE UPDATES
+# ============================================================================
 
 func update_tile(world_tile_pos: Vector2i, tile_type: int, ceiling_type: int = -1) -> void:
 	"""Update a single tile in the GridMap (used for post-generation modifications).
@@ -353,8 +460,7 @@ func _cache_wall_materials() -> void:
 		return
 
 	# Cache materials from all wall-type items (base + variants)
-	var wall_item_ids := [TileType.WALL, TileType.WALL_CRACKED, TileType.WALL_HOLE, TileType.WALL_MOULDY]
-	for item_id in wall_item_ids:
+	for item_id in _wall_items:
 		var wall_mesh = mesh_library.get_item_mesh(item_id)
 		if not wall_mesh:
 			continue
@@ -378,8 +484,7 @@ func _cache_ceiling_materials() -> void:
 		return
 
 	# Cache materials from all ceiling-type items (base + variants)
-	var ceiling_item_ids := [TileType.CEILING, TileType.CEILING_STAIN, TileType.CEILING_HOLE]
-	for item_id in ceiling_item_ids:
+	for item_id in _ceiling_items:
 		var ceiling_mesh = mesh_library.get_item_mesh(item_id)
 		if not ceiling_mesh:
 			continue
@@ -506,14 +611,15 @@ func is_walkable(pos: Vector2i) -> bool:
 	return not _is_position_blocked_by_entity(pos)
 
 func _is_position_blocked_by_entity(pos: Vector2i) -> bool:
-	"""Check if any entity is occupying this grid position
+	"""Check if a movement-blocking entity is occupying this grid position
 
 	Returns true if blocked, false if clear.
-	Uses EntityRenderer to check entity positions (data-driven, like items).
+	Only entities with blocks_movement=true block the tile.
 	"""
 	if entity_renderer:
-		return entity_renderer.has_entity_at(pos)
-	return false  # No renderer = no entities = not blocked
+		var entity = entity_renderer.get_entity_at(pos)
+		return entity != null and not entity.is_dead and entity.blocks_movement
+	return false
 
 # ============================================================================
 # ENTITY QUERIES
@@ -587,6 +693,19 @@ func has_line_of_sight(from_pos: Vector2i, to_pos: Vector2i) -> bool:
 		var tile_pos = line_tiles[i]
 		if _is_tile_blocking_los(tile_pos):
 			return false
+
+	# Check diagonal wall gaps: consecutive tiles that differ on both axes
+	# mean a diagonal step — block LOS if both adjacent cardinals are walls
+	for i in range(line_tiles.size() - 1):
+		var curr = line_tiles[i]
+		var next = line_tiles[i + 1]
+		var dx_step = abs(next.x - curr.x)
+		var dy_step = abs(next.y - curr.y)
+		if dx_step == 1 and dy_step == 1:
+			var adj_x := Vector2i(next.x, curr.y)
+			var adj_y := Vector2i(curr.x, next.y)
+			if _is_tile_blocking_los(adj_x) and _is_tile_blocking_los(adj_y):
+				return false
 
 	return true
 

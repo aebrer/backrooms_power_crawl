@@ -490,7 +490,7 @@ func remove_damage_interceptor_by_source(source: String) -> bool:
 # PROGRESSION
 # ============================================================================
 
-func gain_exp(amount: int) -> void:
+func gain_exp(amount: int, reason: String = "") -> void:
 	"""Add EXP with Clearance multiplier. Check for level up.
 
 	IMPORTANT: EXP gain scales with CLEARANCE, not Level!
@@ -508,12 +508,13 @@ func gain_exp(amount: int) -> void:
 	exp += actual_gain
 	emit_signal("exp_gained", actual_gain, exp)
 
-	# Log EXP gain with progress toward next level
+	# Log EXP gain with reason and progress toward next level
 	var needed = _exp_for_next_level()
+	var reason_prefix := "%s: " % reason if reason != "" else ""
 	if clearance_level > 0:
-		Log.player("+%d EXP (base %d × CL%d bonus) → %d/%d to Lv%d" % [actual_gain, amount, clearance_level, exp, needed, level + 1])
+		Log.player("%s+%d EXP (base %d × CL%d bonus) → %d/%d to Lv%d" % [reason_prefix, actual_gain, amount, clearance_level, exp, needed, level + 1])
 	else:
-		Log.player("+%d EXP → %d/%d to Lv%d" % [actual_gain, exp, needed, level + 1])
+		Log.player("%s+%d EXP → %d/%d to Lv%d" % [reason_prefix, actual_gain, exp, needed, level + 1])
 
 	_check_level_up()
 

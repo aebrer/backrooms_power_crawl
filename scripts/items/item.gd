@@ -52,6 +52,7 @@ enum PoolType {
 
 var level: int = 1  ## Current level of this item (increases when duplicates picked up)
 var equipped: bool = false  ## Is this item currently equipped?
+var starts_enabled: bool = true  ## Whether item defaults to [ON] when first equipped
 
 # ============================================================================
 # CORE METHODS (override in subclasses)
@@ -66,7 +67,6 @@ func on_equip(player: Player3D) -> void:
 	- Initialize turn counters
 	"""
 	equipped = true
-	Log.player("Equipped %s (Level %d)" % [item_name, level])
 
 	# Default: Grant stat bonus based on pool type
 	_apply_stat_bonus(player)

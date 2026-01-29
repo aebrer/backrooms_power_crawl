@@ -33,6 +33,19 @@ extends Resource
 ## Clearance 4-5: Technical details + code revelation
 @export var clearance_info: Array[String] = ["", "", "", "", "", ""]
 
+@export_group("Behavior Defaults")
+## Whether this entity type is hostile (targetable by attacks, combat participant)
+@export var hostile: bool = true
+
+## Whether this entity type blocks player movement
+@export var blocks_movement: bool = true
+
+## Whether this entity type is an exit (minimap coloring, special interactions)
+@export var is_exit: bool = false
+
+## Faction tag for AI grouping (e.g., "bacteria" for cooperative healing)
+@export var faction: String = ""
+
 @export_group("Classification")
 ## SCP-style object class (shown at all clearance levels)
 @export var object_class: String = "Safe"

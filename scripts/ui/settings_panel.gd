@@ -6,6 +6,7 @@ extends Control
 ## - Fullscreen toggle
 ## - Look sensitivity slider (mouse + controller)
 ## - FOV slider
+## - Controls reference (adapts to current input device)
 ## - Restart Run button
 ## - Quit to Desktop button
 ##
@@ -19,6 +20,7 @@ extends Control
 const FONT_SIZE_HEADER := 20
 const FONT_SIZE_LABEL := 14
 const FONT_SIZE_BUTTON := 14
+const FONT_SIZE_CONTROL_HINT := 12
 const PANEL_WIDTH := 280.0
 const PANEL_MARGIN := 20.0  # Offset from left edge of game viewport
 
@@ -42,8 +44,15 @@ var sensitivity_slider: HSlider
 var sensitivity_value_label: Label
 var fov_slider: HSlider
 var fov_value_label: Label
+var codex_button: Button
 var restart_button: Button
 var quit_button: Button
+
+# Controls section container (for device-specific label updates)
+var _controls_vbox: VBoxContainer = null
+
+# Reference to codex panel (set by game.gd)
+var codex_panel: CodexPanel = null
 
 # State
 var _accepting_input: bool = false
@@ -66,6 +75,9 @@ func _ready() -> void:
 
 	if PauseManager:
 		PauseManager.pause_toggled.connect(_on_pause_toggled)
+
+	if InputManager:
+		InputManager.input_device_changed.connect(_on_input_device_changed)
 
 func _build_panel() -> void:
 	"""Build the settings panel UI"""
@@ -181,6 +193,15 @@ func _build_content() -> void:
 		fov_value_label.add_theme_font_override("font", emoji_font)
 	fov_row.add_child(fov_value_label)
 
+	# --- Codex ---
+	codex_button = _create_action_button("Codex")
+	codex_button.pressed.connect(_on_codex_pressed)
+	content_vbox.add_child(codex_button)
+	focusable_controls.append(codex_button)
+
+	# --- Controls Reference ---
+	_build_controls_section()
+
 	# Separator before actions
 	var sep2 = HSeparator.new()
 	sep2.add_theme_constant_override("separation", 10)
@@ -197,6 +218,86 @@ func _build_content() -> void:
 	quit_button.pressed.connect(_on_quit_pressed)
 	content_vbox.add_child(quit_button)
 	focusable_controls.append(quit_button)
+
+# ============================================================================
+# CONTROLS SECTION
+# ============================================================================
+
+## Control mappings: [action_name, gamepad_label, mkb_label]
+const CONTROL_MAPPINGS := [
+	["Move Forward", "RT", "LMB"],
+	["Wait / Pass Turn", "LT", "RMB"],
+	["Look Around", "Right Stick", "Mouse"],
+	["Pause", "START", "ESC / MMB"],
+	["Camera Mode", "SELECT", "C"],
+	["Zoom", "LB / RB", "Scroll Wheel"],
+	["Navigate HUD", "Left Stick", "Mouse Hover"],
+	["Minimap Zoom", "D-Pad L/R", "Arrow Keys"],
+]
+
+func _build_controls_section() -> void:
+	"""Build the controls reference section"""
+	var sep = HSeparator.new()
+	sep.add_theme_constant_override("separation", 10)
+	content_vbox.add_child(sep)
+
+	var controls_header = Label.new()
+	controls_header.text = "CONTROLS"
+	controls_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	controls_header.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_HEADER))
+	controls_header.add_theme_color_override("font_color", Color(0.8, 0.8, 0.8))
+	if emoji_font:
+		controls_header.add_theme_font_override("font", emoji_font)
+	content_vbox.add_child(controls_header)
+
+	_controls_vbox = VBoxContainer.new()
+	_controls_vbox.add_theme_constant_override("separation", 2)
+	content_vbox.add_child(_controls_vbox)
+
+	_populate_controls()
+
+func _populate_controls() -> void:
+	"""Populate control hints based on current input device"""
+	# Clear existing entries
+	for child in _controls_vbox.get_children():
+		child.queue_free()
+
+	var is_gamepad := InputManager and InputManager.current_input_device == InputManager.InputDevice.GAMEPAD
+
+	for mapping in CONTROL_MAPPINGS:
+		var action_name: String = mapping[0]
+		var input_label: String = mapping[1] if is_gamepad else mapping[2]
+		_add_control_row(action_name, input_label)
+
+func _add_control_row(action_name: String, input_label: String) -> void:
+	"""Add a single control mapping row"""
+	var row = HBoxContainer.new()
+	row.add_theme_constant_override("separation", 4)
+
+	var input_lbl = Label.new()
+	input_lbl.text = input_label
+	input_lbl.custom_minimum_size = Vector2(100, 0)
+	input_lbl.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_CONTROL_HINT))
+	input_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 0.7))
+	if emoji_font:
+		input_lbl.add_theme_font_override("font", emoji_font)
+	row.add_child(input_lbl)
+
+	var action_lbl = Label.new()
+	action_lbl.text = action_name
+	action_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	action_lbl.add_theme_font_size_override("font_size", _get_font_size(FONT_SIZE_CONTROL_HINT))
+	action_lbl.add_theme_color_override("font_color", Color(0.6, 0.6, 0.6))
+	if emoji_font:
+		action_lbl.add_theme_font_override("font", emoji_font)
+	row.add_child(action_lbl)
+
+	_controls_vbox.add_child(row)
+
+func _on_input_device_changed(_device) -> void:
+	"""Refresh controls section when input device changes"""
+	if _controls_vbox:
+		_populate_controls()
 
 # ============================================================================
 # PUBLIC API
@@ -295,6 +396,21 @@ func _apply_button_styles(button: Button) -> void:
 func _is_fullscreen() -> bool:
 	"""Check if window is in fullscreen mode"""
 	return DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN
+
+func _on_codex_pressed() -> void:
+	"""Open the codex panel"""
+	if not _accepting_input:
+		return
+	if codex_panel:
+		visible = false
+		if not codex_panel.codex_closed.is_connected(_on_codex_closed):
+			codex_panel.codex_closed.connect(_on_codex_closed)
+		codex_panel.show_codex()
+
+func _on_codex_closed() -> void:
+	"""Re-show settings panel when codex is closed"""
+	if PauseManager and PauseManager.is_paused:
+		_show_panel()
 
 func _on_fullscreen_toggled() -> void:
 	"""Toggle fullscreen mode"""
@@ -471,7 +587,7 @@ func _is_blocking_popup_visible() -> bool:
 			var script = parent.get_script()
 			if script:
 				var script_path = script.resource_path
-				if "level_up_panel" in script_path or "game_over_panel" in script_path or "item_slot_selection_panel" in script_path:
+				if "level_up_panel" in script_path or "game_over_panel" in script_path or "item_slot_selection_panel" in script_path or "codex_panel" in script_path:
 					if parent.visible:
 						return true
 			parent = parent.get_parent()
