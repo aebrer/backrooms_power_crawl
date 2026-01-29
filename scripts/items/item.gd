@@ -67,7 +67,6 @@ func on_equip(player: Player3D) -> void:
 	- Initialize turn counters
 	"""
 	equipped = true
-	Log.player("Equipped %s (Level %d)" % [item_name, level])
 
 	# Default: Grant stat bonus based on pool type
 	_apply_stat_bonus(player)

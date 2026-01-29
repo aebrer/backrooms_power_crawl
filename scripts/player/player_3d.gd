@@ -222,7 +222,19 @@ func update_move_indicator() -> void:
 	var target_pos = grid_position + forward_direction
 
 	# Check if target is valid
-	if grid.is_walkable(target_pos):
+	var walkable := grid.is_walkable(target_pos)
+
+	# Diagonal wall gap check: block when both adjacent cardinals are walls
+	if walkable and abs(forward_direction.x) == 1 and abs(forward_direction.y) == 1:
+		var gm: GridMap = grid.grid_map
+		var adj_x: Vector2i = grid_position + Vector2i(forward_direction.x, 0)
+		var adj_y: Vector2i = grid_position + Vector2i(0, forward_direction.y)
+		var x_is_floor := Grid3D.is_floor_tile(gm.get_cell_item(Vector3i(adj_x.x, 0, adj_x.y)))
+		var y_is_floor := Grid3D.is_floor_tile(gm.get_cell_item(Vector3i(adj_y.x, 0, adj_y.y)))
+		if not x_is_floor and not y_is_floor:
+			walkable = false
+
+	if walkable:
 		# Show indicator at target position
 		var world_pos = grid.grid_to_world(target_pos)
 		world_pos.y = 0.1  # Just above floor to prevent z-fighting

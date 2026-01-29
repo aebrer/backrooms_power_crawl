@@ -736,6 +736,19 @@ func has_line_of_sight(from_pos: Vector2i, to_pos: Vector2i) -> bool:
 		if _is_tile_blocking_los(tile_pos):
 			return false
 
+	# Check diagonal wall gaps: consecutive tiles that differ on both axes
+	# mean a diagonal step — block LOS if both adjacent cardinals are walls
+	for i in range(line_tiles.size() - 1):
+		var curr = line_tiles[i]
+		var next = line_tiles[i + 1]
+		var dx_step = abs(next.x - curr.x)
+		var dy_step = abs(next.y - curr.y)
+		if dx_step == 1 and dy_step == 1:
+			var adj_x := Vector2i(next.x, curr.y)
+			var adj_y := Vector2i(curr.x, next.y)
+			if _is_tile_blocking_los(adj_x) and _is_tile_blocking_los(adj_y):
+				return false
+
 	return true
 
 

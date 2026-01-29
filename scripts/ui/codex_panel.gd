@@ -437,24 +437,31 @@ func _add_redacted_hints(subject_key: String, info: Dictionary) -> void:
 	var category = parts[0]
 	var subject_id = parts[1]
 
-	# Only show redacted hints for entities/environment (items don't have clearance_info array)
-	if category != "entity" and category != "environment":
-		return
-
-	if not EntityRegistry.has_entity(subject_id):
-		return
-
-	# Check if there's info at higher clearance levels
 	var current_cl = KnowledgeDB.clearance_level
 	var has_redacted := false
 
-	for cl in range(current_cl + 1, 6):
-		var higher_info = EntityRegistry.get_info(subject_id, cl)
-		var higher_desc: String = higher_info.get("description", "")
-		var current_desc: String = info.get("description", "")
-		if higher_desc.length() > current_desc.length():
-			has_redacted = true
-			break
+	if category == "entity" or category == "environment":
+		if not EntityRegistry.has_entity(subject_id):
+			return
+		for cl in range(current_cl + 1, 6):
+			var higher_info = EntityRegistry.get_info(subject_id, cl)
+			var higher_desc: String = higher_info.get("description", "")
+			var current_desc: String = info.get("description", "")
+			if higher_desc.length() > current_desc.length():
+				has_redacted = true
+				break
+	elif category == "item":
+		var item = KnowledgeDB._get_item_by_id(subject_id)
+		if not item:
+			return
+		var current_desc: String = item.get_description(current_cl)
+		for cl in range(current_cl + 1, 6):
+			var higher_desc: String = item.get_description(cl)
+			if higher_desc.length() > current_desc.length():
+				has_redacted = true
+				break
+	else:
+		return
 
 	if has_redacted:
 		var sep = HSeparator.new()

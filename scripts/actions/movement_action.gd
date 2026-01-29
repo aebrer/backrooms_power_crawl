@@ -27,6 +27,17 @@ func can_execute(player) -> bool:
 	if not player.grid.is_walkable(target_pos):
 		return false
 
+	# Diagonal wall gap check: block only when BOTH adjacent cardinals are walls
+	# (entities don't fully block a tile visually, so allow squeezing past them)
+	if abs(direction.x) == 1 and abs(direction.y) == 1:
+		var adj_x: Vector2i = player.grid_position + Vector2i(direction.x, 0)
+		var adj_y: Vector2i = player.grid_position + Vector2i(0, direction.y)
+		var gm: GridMap = player.grid.grid_map
+		var x_is_floor := Grid3D.is_floor_tile(gm.get_cell_item(Vector3i(adj_x.x, 0, adj_x.y)))
+		var y_is_floor := Grid3D.is_floor_tile(gm.get_cell_item(Vector3i(adj_y.x, 0, adj_y.y)))
+		if not x_is_floor and not y_is_floor:
+			return false
+
 	return true
 
 func execute(player) -> void:
