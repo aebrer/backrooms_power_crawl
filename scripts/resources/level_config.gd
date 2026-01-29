@@ -266,6 +266,11 @@ var permitted_items: Array[Item] = []
 ## 0 = default direction, 180 = face toward +Y in grid space
 @export var player_spawn_camera_yaw: float = 0.0
 
+## Spraypaint messages placed near the player's spawn point on level entry
+## Each entry: {"text": String, "color": Color, "font_size": int, "surface": String}
+## Placed on adjacent walkable tiles in order. Empty array = no spawn spraypaint.
+var spawn_spraypaint: Array[Dictionary] = []
+
 # ============================================================================
 # LIFECYCLE HOOKS (Override in subclasses)
 # ============================================================================

@@ -145,7 +145,40 @@ func _respawn_player_for_new_level() -> void:
 
 	player.update_visual_position()
 
+	# Place level-defined spraypaint near spawn point
+	if current_level and not current_level.spawn_spraypaint.is_empty():
+		_place_spawn_spraypaint(current_level, player.grid_position)
+
 	# Transition state machine back to IdleState after level change
 	# (PostTurnState called change_level and stopped transitioning)
 	if player.state_machine:
 		player.state_machine.change_state("IdleState")
+
+
+func _place_spawn_spraypaint(level: LevelConfig, spawn_pos: Vector2i) -> void:
+	"""Place level-defined spraypaint messages near the player's spawn point"""
+	if not grid or not grid.spraypaint_renderer:
+		return
+
+	var directions := [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1),
+		Vector2i(1, 1), Vector2i(-1, 1), Vector2i(1, -1), Vector2i(-1, -1)]
+	var used_positions: Array[Vector2i] = []
+
+	for entry in level.spawn_spraypaint:
+		# Find an adjacent walkable tile not already used
+		var spray_pos := spawn_pos
+		for dir in directions:
+			var candidate: Vector2i = spawn_pos + dir
+			if grid.is_walkable(candidate) and candidate not in used_positions:
+				spray_pos = candidate
+				break
+
+		used_positions.append(spray_pos)
+		grid.spraypaint_renderer.add_spraypaint(
+			spray_pos,
+			entry.get("text", ""),
+			entry.get("color", Color(1.0, 1.0, 1.0)),
+			entry.get("font_size", 48),
+			entry.get("surface", "floor"),
+			0.0
+		)
