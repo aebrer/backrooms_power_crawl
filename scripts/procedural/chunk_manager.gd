@@ -567,8 +567,17 @@ func _spawn_entities_in_chunk(chunk: Chunk, chunk_key: Vector3i) -> void:
 			0  # spawn_turn
 		)
 		entity.attack_damage = final_damage
-		entity.hostile = entity_entry.get("hostile", true)
-		entity.blocks_movement = entity_entry.get("blocks_movement", true)
+
+		# Apply registry defaults first, then allow spawn table overrides
+		EntityRegistry.apply_defaults(entity)
+		if entity_entry.has("hostile"):
+			entity.hostile = entity_entry["hostile"]
+		if entity_entry.has("blocks_movement"):
+			entity.blocks_movement = entity_entry["blocks_movement"]
+		if entity_entry.has("is_exit"):
+			entity.is_exit = entity_entry["is_exit"]
+		if entity_entry.has("faction"):
+			entity.faction = entity_entry["faction"]
 
 		# Find subchunk and add entity
 		var local_pos = spawn_pos - chunk_world_pos

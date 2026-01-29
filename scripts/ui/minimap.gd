@@ -580,8 +580,8 @@ func _draw_entities(player_pos: Vector2i) -> void:
 
 func _get_entity_aura_color(entity: WorldEntity) -> Color:
 	"""Return the appropriate minimap aura color for an entity."""
-	# Exit-type entities get deep yellow
-	if entity.entity_type.begins_with("exit_"):
+	# Exit entities get deep yellow
+	if entity.is_exit:
 		return COLOR_AURA_ENTITY_EXIT
 	# Non-hostile entities (vending machines, etc.) get blue
 	if not entity.hostile:

@@ -84,6 +84,13 @@ var hostile: bool = true
 ## Hostile entities block movement; non-hostile (exit holes, vending machines) typically don't
 var blocks_movement: bool = true
 
+## Whether this entity is an exit (for minimap coloring, special interactions)
+var is_exit: bool = false
+
+## Faction tag for AI grouping (e.g., "bacteria" for spreader healing)
+## Entities with the same faction can interact cooperatively
+var faction: String = ""
+
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
@@ -190,6 +197,8 @@ func to_dict() -> Dictionary:
 		"attack_range": attack_range,
 		"hostile": hostile,
 		"blocks_movement": blocks_movement,
+		"is_exit": is_exit,
+		"faction": faction,
 	}
 	# Serialize last_seen_player_pos if set
 	if last_seen_player_pos != null:
@@ -227,6 +236,8 @@ static func from_dict(data: Dictionary) -> WorldEntity:
 	world_entity.attack_range = data.get("attack_range", 1.5)
 	world_entity.hostile = data.get("hostile", true)
 	world_entity.blocks_movement = data.get("blocks_movement", true)
+	world_entity.is_exit = data.get("is_exit", false)
+	world_entity.faction = data.get("faction", "")
 
 	# Restore last_seen_player_pos if present
 	if data.has("last_seen_player_pos"):

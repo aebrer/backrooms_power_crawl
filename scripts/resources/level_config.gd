@@ -186,10 +186,6 @@ var tile_mapping: Dictionary = {}
 ## ItemSpawner uses this list + rarity + corruption to determine spawns
 var permitted_items: Array[Item] = []
 
-## Item spawn rules: [{"item_scene": path, "weight": float}]
-## DEPRECATED: Use permitted_items instead for new rarity-based system
-@export var item_spawn_table: Array[Dictionary] = []
-
 ## Item density (0.0 = rare, 1.0 = common)
 @export_range(0.0, 1.0) var item_density: float = 0.1
 
@@ -318,24 +314,6 @@ func get_random_entity() -> String:
 
 	return ""
 
-## Get a random item scene path based on spawn weights
-func get_random_item() -> String:
-	if item_spawn_table.is_empty():
-		return ""
-
-	var total_weight := 0.0
-	for entry in item_spawn_table:
-		total_weight += entry.get("weight", 1.0)
-
-	var roll := randf() * total_weight
-	var cumulative := 0.0
-
-	for entry in item_spawn_table:
-		cumulative += entry.get("weight", 1.0)
-		if roll <= cumulative:
-			return entry.get("item_scene", "")
-
-	return ""
 
 ## Add an item to the permitted items list
 func add_permitted_item(item: Item) -> void:
@@ -369,5 +347,12 @@ func validate() -> bool:
 	# 1. It doesn't work reliably in web builds (packed filesystem)
 	# 2. The actual load() in grid_3d.gd will fail with a clear error if file is missing
 	# 3. Validation should check data correctness, not file system state
+
+	if tile_mapping.is_empty():
+		push_warning("[LevelConfig] Empty tile_mapping for level %d — grid rendering may fail" % level_id)
+
+	for entry in entity_spawn_table:
+		if not entry.has("entity_type"):
+			push_warning("[LevelConfig] Entity spawn entry missing 'entity_type' in level %d" % level_id)
 
 	return valid

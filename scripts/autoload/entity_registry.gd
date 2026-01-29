@@ -136,6 +136,7 @@ func _load_entities() -> void:
 	bacteria_spawn.clearance_info[3] = "--- FIELD DATA ---\nDamage: 1 HP per attack\nSpeed: 1 move per turn\nSense range: 80 tiles"
 	bacteria_spawn.object_class = "Euclid"
 	bacteria_spawn.threat_level = 1  # White (weakest) - common early, rarer later
+	bacteria_spawn.faction = "bacteria"
 	_entities["bacteria_spawn"] = bacteria_spawn
 
 	# Bacteria Motherload (Level 0 dangerous enemy)
@@ -150,6 +151,7 @@ func _load_entities() -> void:
 	bacteria_motherload.clearance_info[3] = "--- FIELD DATA ---\nDamage: 4 HP per attack\nSpeed: 2 moves per turn (when aware)\nSpawn cooldown: 10 turns\nSense range: 32 tiles"
 	bacteria_motherload.object_class = "Keter"
 	bacteria_motherload.threat_level = 3  # Dangerous (Yellow) - rare early, common later
+	bacteria_motherload.faction = "bacteria"
 	_entities["bacteria_motherload"] = bacteria_motherload
 
 	# Smiler (Level 0 psychological horror enemy)
@@ -180,6 +182,7 @@ func _load_entities() -> void:
 	bacteria_spreader.clearance_info[4] = "--- FIELD DATA ---\nDamage: 3 HP (AOE burst)\nSpeed: 1 move per turn\nHealing: [DAMAGE]% max HP to nearby bacteria (scales with corruption)\nHeal range: 3 tiles\nSense range: 40 tiles"
 	bacteria_spreader.object_class = "Euclid"
 	bacteria_spreader.threat_level = 2  # Epsilon (moderate) - support role
+	bacteria_spreader.faction = "bacteria"
 	_entities["bacteria_spreader"] = bacteria_spreader
 
 	# Debug Enemy (testing entity)
@@ -219,6 +222,8 @@ func _load_entities() -> void:
 	vending.clearance_info[3] = "--- FIELD DATA ---\nCost: Permanent max stat reduction (HP, Sanity, or Mana)\nCost scales with item rarity and local corruption\nItems restocked: Never"
 	vending.object_class = "Safe"
 	vending.threat_level = 0
+	vending.hostile = false
+	vending.blocks_movement = false
 	_entities["vending_machine"] = vending
 
 	# Exit Hole (visual marker for EXIT_STAIRS tiles)
@@ -231,6 +236,9 @@ func _load_entities() -> void:
 	exit_hole.clearance_info[2] = "Descent appears survivable. Others have passed through before — scratch marks line the inner walls."
 	exit_hole.object_class = "Safe"
 	exit_hole.threat_level = 0
+	exit_hole.hostile = false
+	exit_hole.blocks_movement = false
+	exit_hole.is_exit = true
 	_entities["exit_hole"] = exit_hole
 
 
@@ -265,6 +273,17 @@ func register_entity(entity: EntityInfo) -> void:
 		return
 
 	_entities[entity.entity_id] = entity
+
+func apply_defaults(entity: WorldEntity) -> void:
+	"""Apply EntityInfo behavior defaults to a WorldEntity instance.
+	Spawn table values take priority — call this BEFORE applying spawn table overrides."""
+	if not _entities.has(entity.entity_type):
+		return
+	var info: EntityInfo = _entities[entity.entity_type]
+	entity.hostile = info.hostile
+	entity.blocks_movement = info.blocks_movement
+	entity.is_exit = info.is_exit
+	entity.faction = info.faction
 
 func _get_unknown_entity_info() -> Dictionary:
 	"""Fallback info for unregistered entities"""

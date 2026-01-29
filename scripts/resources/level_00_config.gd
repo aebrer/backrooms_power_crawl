@@ -164,8 +164,6 @@ entity density: very low"""
 			"damage_scale": 0.0,  # No damage scaling
 			"threat_level": 0,  # Gimel (environment) - not a threat
 			"corruption_threshold": 0.0,  # Can spawn at any corruption
-			"hostile": false,  # Non-hostile: not targetable by attacks
-			"blocks_movement": false,  # Player can walk through
 		},
 	]
 

@@ -405,8 +405,7 @@ func _scan_exit_stairs_for_chunk(chunk: Chunk) -> void:
 								break
 						if not existing:
 							var exit_entity := WorldEntity.new("exit_hole", world_tile_pos, 99999.0, 0)
-							exit_entity.hostile = false
-							exit_entity.blocks_movement = false
+							EntityRegistry.apply_defaults(exit_entity)
 							sub_chunk.add_world_entity(exit_entity)
 
 func _unload_exit_positions_for_chunk(chunk: Chunk) -> void:
