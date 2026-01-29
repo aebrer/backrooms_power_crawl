@@ -141,13 +141,15 @@ static func calculate_sanity_damage(player, grid) -> Dictionary:
 	# Count enemies in perception range with threat weighting
 	if grid.entity_renderer:
 		var entities_in_range = grid.entity_renderer.get_entities_in_range(player.grid_position, perception_range)
-		result["enemy_count"] = entities_in_range.size()
 
 		# Calculate weighted count based on threat levels + entity-specific bonuses
+		# Only hostile entities contribute to sanity damage
+		var hostile_count: int = 0
 		var weighted_count: int = 0
 		for entity_pos in entities_in_range:
 			var entity = grid.entity_renderer.get_entity_at(entity_pos)
-			if entity:
+			if entity and entity.hostile:
+				hostile_count += 1
 				# Get threat level from entity type
 				var threat_level = _get_threat_level_for_entity(entity.entity_type)
 				weighted_count += EntityRegistry.THREAT_WEIGHTS.get(threat_level, 1)
@@ -156,6 +158,7 @@ static func calculate_sanity_damage(player, grid) -> Dictionary:
 				if SANITY_BONUS_ENTITIES.has(entity.entity_type):
 					weighted_count += SANITY_BONUS_ENTITIES[entity.entity_type]
 
+		result["enemy_count"] = hostile_count
 		result["weighted_count"] = weighted_count
 
 	# Calculate damage using corruption-scaled formula
