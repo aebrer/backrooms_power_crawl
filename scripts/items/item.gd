@@ -52,6 +52,7 @@ enum PoolType {
 
 var level: int = 1  ## Current level of this item (increases when duplicates picked up)
 var equipped: bool = false  ## Is this item currently equipped?
+var starts_enabled: bool = true  ## Whether item defaults to [ON] when first equipped
 
 # ============================================================================
 # CORE METHODS (override in subclasses)

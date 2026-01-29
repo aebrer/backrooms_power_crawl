@@ -43,6 +43,7 @@ func _init():
 	item_name = ITEM_NAME
 	pool_type = POOL
 	rarity = RARITY_TYPE
+	starts_enabled = false  # Dangerous item — default to [OFF]
 
 	# Visual description (CONSTANT - always shown)
 	visual_description = "A malfunctioning device with flickering lights. Appears to be some kind of experimental anomaly containment apparatus."

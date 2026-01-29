@@ -127,6 +127,7 @@ func _place_tutorial_content(chunk: Chunk) -> void:
 	_add_spraypaint(chunk, Vector2i(64, 59), "WAIT NEARBY OR WALK AROUND IT", Color(0.8, 0.2, 0.2), 180.0)
 
 	# Exit area
+	_add_spraypaint(chunk, Vector2i(64, 73), "PAUSE AND READ THE CONTROLS", Color(0.8, 0.2, 0.2), 180.0)
 	_add_spraypaint(chunk, Vector2i(64, 75), "DESCEND", Color(0.8, 0.2, 0.2), 180.0)
 
 	# --- Item in Room 2 ---

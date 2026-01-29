@@ -103,6 +103,9 @@ func add_item(item: Item, slot_index: int, player: Player3D) -> bool:
 		# Slot empty - equip item
 		items[slot_index] = item
 		item.on_equip(player)
+		# Respect item's default enabled state
+		if not item.starts_enabled:
+			enabled[slot_index] = false
 		emit_signal("item_added", item, slot_index)
 		Log.player("Equipped %s to slot %d" % [item.item_name, slot_index])
 		return true
