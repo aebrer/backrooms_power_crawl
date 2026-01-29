@@ -28,7 +28,6 @@ var player: Player3D = null
 var tooltip_slots: Array[Control] = []
 var tooltip_texts: Dictionary = {}  # slot -> tooltip_text
 var slot_items: Dictionary = {}  # slot -> Item (for EXP bonus on examination)
-
 # Reorder state (persistent across focus changes)
 var reordering_slot: Control = null
 var reordering_pool_type: Item.PoolType
@@ -65,6 +64,10 @@ func _ready():
 	# Connect to pause manager to clear focus when unpausing
 	if PauseManager:
 		PauseManager.pause_toggled.connect(_on_pause_toggled)
+
+	# Connect to KnowledgeDB to refresh [NEW!] when items are examined externally
+	if KnowledgeDB:
+		KnowledgeDB.discovery_made.connect(_on_discovery_made)
 
 	if player:
 		_connect_signals()
@@ -135,6 +138,10 @@ func _connect_signals() -> void:
 			player.null_pool.item_leveled_up.connect(_on_item_leveled_up.bind(Item.PoolType.NULL))
 			player.null_pool.item_reordered.connect(_on_item_reordered.bind(Item.PoolType.NULL))
 			player.null_pool.item_toggled.connect(_on_item_toggled.bind(Item.PoolType.NULL))
+
+	# Clearance increases make all items novel again → refresh [NEW!]
+	if player.stats and not player.stats.clearance_increased.is_connected(_on_clearance_increased):
+		player.stats.clearance_increased.connect(_on_clearance_increased)
 
 func _update_all_slots() -> void:
 	"""Update all slot displays"""
@@ -278,6 +285,15 @@ func _on_item_toggled(slot_index: int, _enabled: bool, pool_type: Item.PoolType)
 	var slots = _get_slot_containers(pool_type)
 	if slot_index < slots.size():
 		_update_slot(slots[slot_index], pool, slot_index)
+
+func _on_discovery_made(subject_type: String, _subject_id: String, _exp_reward: int) -> void:
+	"""Refresh [NEW!] indicators when an item is examined externally (e.g., FPV crosshair)"""
+	if subject_type == "item":
+		_update_all_slots()
+
+func _on_clearance_increased(_old_level: int, _new_level: int) -> void:
+	"""Refresh [NEW!] indicators when clearance increases (all items become novel again)"""
+	_update_all_slots()
 
 # ============================================================================
 # HOVER/FOCUS HIGHLIGHTING

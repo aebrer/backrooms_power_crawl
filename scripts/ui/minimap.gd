@@ -39,6 +39,7 @@ const COLOR_ENTITY := Color("#ff00ff")  # Magenta (entities/enemies)
 ## Aura colors (semi-transparent glow behind minimap sprites)
 const COLOR_AURA_ENTITY := Color(1.0, 0.0, 0.0, 0.45)  # Red, semi-transparent
 const COLOR_AURA_ITEM := Color(1.0, 1.0, 0.0, 0.45)  # Yellow, semi-transparent
+const COLOR_AURA_EXIT := Color(0.0, 0.5, 1.0, 0.45)  # Blue, semi-transparent
 
 ## Sprite icon sizes per zoom level (pixels)
 ## Zoom 0: 5px, Zoom 1: 7px, Zoom 2: 11px, Zoom 3: 15px, Zoom 4: 21px
@@ -125,6 +126,8 @@ func _ready() -> void:
 	# Clear cache when initial chunks finish loading
 	if ChunkManager:
 		ChunkManager.initial_load_completed.connect(_on_initial_load_completed)
+		if ChunkManager.has_signal("level_changed"):
+			ChunkManager.level_changed.connect(_on_level_changed)
 
 	# Connect to container size changes for dynamic scaling
 	var container = map_texture_rect.get_parent()
@@ -136,8 +139,11 @@ func _ready() -> void:
 
 func _exit_tree() -> void:
 	# Disconnect autoload signals to prevent memory leaks on scene reload
-	if ChunkManager and ChunkManager.initial_load_completed.is_connected(_on_initial_load_completed):
-		ChunkManager.initial_load_completed.disconnect(_on_initial_load_completed)
+	if ChunkManager:
+		if ChunkManager.initial_load_completed.is_connected(_on_initial_load_completed):
+			ChunkManager.initial_load_completed.disconnect(_on_initial_load_completed)
+		if ChunkManager.has_signal("level_changed") and ChunkManager.level_changed.is_connected(_on_level_changed):
+			ChunkManager.level_changed.disconnect(_on_level_changed)
 
 
 func _process(_delta: float) -> void:
@@ -209,6 +215,14 @@ func on_player_moved(new_position: Vector2i) -> void:
 
 	content_dirty = true
 
+func clear_trail() -> void:
+	"""Clear movement trail (used during level transitions)"""
+	for i in range(TRAIL_LENGTH):
+		player_trail[i] = Vector2i(-99999, -99999)
+	trail_index = 0
+	trail_valid_count = 0
+	content_dirty = true
+
 func on_chunk_loaded(_chunk_pos: Vector2i) -> void:
 	"""Called when chunk loads - mark dirty for full redraw"""
 	content_dirty = true
@@ -219,6 +233,12 @@ func on_chunk_unloaded(_chunk_pos: Vector2i) -> void:
 
 func _on_initial_load_completed() -> void:
 	"""Called when ChunkManager finishes initial chunk loading"""
+	content_dirty = true
+
+func _on_level_changed(_new_level_id: int) -> void:
+	"""Clear trail and redraw when level changes mid-run"""
+	clear_trail()
+	exit_hole_sprite_cache.clear()  # Re-cache in case texture changes per level
 	content_dirty = true
 
 func _update_texture_scale() -> void:
@@ -575,7 +595,7 @@ func _draw_exit_holes(player_pos: Vector2i) -> void:
 			continue
 
 		if exit_hole_sprite_cache.has(zoom_level):
-			_blit_sprite(exit_hole_sprite_cache[zoom_level], screen_pos)
+			_blit_sprite(exit_hole_sprite_cache[zoom_level], screen_pos, COLOR_AURA_EXIT)
 		else:
 			# Fallback: dark pixel
 			var marker_size := maxi(2, zoom_level + 1)
@@ -662,13 +682,9 @@ func _cache_player_sprite() -> void:
 		player_sprite_cache[zoom] = resized
 
 func _cache_entity_sprites() -> void:
-	"""Load entity textures and pre-cache resized versions for each zoom level."""
-	var entity_textures := {
-		"bacteria_spawn": "res://assets/textures/entities/bacteria_spawn.png",
-		"bacteria_motherload": "res://assets/textures/entities/bacteria_motherload.png",
-		"bacteria_spreader": "res://assets/textures/entities/bacteria_spreader.png",
-		"smiler": "res://assets/textures/entities/smiler.png",
-	}
+	"""Load entity textures and pre-cache resized versions for each zoom level.
+	Uses EntityRenderer.ENTITY_TEXTURES as single source of truth."""
+	var entity_textures: Dictionary = EntityRenderer.ENTITY_TEXTURES
 
 	for entity_type in entity_textures:
 		var path: String = entity_textures[entity_type]
