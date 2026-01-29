@@ -40,7 +40,7 @@ const COLOR_ENTITY := Color("#ff00ff")  # Magenta (entities/enemies)
 const COLOR_AURA_ENTITY := Color(1.0, 0.0, 0.0, 0.45)  # Red - hostile entities
 const COLOR_AURA_ENTITY_NEUTRAL := Color(0.0, 0.5, 1.0, 0.45)  # Blue - non-hostile entities (vending machines)
 const COLOR_AURA_ENTITY_EXIT := Color(0.85, 0.75, 0.0, 0.45)  # Deep yellow - exit stairs/holes
-const COLOR_AURA_ITEM := Color(1.0, 1.0, 0.0, 0.45)  # Yellow, semi-transparent
+const COLOR_AURA_ITEM := Color(0.7, 0.2, 1.0, 0.45)  # Purple - items
 const COLOR_AURA_EXIT := Color(0.0, 0.5, 1.0, 0.45)  # Blue, semi-transparent (legacy)
 
 ## Sprite icon sizes per zoom level (pixels)
